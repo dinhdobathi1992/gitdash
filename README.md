@@ -6,6 +6,7 @@ A self-hosted GitHub Actions metrics dashboard. Browse your personal and organiz
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Known Vulnerabilities](https://snyk.io/test/github/dinhdobathi1992/gitdash/badge.svg)](https://snyk.io/test/github/dinhdobathi1992/gitdash)
 
 ---
 
