@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# internal security audit docs — do not publish
+security-issues.md
+PAT-SECURITY-ANALYSIS.md
