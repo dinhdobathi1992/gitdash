@@ -15,6 +15,8 @@ COPY . .
 # Build-time env (no secrets — token comes in at runtime via browser localStorage)
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# Signal to next.config.ts to enable output:standalone (required for Docker runner stage)
+ENV DOCKER_BUILD=1
 
 RUN npm run build
 

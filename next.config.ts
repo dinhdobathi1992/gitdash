@@ -3,8 +3,9 @@ import path from "path";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+// output: "standalone" is only needed for Docker — Vercel manages its own output
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(process.env.DOCKER_BUILD === "1" ? { output: "standalone" } : {}),
   turbopack: {
     root: path.resolve(__dirname),
   },
