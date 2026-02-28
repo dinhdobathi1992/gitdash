@@ -26,7 +26,7 @@ function LoginContent() {
       <div className="relative w-full max-w-sm">
         {/* logo */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-14 h-14 shrink-0 rounded-2xl overflow-hidden shadow-2xl shadow-violet-500/30 mb-4">
+          <div className="w-24 h-24 shrink-0 rounded-3xl overflow-hidden shadow-2xl shadow-violet-500/30 mb-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="GitDash Logo" className="w-full h-full object-cover" />
           </div>
