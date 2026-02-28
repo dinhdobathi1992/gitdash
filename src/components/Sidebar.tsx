@@ -36,7 +36,7 @@ export default function Sidebar() {
   return (
     <aside className="flex flex-col w-60 min-h-screen bg-slate-900 border-r border-slate-800 py-6 px-3 shrink-0">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-3 mb-8">
+      <div className="flex items-center gap-2.5 px-3 mb-2">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
           <Activity className="w-4 h-4 text-white" />
         </div>
@@ -50,6 +50,22 @@ export default function Sidebar() {
           )}>
             {isStandalone ? "standalone" : "organization"}
           </span>
+        </div>
+      </div>
+
+      {/* Version info — sits under logo, above nav */}
+      <div className="px-3 mb-6">
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+          <span className="font-mono text-slate-500">v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
+          <span className="text-slate-700">·</span>
+          <a
+            href="https://github.com/dinhdobathi1992/gitdash"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-400 transition-colors"
+          >
+            GitHub
+          </a>
         </div>
       </div>
 
@@ -154,22 +170,6 @@ export default function Sidebar() {
           )}
         </div>
       )}
-
-      {/* Version info */}
-      <div className="px-3 pt-3 pb-1">
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-600 pl-8">
-          <span className="font-mono text-slate-500">v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
-          <span className="text-slate-700">·</span>
-          <a
-            href="https://github.com/dinhdobathi1992/gitdash"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-slate-400 transition-colors"
-          >
-            GitHub
-          </a>
-        </div>
-      </div>
     </aside>
   );
 }
