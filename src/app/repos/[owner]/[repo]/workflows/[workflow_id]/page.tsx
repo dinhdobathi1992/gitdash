@@ -283,10 +283,18 @@ function WorkflowContent() {
       </div>
 
       {/* ── tabs ── */}
-      <div className="flex gap-1 mb-6 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit">
+      <div
+        role="tablist"
+        aria-label="Workflow metrics tabs"
+        className="flex gap-1 mb-6 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit"
+      >
         {TABS.map(t => (
           <button
             key={t.id}
+            role="tab"
+            id={`tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls={`tabpanel-${t.id}`}
             onClick={() => setTab(t.id)}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
@@ -306,11 +314,11 @@ function WorkflowContent() {
         <>
           {/* All tabs are always mounted — display:none keeps charts alive so
               Recharts never re-measures on switch, making tabs instant. */}
-          <div className={tab === "overview"    ? undefined : "hidden"}><OverviewTab    runs={safeRuns} completed={completed} /></div>
-          <div className={tab === "performance" ? undefined : "hidden"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} /></div>
-          <div className={tab === "reliability" ? undefined : "hidden"}><ReliabilityTab runs={safeRuns} completed={completed} /></div>
-          <div className={tab === "triggers"    ? undefined : "hidden"}><TriggersTab    runs={safeRuns} /></div>
-          <div className={tab === "runs"        ? undefined : "hidden"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} /></div>
+          <div role="tabpanel" id="tabpanel-overview"     aria-labelledby="tab-overview"     hidden={tab !== "overview"}><OverviewTab    runs={safeRuns} completed={completed} /></div>
+          <div role="tabpanel" id="tabpanel-performance"  aria-labelledby="tab-performance"  hidden={tab !== "performance"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} /></div>
+          <div role="tabpanel" id="tabpanel-reliability"  aria-labelledby="tab-reliability"  hidden={tab !== "reliability"}><ReliabilityTab runs={safeRuns} completed={completed} /></div>
+          <div role="tabpanel" id="tabpanel-triggers"     aria-labelledby="tab-triggers"     hidden={tab !== "triggers"}><TriggersTab    runs={safeRuns} /></div>
+          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} /></div>
         </>
       )}
     </div>
@@ -940,6 +948,8 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
                       onClick={() => toggleExpanded(run.id)}
                       className="text-slate-600 hover:text-slate-300 transition-colors"
                       title={expanded.has(run.id) ? "Collapse jobs" : "Expand jobs"}
+                      aria-label={expanded.has(run.id) ? `Collapse jobs for run #${run.run_number}` : `Expand jobs for run #${run.run_number}`}
+                      aria-expanded={expanded.has(run.id)}
                     >
                       <ChevronDown className={cn(
                         "w-3.5 h-3.5 transition-transform",
