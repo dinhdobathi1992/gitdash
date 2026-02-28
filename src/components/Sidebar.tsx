@@ -101,6 +101,24 @@ export default function Sidebar() {
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Version info */}
+      <div className="px-3 pb-3">
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+          <span className="font-mono">GitDash</span>
+          <span className="text-slate-700">·</span>
+          <span className="font-mono text-slate-500">v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
+          <span className="text-slate-700">·</span>
+          <a
+            href="https://github.com/dinhdobathi1992/gitdash"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-400 transition-colors"
+          >
+            GitHub
+          </a>
+        </div>
+      </div>
+
       {/* User section */}
       {user && (
         <div className="border-t border-slate-800 pt-4">
