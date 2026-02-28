@@ -10,7 +10,7 @@ import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import StatCard from "@/components/StatCard";
 import { ConclusionBadge } from "@/components/Badge";
 import { formatDuration, cn } from "@/lib/utils";
-import { formatDistanceToNow, format, getHours, getDay } from "date-fns";
+import { format, getHours, getDay } from "date-fns";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -806,7 +806,7 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // RUNS TAB — sortable columns, CSV export, expandable job/step rows
 // ══════════════════════════════════════════════════════════════════════════════
-type SortCol = "run" | "status" | "branch" | "trigger" | "actor" | "duration" | "queue" | "attempt" | "started";
+type SortCol = "run" | "status" | "branch" | "trigger" | "actor" | "duration" | "queue" | "started";
 
 function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; repo: string }) {
   const [sortCol, setSortCol] = useState<SortCol>("run");
@@ -839,7 +839,6 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
         case "actor":    va = a.actor?.login ?? "";                         vb = b.actor?.login ?? ""; break;
         case "duration": va = a.duration_ms ?? 0;                           vb = b.duration_ms ?? 0; break;
         case "queue":    va = a.queue_wait_ms ?? 0;                         vb = b.queue_wait_ms ?? 0; break;
-        case "attempt":  va = a.run_attempt ?? 1;                           vb = b.run_attempt ?? 1; break;
         case "started":  va = new Date(a.created_at).getTime();             vb = new Date(b.created_at).getTime(); break;
       }
       if (va < vb) return sortDir === "asc" ? -1 : 1;
@@ -849,7 +848,7 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
   }, [runs, sortCol, sortDir]);
 
   function downloadCSV() {
-    const headers = ["Run#", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Attempt", "Started", "SHA", "Commit Message"];
+    const headers = ["Run#", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Started", "SHA", "Commit Message"];
     const rows = sortedRuns.map(r => [
       r.run_number,
       r.status ?? "",
@@ -859,7 +858,6 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
       r.actor?.login ?? "",
       r.duration_ms ?? "",
       r.queue_wait_ms ?? "",
-      r.run_attempt ?? 1,
       r.created_at,
       r.head_sha,
       `"${(r.head_commit?.message ?? "").replace(/"/g, '""').split("\n")[0]}"`,
@@ -903,7 +901,6 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
               <SortTh col="actor"    label="Actor"   current={sortCol} dir={sortDir} onClick={() => toggleSort("actor")} />
               <SortTh col="duration" label="Duration" current={sortCol} dir={sortDir} onClick={() => toggleSort("duration")} />
               <SortTh col="queue"    label="Queue"   current={sortCol} dir={sortDir} onClick={() => toggleSort("queue")} />
-              <SortTh col="attempt"  label="Attempt" current={sortCol} dir={sortDir} onClick={() => toggleSort("attempt")} />
               <SortTh col="started"  label="Started" current={sortCol} dir={sortDir} onClick={() => toggleSort("started")} />
             </tr>
           </thead>
@@ -992,27 +989,19 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-xs text-slate-400">{formatDuration(run.queue_wait_ms)}</span>
                   </td>
-                  {/* attempt */}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {(run.run_attempt ?? 1) > 1 ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-500/10 border border-amber-500/20 text-amber-300">
-                        <RotateCcw className="w-3 h-3" />×{run.run_attempt}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-600">—</span>
-                    )}
-                  </td>
                   {/* started */}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-slate-500" />
-                      {formatDistanceToNow(new Date(run.created_at))} ago
+                      <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
+                      <span className="tabular-nums">
+                        {new Date(run.created_at).toISOString().replace("T", " ").slice(0, 19)} UTC
+                      </span>
                     </span>
                   </td>
                 </tr>
                 {/* expandable job/step drill-down */}
                 {expanded.has(run.id) && (
-                  <RunJobsRow runId={run.id} owner={owner} repo={repo} colSpan={11} />
+                  <RunJobsRow runId={run.id} owner={owner} repo={repo} colSpan={10} />
                 )}
               </React.Fragment>
             ))}
@@ -1037,6 +1026,32 @@ function RunJobsRow({
     fetcher<WorkflowJob[]>
   );
 
+  // Compute overall run window for the Gantt (earliest started_at → latest completed_at)
+  const ganttWindow = useMemo(() => {
+    if (!jobs?.length) return null;
+    const starts = jobs.map(j => j.started_at ? new Date(j.started_at).getTime() : null).filter(Boolean) as number[];
+    const ends   = jobs.map(j => j.completed_at ? new Date(j.completed_at).getTime() : null).filter(Boolean) as number[];
+    if (!starts.length || !ends.length) return null;
+    const minT = Math.min(...starts);
+    const maxT = Math.max(...ends);
+    const span = maxT - minT;
+    return span > 0 ? { minT, span } : null;
+  }, [jobs]);
+
+  // Total run duration = last completed_at − first started_at
+  const totalDuration = useMemo(() => {
+    if (!ganttWindow) return null;
+    return ganttWindow.span;
+  }, [ganttWindow]);
+
+  const conclusionColor: Record<string, string> = {
+    success:   "bg-green-500",
+    failure:   "bg-red-500",
+    cancelled: "bg-yellow-500",
+    skipped:   "bg-slate-600",
+    timed_out: "bg-orange-500",
+  };
+
   const inner = isLoading ? (
     <p className="text-xs text-slate-500 animate-pulse">Loading jobs…</p>
   ) : jobsError ? (
@@ -1044,39 +1059,100 @@ function RunJobsRow({
   ) : !jobs?.length ? (
     <p className="text-xs text-slate-500">No job data available.</p>
   ) : (
-    <div className="space-y-3">
-      {jobs.map(job => (
-        <div key={job.id}>
-          {/* job header */}
-          <div className="flex items-center gap-2 mb-1">
-            <ConclusionBadge conclusion={job.conclusion} status={job.status} />
-            <span className="text-xs font-medium text-slate-200">{job.name}</span>
-            {job.duration_ms !== null && (
-              <span className="ml-auto text-xs text-slate-500">{formatDuration(job.duration_ms)}</span>
-            )}
-          </div>
-          {/* steps */}
-          {job.steps.length > 0 && (
-            <div className="ml-4 space-y-0.5 border-l border-slate-700/40 pl-3">
-              {job.steps.map(step => (
-                <div key={step.number} className="flex items-center gap-2 text-xs text-slate-400">
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full shrink-0",
-                    step.conclusion === "success" ? "bg-green-400"
-                    : step.conclusion === "failure" ? "bg-red-400"
-                    : step.conclusion === "skipped" ? "bg-slate-600"
-                    : "bg-slate-500"
-                  )} />
-                  <span className="truncate max-w-xs">{step.name}</span>
-                  {step.duration_ms !== null && (
-                    <span className="ml-auto text-slate-600 tabular-nums">{formatDuration(step.duration_ms)}</span>
+    <div className="space-y-4">
+      {/* ── header: total run duration ── */}
+      <div className="flex items-center gap-2">
+        <Clock className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+        <span className="text-xs font-semibold text-slate-200">
+          Run duration:&nbsp;
+          <span className="text-violet-300 tabular-nums">
+            {totalDuration != null ? formatDuration(totalDuration) : "—"}
+          </span>
+        </span>
+      </div>
+
+      {/* ── Gantt timeline ── */}
+      {ganttWindow && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Timeline</p>
+          {jobs.map((job, ji) => {
+            const jStart = job.started_at ? new Date(job.started_at).getTime() : null;
+            const jEnd   = job.completed_at ? new Date(job.completed_at).getTime() : null;
+            const left   = jStart != null ? ((jStart - ganttWindow.minT) / ganttWindow.span) * 100 : 0;
+            const width  = (jStart != null && jEnd != null)
+              ? Math.max(((jEnd - jStart) / ganttWindow.span) * 100, 0.5)
+              : 0;
+            const barColor = conclusionColor[job.conclusion ?? ""] ?? "bg-slate-500";
+            const palette  = ["bg-violet-500","bg-blue-500","bg-cyan-500","bg-teal-500","bg-green-600","bg-orange-500","bg-pink-500"];
+            const barFill  = job.conclusion === "success"
+              ? palette[ji % palette.length]
+              : barColor;
+            return (
+              <div key={job.id} className="flex items-center gap-2">
+                {/* job name */}
+                <span className="w-40 shrink-0 text-[11px] text-slate-400 truncate text-right" title={job.name}>
+                  {job.name}
+                </span>
+                {/* bar track */}
+                <div className="relative flex-1 h-4 bg-slate-800 rounded overflow-hidden">
+                  {width > 0 && (
+                    <div
+                      className={cn("absolute top-0 h-full rounded", barFill, "opacity-80")}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                      title={`${job.name}: ${formatDuration(job.duration_ms ?? 0)}`}
+                    />
                   )}
                 </div>
-              ))}
-            </div>
-          )}
+                {/* duration label */}
+                <span className="w-16 shrink-0 text-[11px] text-slate-500 tabular-nums text-right">
+                  {job.duration_ms != null ? formatDuration(job.duration_ms) : "—"}
+                </span>
+              </div>
+            );
+          })}
+          {/* axis labels */}
+          <div className="flex ml-[10.5rem] mr-16 text-[10px] text-slate-600 tabular-nums">
+            <span>0s</span>
+            <span className="ml-auto">{formatDuration(ganttWindow.span)}</span>
+          </div>
         </div>
-      ))}
+      )}
+
+      {/* ── job + step list ── */}
+      <div className="space-y-3 border-t border-slate-700/40 pt-3">
+        {jobs.map(job => (
+          <div key={job.id}>
+            {/* job header */}
+            <div className="flex items-center gap-2 mb-1">
+              <ConclusionBadge conclusion={job.conclusion} status={job.status} />
+              <span className="text-xs font-medium text-slate-200">{job.name}</span>
+              {job.duration_ms !== null && (
+                <span className="ml-auto text-xs text-slate-500 tabular-nums">{formatDuration(job.duration_ms)}</span>
+              )}
+            </div>
+            {/* steps */}
+            {job.steps.length > 0 && (
+              <div className="ml-4 space-y-0.5 border-l border-slate-700/40 pl-3">
+                {job.steps.map(step => (
+                  <div key={step.number} className="flex items-center gap-2 text-xs text-slate-400">
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      step.conclusion === "success" ? "bg-green-400"
+                      : step.conclusion === "failure" ? "bg-red-400"
+                      : step.conclusion === "skipped" ? "bg-slate-600"
+                      : "bg-slate-500"
+                    )} />
+                    <span className="truncate max-w-xs">{step.name}</span>
+                    {step.duration_ms !== null && (
+                      <span className="ml-auto text-slate-600 tabular-nums">{formatDuration(step.duration_ms)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
