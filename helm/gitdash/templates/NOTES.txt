@@ -1,0 +1,29 @@
+1. GitDash has been deployed. Get the application URL:
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+
+  After deploying, point your DNS CNAME to the ALB hostname:
+    kubectl get ingress -n {{ include "gitdash.namespace" . }} {{ include "gitdash.fullname" . }} \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get svc -n {{ include "gitdash.namespace" . }} {{ include "gitdash.fullname" . }} \
+    -o jsonpath='{.spec.ports[0].nodePort}')
+  export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+  echo "http://$NODE_IP:$NODE_PORT"
+
+{{- else }}
+  kubectl port-forward -n {{ include "gitdash.namespace" . }} \
+    svc/{{ include "gitdash.fullname" . }} 3000:80
+  echo "http://localhost:3000"
+{{- end }}
+
+2. Check pod status:
+    kubectl get pods -n {{ include "gitdash.namespace" . }} -l app.kubernetes.io/name={{ include "gitdash.name" . }}
+
+3. Tail logs:
+    kubectl logs -n {{ include "gitdash.namespace" . }} \
+      -l app.kubernetes.io/name={{ include "gitdash.name" . }} --follow

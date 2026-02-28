@@ -1,0 +1,168 @@
+# ── Image ─────────────────────────────────────────────────────────────────────
+image:
+  repository: dinhdobathi/gitdash
+  tag: ""          # defaults to .Chart.AppVersion when empty
+  pullPolicy: Always
+
+imagePullSecrets: []
+
+# ── Replica / update strategy ─────────────────────────────────────────────────
+replicaCount: 2
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# ── Application config (non-secret) ──────────────────────────────────────────
+config:
+  # standalone  → users enter their own GitHub PAT on /setup
+  # organization → GitHub OAuth (set githubClientId / githubClientSecret below)
+  mode: standalone
+
+  # Public-facing URL — used for the OAuth callback URL in organization mode.
+  # Must match your ingress host (including scheme).
+  appUrl: "https://gitdash.example.com"
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+secret:
+  # When create: true the chart creates a Secret from the values below.
+  # For production, set create: false and point existingSecretName at a
+  # pre-existing secret (e.g. created by External Secrets Operator).
+  create: true
+  existingSecretName: ""   # used only when create: false
+
+  # Required — min 32 chars. Generate: openssl rand -hex 32
+  sessionSecret: "REPLACE_WITH_RANDOM_32_CHAR_STRING_HERE_!!"
+
+  # Required only in organization (OAuth) mode
+  githubClientId: ""
+  githubClientSecret: ""
+
+# ── Service ───────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 80
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+
+  # ingressClassName is set on spec.ingressClassName (preferred in k8s ≥1.18)
+  # Leave empty to rely on the annotation below instead.
+  className: ""
+
+  annotations:
+    # AWS ALB (requires AWS Load Balancer Controller)
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTPS redirect
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+
+    # Health check
+    alb.ingress.kubernetes.io/healthcheck-path: /api/auth/me
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # ALB idle timeout
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+
+    # Cost-allocation tags
+    alb.ingress.kubernetes.io/tags: "app=gitdash,env=production"
+
+  # ACM certificate ARN — set this to enable TLS on the ALB.
+  # Example: arn:aws:acm:ap-southeast-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  # Leave empty to omit the annotation (ALB will listen on HTTP only).
+  certificateArn: ""
+
+  hosts:
+    - host: gitdash.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+  # Standard k8s TLS block (not used by ALB — ALB TLS is via certificateArn above).
+  # Uncomment if using nginx-ingress or another controller that handles TLS here.
+  tls: []
+  # - secretName: gitdash-tls
+  #   hosts:
+  #     - gitdash.example.com
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# ── Probes ────────────────────────────────────────────────────────────────────
+readinessProbe:
+  httpGet:
+    path: /api/auth/me
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 3
+
+livenessProbe:
+  httpGet:
+    path: /api/auth/me
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  failureThreshold: 3
+
+# ── Pod security ──────────────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # Next.js writes to /tmp at runtime
+  capabilities:
+    drop: [ALL]
+
+# ── Topology spread (multi-AZ) ────────────────────────────────────────────────
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: ScheduleAnyway
+
+# ── Namespace ─────────────────────────────────────────────────────────────────
+namespaceOverride: ""   # defaults to .Release.Namespace
+
+# ── Extra env vars (injected into the container) ──────────────────────────────
+extraEnv: []
+# - name: CUSTOM_VAR
+#   value: "custom-value"
+
+# ── Pod annotations / labels ─────────────────────────────────────────────────
+podAnnotations: {}
+podLabels: {}
+
+# ── Node selector / tolerations / affinity ───────────────────────────────────
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ── Service account ───────────────────────────────────────────────────────────
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+terminationGracePeriodSeconds: 30

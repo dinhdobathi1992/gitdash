@@ -1,0 +1,15 @@
+apiVersion: v2
+name: gitdash
+description: Self-hosted GitHub Actions metrics dashboard (standalone PAT or GitHub OAuth)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - github-actions
+  - dashboard
+  - devops
+home: https://github.com/dinhdobathi1992/gitdash
+sources:
+  - https://github.com/dinhdobathi1992/gitdash
+maintainers:
+  - name: dinhdobathi
