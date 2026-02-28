@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+
+  "required": ["config", "secret"],
+
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag":        { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "additionalProperties": false
+    },
+
+    "imagePullSecrets": { "type": "array" },
+
+    "replicaCount": { "type": "integer", "minimum": 1 },
+
+    "strategy": { "type": "object" },
+
+    "config": {
+      "type": "object",
+      "required": ["mode", "appUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["standalone", "organization"],
+          "description": "standalone: users enter their own GitHub PAT. organization: GitHub OAuth app."
+        },
+        "appUrl": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "Public-facing URL including scheme, e.g. https://gitdash.example.com"
+        }
+      }
+    },
+
+    "secret": {
+      "type": "object",
+      "required": ["sessionSecret"],
+      "additionalProperties": false,
+      "properties": {
+        "create":             { "type": "boolean" },
+        "existingSecretName": { "type": "string" },
+        "sessionSecret": {
+          "type": "string",
+          "minLength": 32,
+          "description": "Required. Must be at least 32 characters. Generate with: openssl rand -hex 32"
+        },
+        "githubClientId":     { "type": "string" },
+        "githubClientSecret": { "type": "string" }
+      }
+    },
+
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "additionalProperties": false
+    },
+
+    "ingress":                   { "type": "object" },
+    "resources":                 { "type": "object" },
+    "readinessProbe":            { "type": "object" },
+    "livenessProbe":             { "type": "object" },
+    "podSecurityContext":        { "type": "object" },
+    "containerSecurityContext":  { "type": "object" },
+    "topologySpread":            { "type": "object" },
+    "namespaceOverride":         { "type": "string" },
+    "extraEnv":                  { "type": "array" },
+    "podAnnotations":            { "type": "object" },
+    "podLabels":                 { "type": "object" },
+    "nodeSelector":              { "type": "object" },
+    "tolerations":               { "type": "array" },
+    "affinity":                  { "type": "object" },
+    "serviceAccount":            { "type": "object" },
+    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+    "nameOverride":              { "type": "string" },
+    "fullnameOverride":          { "type": "string" }
+  },
+
+  "if": {
+    "properties": {
+      "config": {
+        "properties": {
+          "mode": { "const": "standalone" }
+        },
+        "required": ["mode"]
+      }
+    }
+  },
+  "then": {
+    "title": "standalone mode: GitHub OAuth fields must be empty",
+    "properties": {
+      "secret": {
+        "properties": {
+          "githubClientId": {
+            "maxLength": 0,
+            "description": "Must be empty in standalone mode — users supply their own PAT."
+          },
+          "githubClientSecret": {
+            "maxLength": 0,
+            "description": "Must be empty in standalone mode — users supply their own PAT."
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "title": "organization mode: GitHub OAuth fields are required",
+    "properties": {
+      "secret": {
+        "required": ["githubClientId", "githubClientSecret"],
+        "properties": {
+          "githubClientId": {
+            "minLength": 1,
+            "description": "Required in organization mode."
+          },
+          "githubClientSecret": {
+            "minLength": 1,
+            "description": "Required in organization mode."
+          }
+        }
+      }
+    }
+  }
+}
