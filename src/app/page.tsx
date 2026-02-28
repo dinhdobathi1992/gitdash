@@ -11,7 +11,7 @@ import { Repo, Workflow, GitHubOrg } from "@/lib/github";
 import { useAuth } from "@/components/AuthProvider";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Search, Lock, Unlock, Star, AlertCircle, ChevronRight,
+  Search, Lock, Unlock, Star, AlertCircle, ChevronRight, ChevronLeft,
   RefreshCw, Zap, Building2, User, ChevronDown, X,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
@@ -269,6 +269,10 @@ function HomeContent() {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [visFilter, setVisFilter] = useState<VisibilityFilter>("all");
+  // Page state paired with the filter snapshot it was set under.
+  // When filters change, effectivePage resets to 1 without needing useEffect.
+  const PAGE_SIZE = 20;
+  const [pageState, setPageState] = useState<{ page: number; key: string }>({ page: 1, key: "" });
   const searchRef = useRef<HTMLInputElement>(null);
 
   const orgParam = searchParams.get("org");
@@ -326,8 +330,23 @@ function HomeContent() {
     });
   }, [displayed, search, effectiveLangFilter, visFilter]);
 
-  // Clamp activeIndex to valid range without a setState-in-effect
-  const clampedActiveIndex = Math.min(activeIndex, filtered.length - 1);
+  // ── Pagination — derive current page from filter snapshot to avoid setState-in-effect
+  const filterKey = `${search}|${effectiveLangFilter}|${visFilter}|${orgParam}`;
+  // When the filter key changes, the stored key no longer matches → reset to page 1.
+  const effectivePage = pageState.key === filterKey ? pageState.page : 1;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(effectivePage, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  );
+
+  function setPage(p: number) {
+    setPageState({ page: p, key: filterKey });
+  }
+
+  // Clamp activeIndex to visible (paginated) range without a setState-in-effect
+  const clampedActiveIndex = Math.min(activeIndex, paginated.length - 1);
 
   function handleRefresh() {
     mutate(() => true, undefined, { revalidate: true });
@@ -366,12 +385,12 @@ function HomeContent() {
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, paginated.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter" && clampedActiveIndex >= 0) {
-      const hit = filtered[clampedActiveIndex];
+      const hit = paginated[clampedActiveIndex];
       if (hit) router.push(`/repos/${hit.repo.owner}/${hit.repo.name}`);
     }
   }
@@ -399,7 +418,10 @@ function HomeContent() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatar_url} alt={user.login} width={28} height={28} className="w-7 h-7 rounded-full" />
                 )}
-                <h1 className="text-2xl font-bold text-white">Personal Repos</h1>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">Personal Repos</h1>
+                  {user && <p className="text-xs text-slate-500 font-mono mt-0.5">@{user.login}</p>}
+                </div>
               </div>
             )}
           </div>
@@ -514,7 +536,7 @@ function HomeContent() {
         <RepoSkeleton />
       ) : (
         <div className="grid gap-3">
-          {filtered.map(({ repo, nameIndices }, i) => (
+          {paginated.map(({ repo, nameIndices }, i) => (
             <RepoCard
               key={repo.id}
               repo={repo}
@@ -525,6 +547,40 @@ function HomeContent() {
           {filtered.length === 0 && !isLoading && (
             <p className="text-center text-slate-500 py-16">No repositories found.</p>
           )}
+        </div>
+      )}
+
+      {/* Pagination controls */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-5 border-t border-slate-800">
+          <button
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+            disabled={safePage <= 1}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Previous
+          </button>
+
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-slate-400">
+              Page <span className="text-white font-medium">{safePage}</span> of{" "}
+              <span className="text-white font-medium">{totalPages}</span>
+            </span>
+            <span className="text-slate-600 mx-2">·</span>
+            <span className="text-xs text-slate-500">
+              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+          </div>
+
+          <button
+            onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+            disabled={safePage >= totalPages}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Next
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>
