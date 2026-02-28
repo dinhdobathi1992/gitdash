@@ -157,9 +157,7 @@ export default function Sidebar() {
 
       {/* Version info */}
       <div className="px-3 pt-3 pb-1">
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
-          <span className="font-mono">GitDash</span>
-          <span className="text-slate-700">·</span>
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-600 pl-8">
           <span className="font-mono text-slate-500">v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
           <span className="text-slate-700">·</span>
           <a
