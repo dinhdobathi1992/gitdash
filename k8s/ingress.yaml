@@ -1,0 +1,51 @@
+# ── EKS ALB Ingress ───────────────────────────────────────────────────────────
+# Prerequisites:
+#   - AWS Load Balancer Controller installed in the cluster
+#     https://kubernetes-sigs.github.io/aws-load-balancer-controller/
+#   - ACM certificate ARN for your domain in the annotation below
+#   - DNS CNAME pointing gitdash.example.com → ALB hostname (get from:
+#     kubectl get ingress -n gitdash gitdash -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitdash
+  namespace: gitdash
+  labels:
+    app.kubernetes.io/name: gitdash
+  annotations:
+    # Use AWS ALB (requires AWS Load Balancer Controller)
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # TLS — replace with your ACM certificate ARN
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    # Redirect HTTP → HTTPS
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # Health check path
+    alb.ingress.kubernetes.io/healthcheck-path: /api/auth/me
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # Idle timeout (match Next.js graceful shutdown)
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+
+    # Tags for cost allocation
+    alb.ingress.kubernetes.io/tags: "app=gitdash,env=production"
+spec:
+  rules:
+    - host: gitdash.example.com   # ← replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitdash
+                port:
+                  name: http

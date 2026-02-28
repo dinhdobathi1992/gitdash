@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitdash-config
+  namespace: gitdash
+  labels:
+    app.kubernetes.io/name: gitdash
+data:
+  # standalone = each user enters their own GitHub PAT on /setup
+  # organization = GitHub OAuth (requires GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET in secret)
+  MODE: "standalone"
+
+  # Public URL of the app — used for OAuth callback construction
+  # Update to your actual ingress hostname
+  NEXT_PUBLIC_APP_URL: "https://gitdash.example.com"
+
+  NODE_ENV: "production"
+  NEXT_TELEMETRY_DISABLED: "1"
