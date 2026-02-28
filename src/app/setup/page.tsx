@@ -45,8 +45,9 @@ export default function SetupPage() {
       <div className="relative w-full max-w-md">
         {/* logo */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-2xl shadow-violet-500/30 mb-4">
-            <Activity className="w-7 h-7 text-white" />
+          <div className="w-14 h-14 shrink-0 rounded-2xl overflow-hidden shadow-2xl shadow-violet-500/30 mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="GitDash Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">GitDash</h1>
           <p className="text-sm text-slate-400 mt-1">GitHub Actions Dashboard</p>
