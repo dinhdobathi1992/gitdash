@@ -884,19 +884,22 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: Workflo
       return `"${String(v ?? "").replace(/"/g, '""')}"`;
     }
     const headers = ["Run#", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Started", "SHA", "Commit Message"];
-    const rows = sortedRuns.map(r => [
-      csvField(r.run_number),
-      csvField(r.status),
-      csvField(r.conclusion),
-      csvField(r.head_branch),
-      csvField(r.event),
-      csvField(r.actor?.login),
-      csvField(r.duration_ms),
-      csvField(r.queue_wait_ms),
-      csvField(r.created_at),
-      csvField(r.head_sha),
-      csvField((r.head_commit?.message ?? "").split("\n")[0]),
-    ]);
+    const rows = sortedRuns.map(r => {
+      const isActive = r.status != null && ACTIVE_RUN_STATUSES.has(r.status);
+      return [
+        csvField(r.run_number),
+        csvField(r.status),
+        csvField(isActive ? "(in progress at export)" : r.conclusion),
+        csvField(r.head_branch),
+        csvField(r.event),
+        csvField(r.actor?.login),
+        csvField(isActive ? "(in progress)" : r.duration_ms),
+        csvField(r.queue_wait_ms),
+        csvField(r.created_at),
+        csvField(r.head_sha),
+        csvField((r.head_commit?.message ?? "").split("\n")[0]),
+      ];
+    });
     const csv = [headers.map(csvField).join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
