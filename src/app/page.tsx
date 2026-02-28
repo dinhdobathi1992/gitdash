@@ -7,12 +7,13 @@ import useSWR, { useSWRConfig } from "swr";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fetcher } from "@/lib/swr";
-import { Repo, Workflow, GitHubOrg } from "@/lib/github";
+import { Repo, GitHubOrg, RepoSummary } from "@/lib/github";
 import { useAuth } from "@/components/AuthProvider";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Search, Lock, Unlock, Star, AlertCircle, ChevronRight, ChevronLeft,
-  RefreshCw, Zap, Building2, User, ChevronDown, X,
+  Search, Lock, Unlock, AlertCircle, ChevronRight, ChevronLeft,
+  RefreshCw, Building2, User, ChevronDown, X, CheckCircle2,
+  XCircle, Clock, GitCommit, Info,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 
@@ -30,136 +31,322 @@ function Highlighted({ text, indices }: { text: string; indices: number[] }) {
   );
 }
 
-// ── Workflow chips — lazy via IntersectionObserver ────────────────────────────
-function WorkflowChips({ owner, repo }: { owner: string; repo: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
-      { rootMargin: "200px" }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const { data: workflows, isLoading, error: workflowsError } = useSWR<Workflow[]>(
-    visible ? `/api/github/workflows?owner=${owner}&repo=${repo}` : null,
-    fetcher<Workflow[]>
-  );
+// ── Run history bars (last 10) ────────────────────────────────────────────────
+function RunHistoryBars({ runs }: { runs: RepoSummary["recent_runs"] }) {
+  // Pad to exactly 10 slots
+  const slots = [...runs];
+  while (slots.length < 10) slots.push({ id: -slots.length, conclusion: null, status: null, created_at: "" });
 
   return (
-    <div ref={ref} className="shrink-0 flex items-center gap-2">
-      {!visible || isLoading ? (
-        <span className="text-xs text-slate-600 animate-pulse">Loading...</span>
-      ) : workflowsError ? (
-        <span className="text-xs text-red-500/70" title={workflowsError.message}>Error</span>
-      ) : !workflows || workflows.length === 0 ? (
-        <span className="text-xs text-slate-600">No workflows</span>
-      ) : (
-        <div className="flex flex-wrap gap-1.5 justify-end max-w-xs">
-          {workflows.slice(0, 5).map((wf) => (
-            <Link
-              key={wf.id}
-              href={`/repos/${owner}/${repo}/workflows/${wf.id}`}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-700/50 hover:bg-violet-500/20 hover:border-violet-500/30 border border-slate-600/30 text-xs text-slate-300 hover:text-violet-200 transition-all"
-            >
-              <Zap className="w-3 h-3" />
-              <span className="truncate max-w-[120px]">{wf.name}</span>
-            </Link>
-          ))}
-          {workflows.length > 5 && (
-            <Link
-              href={`/repos/${owner}/${repo}`}
-              className="px-2 py-1 rounded-lg bg-slate-700/30 border border-slate-600/30 text-xs text-slate-400 hover:text-white transition-colors"
-            >
-              +{workflows.length - 5} more
-            </Link>
-          )}
-        </div>
-      )}
-      <Link
-        href={`/repos/${owner}/${repo}`}
-        className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </Link>
+    <div className="flex items-end gap-0.5 h-6">
+      {slots.map((r) => {
+        let bg = "bg-slate-700/50";
+        if (r.conclusion === "success") bg = "bg-emerald-500";
+        else if (r.conclusion === "failure") bg = "bg-red-500";
+        else if (r.conclusion === "cancelled") bg = "bg-yellow-500/70";
+        else if (r.status === "in_progress") bg = "bg-blue-500 animate-pulse";
+        return (
+          <div
+            key={r.id}
+            title={r.conclusion ?? r.status ?? "no data"}
+            className={cn("w-2.5 rounded-sm transition-all", bg)}
+            style={{ height: r.conclusion || r.status === "in_progress" ? "100%" : "40%" }}
+          />
+        );
+      })}
     </div>
   );
 }
 
-// ── Repo card ─────────────────────────────────────────────────────────────────
-function RepoCard({
+// ── Trend sparkline (30d) — inline SVG ───────────────────────────────────────
+function TrendSparkline({ points }: { points: RepoSummary["trend_30d"] }) {
+  if (points.length < 2) {
+    return <span className="text-xs text-slate-600 italic">no data</span>;
+  }
+
+  const W = 120;
+  const H = 32;
+  const rates = points.map((p) => (p.total > 0 ? p.success / p.total : 0));
+  const maxR = Math.max(...rates, 0.01);
+
+  const coords = rates.map((r, i) => ({
+    x: (i / (rates.length - 1)) * W,
+    y: H - (r / maxR) * (H - 4) - 2,
+  }));
+
+  const pathD = coords
+    .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(" ");
+
+  const lastRate = rates[rates.length - 1];
+  const strokeColor = lastRate >= 0.8 ? "#10b981" : lastRate >= 0.5 ? "#f59e0b" : "#ef4444";
+
+  // Area fill
+  const areaD = `${pathD} L${W},${H} L0,${H} Z`;
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      <defs>
+        <linearGradient id={`tg-${points[0]?.date ?? "x"}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#tg-${points[0]?.date ?? "x"})`} />
+      <path d={pathD} fill="none" stroke={strokeColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* dot at last point */}
+      <circle cx={coords[coords.length - 1].x} cy={coords[coords.length - 1].y} r="2.5" fill={strokeColor} />
+    </svg>
+  );
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
+function StatusBadge({ summary }: { summary: RepoSummary | undefined }) {
+  if (!summary) return <span className="text-xs text-slate-600">—</span>;
+
+  const { latest_conclusion, latest_status, latest_run_at } = summary;
+
+  if (latest_status === "in_progress") {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-500/10 border-blue-500/30 text-blue-300">
+          <Clock className="w-3 h-3 animate-spin" /> Running
+        </span>
+      </div>
+    );
+  }
+  if (latest_conclusion === "success") {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+          Passing
+        </span>
+        {latest_run_at && (
+          <p className="text-[11px] text-slate-500 mt-1">
+            {formatDistanceToNow(new Date(latest_run_at))} ago
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (latest_conclusion === "failure") {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-red-500/10 border-red-500/30 text-red-300">
+          Failing
+        </span>
+        {latest_run_at && (
+          <p className="text-[11px] text-slate-500 mt-1">
+            {formatDistanceToNow(new Date(latest_run_at))} ago
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (latest_conclusion === "cancelled") {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-yellow-500/10 border-yellow-500/30 text-yellow-300">
+          Cancelled
+        </span>
+        {latest_run_at && (
+          <p className="text-[11px] text-slate-500 mt-1">
+            {formatDistanceToNow(new Date(latest_run_at))} ago
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return <span className="text-xs text-slate-600">No runs</span>;
+}
+
+// ── Health badge ──────────────────────────────────────────────────────────────
+function HealthBadge({ summary }: { summary: RepoSummary | undefined }) {
+  if (!summary || summary.recent_runs.every((r) => !r.conclusion)) {
+    return <span className="text-xs text-slate-600">—</span>;
+  }
+  const rate = summary.success_rate;
+  if (rate >= 80) {
+    return (
+      <div>
+        <span className="flex items-center gap-1 text-sm font-medium text-emerald-400">
+          <CheckCircle2 className="w-4 h-4" /> Good
+        </span>
+        <p className="text-[11px] text-slate-500 mt-0.5">{rate}% success</p>
+      </div>
+    );
+  }
+  if (rate >= 50) {
+    return (
+      <div>
+        <span className="flex items-center gap-1 text-sm font-medium text-yellow-400">
+          <Info className="w-4 h-4" /> Fair
+        </span>
+        <p className="text-[11px] text-slate-500 mt-0.5">{rate}% success</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <span className="flex items-center gap-1 text-sm font-medium text-red-400">
+        <XCircle className="w-4 h-4" /> Poor
+      </span>
+      <p className="text-[11px] text-slate-500 mt-0.5">{rate}% success</p>
+    </div>
+  );
+}
+
+// ── Repo row — lazily fetches summary when row enters viewport ────────────────
+function RepoRow({
   repo, nameIndices, active,
 }: {
   repo: Repo;
   nameIndices: number[];
   active: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLTableRowElement>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (active) ref.current?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const { data: summary } = useSWR<RepoSummary>(
+    visible ? `/api/github/repo-summary?owner=${repo.owner}&repo=${repo.name}` : null,
+    fetcher<RepoSummary>
+  );
+
   return (
-    <div
+    <tr
       ref={ref}
       className={cn(
-        "group bg-slate-800/40 hover:bg-slate-800/70 border rounded-xl p-4 transition-all",
-        active
-          ? "border-violet-500/50 bg-slate-800/70 ring-1 ring-violet-500/30"
-          : "border-slate-700/40 hover:border-slate-600/60"
+        "group border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer",
+        active && "bg-slate-800/60 ring-1 ring-inset ring-violet-500/30"
       )}
+      onClick={() => {/* navigated via Link inside */}}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            {repo.private
-              ? <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              : <Unlock className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
+      {/* Repository */}
+      <td className="py-3.5 pl-5 pr-4">
+        <div className="flex items-start gap-2.5">
+          {repo.private
+            ? <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+            : <Unlock className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />}
+          <div className="min-w-0">
             <Link
               href={`/repos/${repo.owner}/${repo.name}`}
-              className="text-sm font-semibold text-white hover:text-violet-300 transition-colors font-mono truncate"
+              className="text-sm font-semibold text-white hover:text-violet-300 transition-colors font-mono truncate block"
+              onClick={(e) => e.stopPropagation()}
             >
               <span className="text-slate-400">{repo.owner}/</span>
               <Highlighted text={repo.name} indices={nameIndices} />
             </Link>
-            {repo.language && (
-              <span className="text-xs text-slate-500 bg-slate-700/50 px-2 py-0.5 rounded-full shrink-0">
-                {repo.language}
-              </span>
-            )}
-          </div>
-          {repo.description && (
-            <p className="text-xs text-slate-400 truncate mb-2">{repo.description}</p>
-          )}
-          <div className="flex items-center gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1">
-              <Star className="w-3 h-3" />{repo.stargazers_count}
-            </span>
-            {repo.updated_at && (
-              <span>Updated {formatDistanceToNow(new Date(repo.updated_at))} ago</span>
-            )}
+
+            {/* Last commit line */}
+            {summary?.latest_sha ? (
+              <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                <GitCommit className="w-3 h-3 shrink-0" />
+                <span className="font-mono">{summary.latest_sha}</span>
+                {summary.latest_message && (
+                  <span className="truncate max-w-[180px]">{summary.latest_message}</span>
+                )}
+                {summary.latest_actor && (
+                  <span>by {summary.latest_actor}</span>
+                )}
+                {summary.latest_run_at && (
+                  <span>{formatDistanceToNow(new Date(summary.latest_run_at))} ago</span>
+                )}
+              </div>
+            ) : repo.updated_at ? (
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Updated {formatDistanceToNow(new Date(repo.updated_at))} ago
+              </p>
+            ) : null}
           </div>
         </div>
-        <WorkflowChips owner={repo.owner} repo={repo.name} />
-      </div>
-    </div>
+      </td>
+
+      {/* Status */}
+      <td className="py-3.5 px-4 w-36">
+        <StatusBadge summary={summary} />
+      </td>
+
+      {/* Health */}
+      <td className="py-3.5 px-4 w-36">
+        <HealthBadge summary={summary} />
+      </td>
+
+      {/* Run History (10) */}
+      <td className="py-3.5 px-4 w-48">
+        {summary ? (
+          <RunHistoryBars runs={summary.recent_runs} />
+        ) : (
+          <div className="flex items-end gap-0.5 h-6">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="w-2.5 h-2 rounded-sm bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+        )}
+      </td>
+
+      {/* Trend (30d) */}
+      <td className="py-3.5 px-4 w-36">
+        {summary ? (
+          <TrendSparkline points={summary.trend_30d} />
+        ) : (
+          <div className="h-8 w-28 rounded bg-slate-800 animate-pulse" />
+        )}
+      </td>
+
+      {/* Arrow */}
+      <td className="py-3.5 pr-5 w-10 text-right">
+        <Link
+          href={`/repos/${repo.owner}/${repo.name}`}
+          className="inline-flex text-slate-600 group-hover:text-slate-300 transition-colors"
+          aria-label={`Open ${repo.name}`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      </td>
+    </tr>
   );
 }
 
-// ── Skeleton ─────────────────────────────────────────────────────────────────
-function RepoSkeleton() {
+// ── Table skeleton ────────────────────────────────────────────────────────────
+function TableSkeleton() {
   return (
-    <div className="grid gap-3">
+    <tbody>
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="h-20 rounded-xl bg-slate-800/40 border border-slate-700/30 animate-pulse" />
+        <tr key={i} className="border-b border-slate-800">
+          <td className="py-4 pl-5 pr-4">
+            <div className="h-4 w-48 bg-slate-800 rounded animate-pulse mb-1.5" />
+            <div className="h-3 w-64 bg-slate-800/60 rounded animate-pulse" />
+          </td>
+          <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-800 rounded-full animate-pulse" /></td>
+          <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-800 rounded animate-pulse" /></td>
+          <td className="py-4 px-4">
+            <div className="flex items-end gap-0.5 h-6">
+              {Array.from({ length: 10 }).map((_, j) => (
+                <div key={j} className="w-2.5 h-full bg-slate-800 rounded-sm animate-pulse" />
+              ))}
+            </div>
+          </td>
+          <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-800 rounded animate-pulse" /></td>
+          <td className="py-4 pr-5" />
+        </tr>
       ))}
-    </div>
+    </tbody>
   );
 }
 
@@ -269,8 +456,6 @@ function HomeContent() {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [visFilter, setVisFilter] = useState<VisibilityFilter>("all");
-  // Page state paired with the filter snapshot it was set under.
-  // When filters change, effectivePage resets to 1 without needing useEffect.
   const PAGE_SIZE = 20;
   const [pageState, setPageState] = useState<{ page: number; key: string }>({ page: 1, key: "" });
   const searchRef = useRef<HTMLInputElement>(null);
@@ -279,8 +464,6 @@ function HomeContent() {
 
   const { data: orgs } = useSWR<GitHubOrg[]>("/api/github/orgs", fetcher<GitHubOrg[]>);
 
-  // The repos API authenticates via session cookie — it doesn't need user
-  // identity on the client. Fetch immediately; no gate needed.
   const reposUrl = orgParam
     ? `/api/github/org-repos?org=${orgParam}`
     : "/api/github/repos";
@@ -289,35 +472,25 @@ function HomeContent() {
     data: repos, error, isLoading, isValidating, mutate: mutateRepos,
   } = useSWR<Repo[]>(reposUrl, fetcher<Repo[]>);
 
-  // When no org is selected show all repos from listForAuthenticatedUser —
-  // that includes personal repos AND org repos the user has access to.
-  // Filtering by owner===user.login would hide org repos and show nothing
-  // for users who keep all repos under an org.
   const displayed = useMemo(() => repos ?? [], [repos]);
 
-  // ── Available languages for filter pills
+  // Available languages for filter pills
   const languages = useMemo(() => {
     const langs = new Set<string>();
     for (const r of displayed) if (r.language) langs.add(r.language);
     return [...langs].sort();
   }, [displayed]);
 
-  // ── Fuzzy + filter pipeline
+  // Fuzzy + filter pipeline
   type Match = { repo: Repo; nameIndices: number[] };
 
-  // Clamp lang filter: if the current language no longer exists in the repo
-  // list (e.g. after switching orgs) treat it as unset rather than running
-  // a setState-in-effect which the linter forbids.
   const effectiveLangFilter = langFilter && languages.includes(langFilter) ? langFilter : null;
 
   const filtered = useMemo<Match[]>(() => {
     return displayed.flatMap((repo) => {
-      // visibility
       if (visFilter === "public" && repo.private) return [];
       if (visFilter === "private" && !repo.private) return [];
-      // language
       if (effectiveLangFilter && repo.language !== effectiveLangFilter) return [];
-      // fuzzy on name + full_name + description
       const q = search.trim();
       if (!q) return [{ repo, nameIndices: [] }];
       const nameResult = fuzzyMatch(repo.name, q);
@@ -330,9 +503,8 @@ function HomeContent() {
     });
   }, [displayed, search, effectiveLangFilter, visFilter]);
 
-  // ── Pagination — derive current page from filter snapshot to avoid setState-in-effect
+  // Pagination
   const filterKey = `${search}|${effectiveLangFilter}|${visFilter}|${orgParam}`;
-  // When the filter key changes, the stored key no longer matches → reset to page 1.
   const effectivePage = pageState.key === filterKey ? pageState.page : 1;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(effectivePage, totalPages);
@@ -345,7 +517,6 @@ function HomeContent() {
     setPageState({ page: p, key: filterKey });
   }
 
-  // Clamp activeIndex to visible (paginated) range without a setState-in-effect
   const clampedActiveIndex = Math.min(activeIndex, paginated.length - 1);
 
   function handleRefresh() {
@@ -359,7 +530,6 @@ function HomeContent() {
     router.push(org ? `/?${params.toString()}` : "/");
   }
 
-  // ── Global "/" shortcut to focus search
   const handleGlobalKey = useCallback((e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement).tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -374,15 +544,10 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleGlobalKey);
   }, [handleGlobalKey]);
 
-  // ── Search box key handling (Esc / ↑ / ↓ / Enter)
   function handleSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
-      if (search) {
-        setSearch("");
-        setActiveIndex(-1);
-      } else {
-        searchRef.current?.blur();
-      }
+      if (search) { setSearch(""); setActiveIndex(-1); }
+      else searchRef.current?.blur();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, paginated.length - 1));
@@ -449,13 +614,12 @@ function HomeContent() {
 
       {/* Search + filters */}
       <div className="mb-4 space-y-3">
-        {/* Search bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
             ref={searchRef}
             type="text"
-            placeholder={`Search repositories… (press / to focus)`}
+            placeholder="Search repositories… (press / to focus)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKey}
@@ -472,56 +636,51 @@ function HomeContent() {
           )}
         </div>
 
-        {/* Filter row — always shown so visibility pills are always accessible */}
         <div className="flex items-center gap-2 flex-wrap">
-            {/* Visibility pills */}
-            {(["all", "public", "private"] as VisibilityFilter[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setVisFilter(v)}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors capitalize",
-                  visFilter === v
-                    ? "bg-violet-500/20 border-violet-500/40 text-violet-200"
-                    : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-600"
-                )}
-              >
-                {v === "private" && <Lock className="w-3 h-3" />}
-                {v === "public" && <Unlock className="w-3 h-3" />}
-                {v}
-              </button>
-            ))}
+          {(["all", "public", "private"] as VisibilityFilter[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setVisFilter(v)}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors capitalize",
+                visFilter === v
+                  ? "bg-violet-500/20 border-violet-500/40 text-violet-200"
+                  : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-600"
+              )}
+            >
+              {v === "private" && <Lock className="w-3 h-3" />}
+              {v === "public" && <Unlock className="w-3 h-3" />}
+              {v}
+            </button>
+          ))}
 
-            {/* Divider */}
-            {languages.length > 0 && (
-              <span className="text-slate-700 select-none">|</span>
-            )}
+          {languages.length > 0 && (
+            <span className="text-slate-700 select-none">|</span>
+          )}
 
-            {/* Language pills */}
-            {languages.map((lang) => (
-              <button
-                key={lang}
-                onClick={() => setLangFilter((l) => l === lang ? null : lang)}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                  effectiveLangFilter === lang
-                    ? "bg-violet-500/20 border-violet-500/40 text-violet-200"
-                    : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-600"
-                )}
-              >
-                {lang}
-              </button>
-            ))}
+          {languages.map((lang) => (
+            <button
+              key={lang}
+              onClick={() => setLangFilter((l) => l === lang ? null : lang)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                effectiveLangFilter === lang
+                  ? "bg-violet-500/20 border-violet-500/40 text-violet-200"
+                  : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-600"
+              )}
+            >
+              {lang}
+            </button>
+          ))}
 
-            {/* Clear all filters */}
-            {(effectiveLangFilter || visFilter !== "all" || search) && (
-              <button
-                onClick={() => { setLangFilter(null); setVisFilter("all"); setSearch(""); }}
-                className="ml-auto flex items-center gap-1 text-xs text-slate-500 hover:text-white transition-colors"
-              >
-                <X className="w-3 h-3" /> Clear filters
-              </button>
-            )}
+          {(effectiveLangFilter || visFilter !== "all" || search) && (
+            <button
+              onClick={() => { setLangFilter(null); setVisFilter("all"); setSearch(""); }}
+              className="ml-auto flex items-center gap-1 text-xs text-slate-500 hover:text-white transition-colors"
+            >
+              <X className="w-3 h-3" /> Clear filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -532,25 +691,55 @@ function HomeContent() {
         </div>
       )}
 
-      {isLoading ? (
-        <RepoSkeleton />
-      ) : (
-        <div className="grid gap-3">
-          {paginated.map(({ repo, nameIndices }, i) => (
-            <RepoCard
-              key={repo.id}
-              repo={repo}
-              nameIndices={nameIndices}
-              active={i === clampedActiveIndex}
-            />
-          ))}
-          {filtered.length === 0 && !isLoading && (
-            <p className="text-center text-slate-500 py-16">No repositories found.</p>
-          )}
-        </div>
-      )}
+      {/* Table */}
+      <div className="rounded-xl border border-slate-800 overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-slate-800 bg-slate-900/60">
+              <th className="py-2.5 pl-5 pr-4 text-left text-xs font-medium text-slate-400 tracking-wide">
+                Repository
+              </th>
+              <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
+                Status
+              </th>
+              <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
+                Health
+              </th>
+              <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-48">
+                Run History (10)
+              </th>
+              <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
+                Trend (30d)
+              </th>
+              <th className="py-2.5 pr-5 w-10" />
+            </tr>
+          </thead>
 
-      {/* Pagination controls */}
+          {isLoading ? (
+            <TableSkeleton />
+          ) : (
+            <tbody>
+              {paginated.map(({ repo, nameIndices }, i) => (
+                <RepoRow
+                  key={repo.id}
+                  repo={repo}
+                  nameIndices={nameIndices}
+                  active={i === clampedActiveIndex}
+                />
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center text-slate-500 text-sm">
+                    No repositories found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          )}
+        </table>
+      </div>
+
+      {/* Pagination */}
       {!isLoading && totalPages > 1 && (
         <div className="flex items-center justify-between mt-6 pt-5 border-t border-slate-800">
           <button

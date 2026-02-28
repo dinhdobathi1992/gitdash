@@ -113,6 +113,98 @@ export interface JobStatsResponse {
   }[];
 }
 
+// ── Repo summary (cross-workflow aggregate for the home table) ────────────────
+
+export interface RepoRunPoint {
+  id: number;
+  conclusion: string | null;
+  status: string | null;
+  created_at: string;
+}
+
+export interface TrendPoint {
+  date: string;   // "YYYY-MM-DD"
+  success: number;
+  total: number;
+}
+
+export interface RepoSummary {
+  latest_conclusion: string | null;
+  latest_status: string | null;
+  latest_run_at: string | null;
+  latest_actor: string | null;
+  latest_sha: string | null;
+  latest_message: string | null;
+  recent_runs: RepoRunPoint[];   // last 10
+  trend_30d: TrendPoint[];       // one bucket per calendar day (last 30 days)
+  success_rate: number;          // 0-100, last 10 completed runs
+}
+
+export async function getRepoSummary(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<RepoSummary> {
+  const octokit = getOctokit(token);
+
+  const { data } = await octokit.rest.actions.listWorkflowRunsForRepo({
+    owner,
+    repo,
+    per_page: 30,
+  });
+
+  const runs = data.workflow_runs;
+
+  // Latest run (first in list, most recent)
+  const latest = runs[0] ?? null;
+
+  // Recent 10 for history bars
+  const recent_runs: RepoRunPoint[] = runs.slice(0, 10).map((r) => ({
+    id: r.id,
+    conclusion: r.conclusion ?? null,
+    status: r.status ?? null,
+    created_at: r.created_at,
+  }));
+
+  // Success rate over last 10 completed runs
+  const completed10 = runs.filter((r) => r.status === "completed").slice(0, 10);
+  const successCount = completed10.filter((r) => r.conclusion === "success").length;
+  const success_rate = completed10.length
+    ? Math.round((successCount / completed10.length) * 100)
+    : 0;
+
+  // 30-day trend — bucket by calendar day
+  const now = Date.now();
+  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  const buckets: Record<string, { success: number; total: number }> = {};
+
+  for (const r of runs) {
+    const ts = new Date(r.created_at).getTime();
+    if (ts < cutoff) continue;
+    if (r.status !== "completed") continue;
+    const day = r.created_at.slice(0, 10);
+    if (!buckets[day]) buckets[day] = { success: 0, total: 0 };
+    buckets[day].total++;
+    if (r.conclusion === "success") buckets[day].success++;
+  }
+
+  const trend_30d: TrendPoint[] = Object.entries(buckets)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, { success, total }]) => ({ date, success, total }));
+
+  return {
+    latest_conclusion: latest?.conclusion ?? null,
+    latest_status: latest?.status ?? null,
+    latest_run_at: latest?.created_at ?? null,
+    latest_actor: latest?.actor?.login ?? null,
+    latest_sha: latest?.head_sha?.slice(0, 7) ?? null,
+    latest_message: latest?.head_commit?.message?.split("\n")[0] ?? null,
+    recent_runs,
+    trend_30d,
+    success_rate,
+  };
+}
+
 // ── Types for orgs ───────────────────────────────────────────────────────────
 
 export interface GitHubOrg {
