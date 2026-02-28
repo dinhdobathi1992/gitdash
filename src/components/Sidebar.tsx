@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
   LayoutDashboard, Settings, GitBranch, Activity, ChevronRight,
-  ChevronDown, LogOut, Key, Building2, User,
+  ChevronDown, LogOut, Key,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
@@ -214,24 +214,4 @@ export function RepoWorkflowBreadcrumb({
   );
 }
 
-// ── Org / Personal tab badge ──────────────────────────────────────────────────
-export function OrgBadge({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 font-mono">
-      {avatarUrl
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={avatarUrl} alt={name} width={14} height={14} className="w-3.5 h-3.5 rounded-sm" />
-        : <Building2 className="w-3 h-3" />}
-      {name}
-    </span>
-  );
-}
 
-export function PersonalBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-700/50 border border-slate-600/50 text-xs text-slate-300">
-      <User className="w-3 h-3" />
-      Personal
-    </span>
-  );
-}

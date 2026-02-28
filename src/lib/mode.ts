@@ -21,7 +21,3 @@ export function getAppMode(): AppMode {
 export function isStandaloneMode(): boolean {
   return getAppMode() === "standalone";
 }
-
-export function isOrgMode(): boolean {
-  return getAppMode() === "organization";
-}

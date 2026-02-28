@@ -75,6 +75,9 @@ type Tab = "overview" | "performance" | "reliability" | "triggers" | "runs";
 
 // Statuses that mean a run is still active — module-level so it is allocated once.
 const ACTIVE_RUN_STATUSES = new Set(["in_progress", "queued", "waiting", "requested", "pending"]);
+
+// Day-of-week labels (Sun=0…Sat=6) — module-level so useMemo deps are stable.
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "overview",     label: "Overview",     icon: Activity },
   { id: "performance",  label: "Performance",  icon: Cpu },
@@ -722,12 +725,11 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
   }, [runs]);
 
   // day-of-week distribution (Sun=0…Sat=6)
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const dayData = useMemo(() => {
-    const d = dayNames.map(name => ({ day: name, count: 0 }));
+    const d = DAY_NAMES.map(name => ({ day: name, count: 0 }));
     runs.forEach(r => { d[getDay(new Date(r.created_at))].count++; });
     return d;
-  }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [runs]);
 
   // branch leaderboard
   const branchLeaderboard = useMemo(() => {
@@ -1074,11 +1076,8 @@ function RunJobsRow({
     return span > 0 ? { minT, span } : null;
   }, [jobs]);
 
-  // Total run duration = last completed_at − first started_at
-  const totalDuration = useMemo(() => {
-    if (!ganttWindow) return null;
-    return ganttWindow.span;
-  }, [ganttWindow]);
+  // Total run duration = last completed_at − first started_at (same as ganttWindow.span)
+  const totalDuration = ganttWindow?.span ?? null;
 
   const conclusionColor: Record<string, string> = {
     success:   "bg-green-500",
