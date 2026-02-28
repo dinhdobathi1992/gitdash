@@ -205,6 +205,119 @@ export async function getRepoSummary(
   };
 }
 
+// ── Workflow-level overview (for repo detail page) ────────────────────────────
+
+export interface WorkflowDurPoint {
+  created_at: string;
+  duration_ms: number;
+}
+
+export interface WorkflowOverview {
+  id: number;
+  name: string;
+  state: string;
+  path: string;
+  summary: RepoSummary;
+  dur_points: WorkflowDurPoint[];  // last 20 completed runs, chronological
+}
+
+/** Fetch all workflows (≤10) + recent runs for each, return per-workflow overview */
+export async function getRepoOverview(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<WorkflowOverview[]> {
+  const octokit = getOctokit(token);
+
+  // 1. List workflows (cap at 10)
+  const { data: wfData } = await octokit.rest.actions.listRepoWorkflows({
+    owner, repo, per_page: 10,
+  });
+  const workflows = wfData.workflows.slice(0, 10);
+
+  // 2. Fetch last 20 runs per workflow in parallel (5 at a time)
+  const BATCH = 5;
+  const results: WorkflowOverview[] = [];
+
+  for (let i = 0; i < workflows.length; i += BATCH) {
+    const batch = workflows.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(
+      batch.map(async (wf) => {
+        const { data: runsData } = await octokit.rest.actions.listWorkflowRuns({
+          owner, repo, workflow_id: wf.id, per_page: 20,
+        });
+        const runs = runsData.workflow_runs;
+
+        // Build summary (same logic as getRepoSummary)
+        const latest = runs[0] ?? null;
+        const recent_runs: RepoRunPoint[] = runs.slice(0, 10).map((r) => ({
+          id: r.id,
+          conclusion: r.conclusion ?? null,
+          status: r.status ?? null,
+          created_at: r.created_at,
+        }));
+
+        const completed10 = runs.filter((r) => r.status === "completed").slice(0, 10);
+        const successCount = completed10.filter((r) => r.conclusion === "success").length;
+        const success_rate = completed10.length
+          ? Math.round((successCount / completed10.length) * 100)
+          : 0;
+
+        const now = Date.now();
+        const cutoff = now - 30 * 24 * 60 * 60 * 1000;
+        const buckets: Record<string, { success: number; total: number }> = {};
+        for (const r of runs) {
+          const ts = new Date(r.created_at).getTime();
+          if (ts < cutoff || r.status !== "completed") continue;
+          const day = r.created_at.slice(0, 10);
+          if (!buckets[day]) buckets[day] = { success: 0, total: 0 };
+          buckets[day].total++;
+          if (r.conclusion === "success") buckets[day].success++;
+        }
+        const trend_30d: TrendPoint[] = Object.entries(buckets)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, { success, total }]) => ({ date, success, total }));
+
+        const summary: RepoSummary = {
+          latest_conclusion: latest?.conclusion ?? null,
+          latest_status: latest?.status ?? null,
+          latest_run_at: latest?.created_at ?? null,
+          latest_actor: latest?.actor?.login ?? null,
+          latest_sha: latest?.head_sha?.slice(0, 7) ?? null,
+          latest_message: latest?.head_commit?.message?.split("\n")[0] ?? null,
+          recent_runs,
+          trend_30d,
+          success_rate,
+        };
+
+        // Build duration points for chart (completed runs only, chronological)
+        const dur_points: WorkflowDurPoint[] = runs
+          .filter((r) => r.status === "completed")
+          .map((r) => {
+            const rawCompletedAt = (r as unknown as { completed_at?: string | null }).completed_at;
+            const startedAt = r.run_started_at
+              ? new Date(r.run_started_at).getTime()
+              : new Date(r.created_at).getTime();
+            const completedAt = rawCompletedAt
+              ? new Date(rawCompletedAt).getTime()
+              : new Date(r.updated_at).getTime();
+            return { created_at: r.created_at, duration_ms: completedAt - startedAt };
+          })
+          .filter((p) => p.duration_ms > 0)
+          .reverse(); // oldest first
+
+        return { id: wf.id, name: wf.name, state: wf.state, path: wf.path, summary, dur_points };
+      })
+    );
+
+    for (const s of settled) {
+      if (s.status === "fulfilled") results.push(s.value);
+    }
+  }
+
+  return results;
+}
+
 // ── Types for orgs ───────────────────────────────────────────────────────────
 
 export interface GitHubOrg {
@@ -312,16 +425,22 @@ export async function listWorkflowRuns(
 
   return data.workflow_runs.map((r) => {
     const createdAt = new Date(r.created_at).getTime();
-    const startedAt = r.run_started_at ? new Date(r.run_started_at).getTime() : null;
-    // Use completed_at (when the run actually finished) rather than updated_at
-    // (which can drift forward whenever GitHub updates run metadata).
-    // The Octokit type omits completed_at from listWorkflowRuns but the field
-    // is present in the API response, so we cast through unknown to access it.
+    // Prefer run_started_at; fall back to created_at so queue_wait is always computable.
+    const startedAt = r.run_started_at
+      ? new Date(r.run_started_at).getTime()
+      : new Date(r.created_at).getTime();
+    // completed_at is present in the REST response but the Octokit v22 type omits it.
+    // Cast through unknown to read it; fall back to updated_at for completed runs
+    // (GitHub sets updated_at = finish time for completed runs, making it a reliable proxy).
     const rawCompletedAt = (r as unknown as { completed_at?: string | null }).completed_at;
-    const completedAt = rawCompletedAt ? new Date(rawCompletedAt).getTime() : null;
+    const completedAt = rawCompletedAt
+      ? new Date(rawCompletedAt).getTime()
+      : r.status === "completed" ? new Date(r.updated_at).getTime() : null;
     const duration_ms =
-      r.status === "completed" && startedAt && completedAt ? completedAt - startedAt : undefined;
-    const queue_wait_ms = startedAt ? startedAt - createdAt : undefined;
+      r.status === "completed" && completedAt ? completedAt - startedAt : undefined;
+    const queue_wait_ms = r.run_started_at
+      ? new Date(r.run_started_at).getTime() - createdAt
+      : undefined;
 
     return {
       id: r.id,

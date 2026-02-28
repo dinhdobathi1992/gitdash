@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
-  LayoutDashboard, Settings, GitBranch, Activity, ChevronRight,
+  LayoutDashboard, Settings, GitBranch, ChevronRight,
   ChevronDown, LogOut, Key,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -2,7 +2,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Activity } from "lucide-react";
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: "You cancelled the GitHub sign-in.",

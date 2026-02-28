@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, Eye, EyeOff, ExternalLink, Key, CheckCircle, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, ExternalLink, Key, CheckCircle, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SetupPage() {
