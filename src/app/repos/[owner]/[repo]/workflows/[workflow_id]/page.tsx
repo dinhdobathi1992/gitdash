@@ -29,7 +29,7 @@ const OUTCOME_COLORS: Record<string, string> = {
   skipped: "#94a3b8", timed_out: "#fb923c",
 };
 const JOB_PALETTE = [
-  "#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#7c3aed",
+  "#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#0d9488",
 ];
 
 // ── math helpers ─────────────────────────────────────────────────────────────
