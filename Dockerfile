@@ -17,6 +17,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 # Signal to next.config.ts to enable output:standalone (required for Docker runner stage)
 ENV DOCKER_BUILD=1
+# Dummy secret satisfies the ≥32-char validation during `next build` page-data collection.
+# This value is never baked into the image — SESSION_SECRET is supplied at runtime via env/secret.
+ENV SESSION_SECRET=00000000000000000000000000000000
+ENV MODE=standalone
 
 RUN npm run build
 
