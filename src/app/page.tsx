@@ -364,6 +364,8 @@ function HomeContent() {
   }
 
   function handleOrgSelect(org: string | null) {
+    setLangFilter(null);
+    setVisFilter("all");
     const params = new URLSearchParams();
     if (org) params.set("org", org);
     router.push(org ? `/?${params.toString()}` : "/");

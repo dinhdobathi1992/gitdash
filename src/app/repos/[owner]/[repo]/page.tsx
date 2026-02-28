@@ -41,8 +41,9 @@ function Highlighted({ text, indices }: { text: string; indices: number[] }) {
 
 // ── Duration chart (multi-workflow lines) ─────────────────────────────────────
 function DurationChart({ workflows }: { workflows: WorkflowOverview[] }) {
-  // Build a unified dataset: one entry per unique created_at timestamp
-  // Each entry has { time: string, [wfName]: minutes }
+  // Build a unified dataset bucketed by calendar day (YYYY-MM-DD).
+  // Multiple runs on the same day are averaged per workflow so lines connect
+  // across days even when workflows don't fire at the exact same instant.
   const withData = workflows.filter((wf) => wf.dur_points.length > 0);
 
   if (withData.length === 0) {
@@ -53,24 +54,27 @@ function DurationChart({ workflows }: { workflows: WorkflowOverview[] }) {
     );
   }
 
-  // Collect all timestamps across all workflows, sorted
-  const allTimes = Array.from(
-    new Set(withData.flatMap((wf) => wf.dur_points.map((p) => p.created_at)))
+  // Collect all days across all workflows, sorted
+  const allDays = Array.from(
+    new Set(withData.flatMap((wf) => wf.dur_points.map((p) => p.created_at.slice(0, 10))))
   ).sort();
 
-  // Build chart data: each row = one timestamp
-  const data = allTimes.map((ts) => {
+  // Build chart data: each row = one calendar day, value = avg duration in min
+  const data = allDays.map((day) => {
     const row: Record<string, string | number> = {
-      time: new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      time: new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     };
     for (const wf of withData) {
-      const pt = wf.dur_points.find((p) => p.created_at === ts);
-      if (pt) row[wf.name] = Math.round(pt.duration_ms / 60000 * 100) / 100;
+      const pts = wf.dur_points.filter((p) => p.created_at.startsWith(day));
+      if (pts.length > 0) {
+        const avg = pts.reduce((sum, p) => sum + p.duration_ms, 0) / pts.length;
+        row[wf.name] = Math.round(avg / 60000 * 100) / 100;
+      }
     }
     return row;
   });
 
-  // Only show last 30 data points for legibility
+  // Only show last 30 days for legibility
   const sliced = data.slice(-30);
 
   return (
