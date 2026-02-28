@@ -37,8 +37,9 @@ export default function Sidebar() {
     <aside className="flex flex-col w-60 min-h-screen bg-slate-900 border-r border-slate-800 py-6 px-3 shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-3 mb-2">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
-          <Activity className="w-4 h-4 text-white" />
+        <div className="w-8 h-8 shrink-0 rounded-xl overflow-hidden shadow-lg shadow-violet-500/30">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="GitDash" className="w-full h-full object-cover" />
         </div>
         <div className="flex-1 min-w-0">
           <span className="font-semibold text-white tracking-tight">GitDash</span>
