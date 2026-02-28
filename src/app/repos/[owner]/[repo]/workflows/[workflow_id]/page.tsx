@@ -36,7 +36,11 @@ const JOB_PALETTE = [
 function pct(arr: number[], p: number) {
   if (!arr.length) return 0;
   const s = [...arr].sort((a, b) => a - b);
-  return s[Math.ceil(p * s.length) - 1];
+  // Linear interpolation avoids conflating p95 with p100 on small samples.
+  const idx = p * (s.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (idx - lo);
 }
 function avg(arr: number[]) {
   return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -178,13 +182,9 @@ function WorkflowContent() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission === "default") {
-      Notification.requestPermission()
-        .then(p => { notifPerm.current = p; })
-        .catch(() => { /* permission prompt rejected (e.g. iframes, privacy mode) */ });
-    } else {
-      notifPerm.current = Notification.permission;
-    }
+    // Read current permission without prompting — requestPermission() requires
+    // a user gesture in modern browsers and is auto-denied on page load.
+    notifPerm.current = Notification.permission;
   }, []);
 
   useEffect(() => {
