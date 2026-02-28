@@ -321,7 +321,7 @@ function WorkflowContent() {
           <div role="tabpanel" id="tabpanel-performance"  aria-labelledby="tab-performance"  hidden={tab !== "performance"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} /></div>
           <div role="tabpanel" id="tabpanel-reliability"  aria-labelledby="tab-reliability"  hidden={tab !== "reliability"}><ReliabilityTab runs={safeRuns} completed={completed} /></div>
           <div role="tabpanel" id="tabpanel-triggers"     aria-labelledby="tab-triggers"     hidden={tab !== "triggers"}><TriggersTab    runs={safeRuns} /></div>
-          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} /></div>
+          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} onRefresh={() => mutateRuns()} isRefreshing={runsValidating} /></div>
         </>
       )}
     </div>
@@ -838,7 +838,7 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
 // ══════════════════════════════════════════════════════════════════════════════
 type SortCol = "run" | "status" | "branch" | "trigger" | "actor" | "duration" | "queue" | "started";
 
-function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; repo: string }) {
+function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: WorkflowRun[]; owner: string; repo: string; onRefresh: () => void; isRefreshing: boolean }) {
   const [sortCol, setSortCol] = useState<SortCol>("run");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -911,7 +911,17 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
   return (
     <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-white">All Runs</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-white">All Runs</h3>
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="Refresh runs"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400">{runs.length} runs</span>
           <button
