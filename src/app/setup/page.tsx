@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Activity, Eye, EyeOff, ExternalLink, Key, CheckCircle, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SetupPage() {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [pat, setPat] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -78,7 +77,6 @@ export default function SetupPage() {
               </label>
               <div className="relative">
                 <input
-                  ref={inputRef}
                   type={show ? "text" : "password"}
                   value={pat}
                   onChange={(e) => setPat(e.target.value)}

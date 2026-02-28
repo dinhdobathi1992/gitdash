@@ -427,9 +427,8 @@ function HomeContent() {
           )}
         </div>
 
-        {/* Filter row */}
-        {(languages.length > 0 || true) && (
-          <div className="flex items-center gap-2 flex-wrap">
+        {/* Filter row — always shown so visibility pills are always accessible */}
+        <div className="flex items-center gap-2 flex-wrap">
             {/* Visibility pills */}
             {(["all", "public", "private"] as VisibilityFilter[]).map((v) => (
               <button
@@ -478,8 +477,7 @@ function HomeContent() {
                 <X className="w-3 h-3" /> Clear filters
               </button>
             )}
-          </div>
-        )}
+        </div>
       </div>
 
       {error && (
@@ -512,7 +510,7 @@ function HomeContent() {
 
 export default function HomePage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="p-8 animate-pulse text-slate-500 text-sm">Loading…</div>}>
       <HomeContent />
     </Suspense>
   );

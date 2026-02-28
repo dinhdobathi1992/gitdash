@@ -9,6 +9,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   config: "Server is missing OAuth credentials. Contact your admin.",
   token_exchange: "Failed to exchange code for a token. Try again.",
   state_mismatch: "Sign-in state mismatch. Please try again (possible CSRF attempt).",
+  state_expired: "Sign-in session expired. Please try signing in again.",
   server: "An unexpected server error occurred. Try again.",
 };
 
@@ -77,7 +78,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
       <LoginContent />
     </Suspense>
   );

@@ -9,7 +9,6 @@ interface StatCardProps {
   sub?: string;
   icon?: LucideIcon;
   iconColor?: string;
-  trend?: "up" | "down" | "neutral";
 }
 
 export default function StatCard({

@@ -25,13 +25,16 @@ export async function GET(req: NextRequest) {
 
   const rawOrg = new URL(req.url).searchParams.get("org");
 
-  // Validate org param when present
-  if (rawOrg !== null) {
-    const orgResult = validateOrg(rawOrg || null);
+  // Treat missing OR empty ?org= as "no org" (personal billing).
+  // rawOrg === null  → key absent (?org not in URL)
+  // rawOrg === ""    → key present but empty (?org=), treat as absent
+  const org = rawOrg || null;
+
+  // Validate org param only when a non-empty value was actually provided
+  if (org !== null) {
+    const orgResult = validateOrg(org);
     if (!orgResult.ok) return orgResult.response;
   }
-
-  const org = rawOrg || null;
 
   try {
     const octokit = getOctokit(token);

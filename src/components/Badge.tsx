@@ -1,7 +1,6 @@
 "use client";
 
-import { conclusionBadgeCn } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { conclusionBadgeCn, cn } from "@/lib/utils";
 
 interface BadgeProps {
   conclusion: string | null;

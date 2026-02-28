@@ -72,6 +72,9 @@ function ChartTip({
 
 // ── tab types ────────────────────────────────────────────────────────────────
 type Tab = "overview" | "performance" | "reliability" | "triggers" | "runs";
+
+// Statuses that mean a run is still active — module-level so it is allocated once.
+const ACTIVE_RUN_STATUSES = new Set(["in_progress", "queued", "waiting", "requested", "pending"]);
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "overview",     label: "Overview",     icon: Activity },
   { id: "performance",  label: "Performance",  icon: Cpu },
@@ -111,7 +114,7 @@ function SortTh({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function WorkflowDetailPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="p-8 animate-pulse text-slate-500 text-sm">Loading…</div>}>
       <WorkflowContent />
     </Suspense>
   );
@@ -123,7 +126,16 @@ function WorkflowContent() {
   }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>("overview");
+
+  // Active tab is stored in the URL (?tab=overview) so it survives refresh / link sharing.
+  const rawTab = searchParams.get("tab") as Tab | null;
+  const VALID_TABS: Tab[] = ["overview", "performance", "reliability", "triggers", "runs"];
+  const tab: Tab = rawTab && VALID_TABS.includes(rawTab) ? rawTab : "overview";
+  function setTab(t: Tab) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", t);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }
 
   // perPage is stored in the URL (?n=50) so it survives refresh / sharing
   const perPage = Math.max(10, Math.min(100, parseInt(searchParams.get("n") ?? "50")));
@@ -135,9 +147,8 @@ function WorkflowContent() {
 
   // ── runs ─────────────────────────────────────────────────────────────────
   // Poll every 30 s when any run is still active so the UI stays live.
-  const ACTIVE = new Set(["in_progress", "queued", "waiting", "requested", "pending"]);
   const hasInProgress = (runs: WorkflowRun[] | undefined) =>
-    runs?.some(r => r.status != null && ACTIVE.has(r.status)) ?? false;
+    runs?.some(r => r.status != null && ACTIVE_RUN_STATUSES.has(r.status)) ?? false;
 
   const {
     data: runs, error: runsError, isLoading: runsLoading,
@@ -165,7 +176,9 @@ function WorkflowContent() {
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission === "default") {
-      Notification.requestPermission().then(p => { notifPerm.current = p; });
+      Notification.requestPermission()
+        .then(p => { notifPerm.current = p; })
+        .catch(() => { /* permission prompt rejected (e.g. iframes, privacy mode) */ });
     } else {
       notifPerm.current = Notification.permission;
     }
@@ -294,7 +307,7 @@ function WorkflowContent() {
           {/* All tabs are always mounted — display:none keeps charts alive so
               Recharts never re-measures on switch, making tabs instant. */}
           <div className={tab === "overview"    ? undefined : "hidden"}><OverviewTab    runs={safeRuns} completed={completed} /></div>
-          <div className={tab === "performance" ? undefined : "hidden"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} /></div>
+          <div className={tab === "performance" ? undefined : "hidden"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} /></div>
           <div className={tab === "reliability" ? undefined : "hidden"}><ReliabilityTab runs={safeRuns} completed={completed} /></div>
           <div className={tab === "triggers"    ? undefined : "hidden"}><TriggersTab    runs={safeRuns} /></div>
           <div className={tab === "runs"        ? undefined : "hidden"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} /></div>
@@ -430,7 +443,7 @@ function OverviewTab({ runs, completed }: { runs: WorkflowRun[]; completed: Work
 // ══════════════════════════════════════════════════════════════════════════════
 // PERFORMANCE TAB
 // ══════════════════════════════════════════════════════════════════════════════
-function PerformanceTab({ jobStats, loading, error }: { jobStats: JobStatsResponse | undefined; loading: boolean; error?: Error }) {
+function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCount }: { jobStats: JobStatsResponse | undefined; loading: boolean; error?: Error; analysedCount: number; requestedCount: number }) {
   if (loading) return <LoadingSkeleton />;
   if (error) return <EmptyState icon={Cpu} message={`Failed to load job stats: ${error.message}`} />;
   if (!jobStats) return <EmptyState icon={Cpu} message="No job-level data available yet." />;
@@ -457,6 +470,13 @@ function PerformanceTab({ jobStats, loading, error }: { jobStats: JobStatsRespon
 
   return (
     <div className="space-y-6">
+      {/* Cap notice — shown when fewer runs are analysed than the user has selected */}
+      {analysedCount < requestedCount && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          Performance data is based on the last <strong>{analysedCount}</strong> runs (capped from {requestedCount} to limit GitHub API usage).
+        </div>
+      )}
       {/* job avg/p95 */}
       <ChartCard title="Job Duration" sub="Average vs p95 (minutes)">
         <ResponsiveContainer width="100%" height={Math.max(180, sortedJobs.length * 44)}>
@@ -848,28 +868,34 @@ function RunsTab({ runs, owner, repo }: { runs: WorkflowRun[]; owner: string; re
   }, [runs, sortCol, sortDir]);
 
   function downloadCSV() {
+    // Wrap every field in double-quotes and escape internal double-quotes by doubling them.
+    // This handles commas, newlines, and quotes in branch names, actor logins, etc.
+    function csvField(v: string | number | undefined | null): string {
+      return `"${String(v ?? "").replace(/"/g, '""')}"`;
+    }
     const headers = ["Run#", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Started", "SHA", "Commit Message"];
     const rows = sortedRuns.map(r => [
-      r.run_number,
-      r.status ?? "",
-      r.conclusion ?? "",
-      r.head_branch ?? "",
-      r.event,
-      r.actor?.login ?? "",
-      r.duration_ms ?? "",
-      r.queue_wait_ms ?? "",
-      r.created_at,
-      r.head_sha,
-      `"${(r.head_commit?.message ?? "").replace(/"/g, '""').split("\n")[0]}"`,
+      csvField(r.run_number),
+      csvField(r.status),
+      csvField(r.conclusion),
+      csvField(r.head_branch),
+      csvField(r.event),
+      csvField(r.actor?.login),
+      csvField(r.duration_ms),
+      csvField(r.queue_wait_ms),
+      csvField(r.created_at),
+      csvField(r.head_sha),
+      csvField((r.head_commit?.message ?? "").split("\n")[0]),
     ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const csv = [headers.map(csvField).join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "runs.csv";
     a.click();
-    URL.revokeObjectURL(url);
+    // Defer revocation so the browser has time to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   return (
@@ -1170,9 +1196,11 @@ function RunJobsRow({
 // ══════════════════════════════════════════════════════════════════════════════
 function ChartCard({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const [pngError, setPngError] = useState<string | null>(null);
 
   async function exportPng() {
     if (!cardRef.current) return;
+    setPngError(null);
     try {
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(cardRef.current, {
@@ -1187,7 +1215,8 @@ function ChartCard({ title, sub, children }: { title: string; sub?: string; chil
       a.download = `${title.replace(/\s+/g, "-").toLowerCase()}.png`;
       a.click();
     } catch {
-      // html2canvas not available or failed silently
+      setPngError("Export failed");
+      setTimeout(() => setPngError(null), 3000);
     }
   }
 
@@ -1198,13 +1227,17 @@ function ChartCard({ title, sub, children }: { title: string; sub?: string; chil
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
         </div>
-        <button
-          onClick={exportPng}
-          title="Export as PNG"
-          className="text-slate-600 hover:text-slate-300 transition-colors shrink-0 mt-0.5"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2 shrink-0 mt-0.5">
+          {pngError && <span className="text-xs text-red-400">{pngError}</span>}
+          <button
+            onClick={exportPng}
+            title="Export as PNG"
+            aria-label="Export chart as PNG"
+            className="text-slate-600 hover:text-slate-300 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
       <div className="mt-4">{children}</div>
     </div>

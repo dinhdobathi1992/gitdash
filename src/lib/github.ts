@@ -221,9 +221,14 @@ export async function listWorkflowRuns(
   return data.workflow_runs.map((r) => {
     const createdAt = new Date(r.created_at).getTime();
     const startedAt = r.run_started_at ? new Date(r.run_started_at).getTime() : null;
-    const updatedAt = new Date(r.updated_at).getTime();
+    // Use completed_at (when the run actually finished) rather than updated_at
+    // (which can drift forward whenever GitHub updates run metadata).
+    // The Octokit type omits completed_at from listWorkflowRuns but the field
+    // is present in the API response, so we cast through unknown to access it.
+    const rawCompletedAt = (r as unknown as { completed_at?: string | null }).completed_at;
+    const completedAt = rawCompletedAt ? new Date(rawCompletedAt).getTime() : null;
     const duration_ms =
-      r.status === "completed" && startedAt ? updatedAt - startedAt : undefined;
+      r.status === "completed" && startedAt && completedAt ? completedAt - startedAt : undefined;
     const queue_wait_ms = startedAt ? startedAt - createdAt : undefined;
 
     return {
@@ -390,7 +395,10 @@ export async function getJobStats(
   });
 
   const steps: StepStat[] = Object.entries(stepMap).map(([key, durations]) => {
-    const [, stepName] = key.split("::");
+    // Key is `jobName::stepName`. Split only on the first `::` so step names
+    // that themselves contain `::` (e.g. "Set up: node::cache") are preserved.
+    const sepIdx = key.indexOf("::");
+    const stepName = sepIdx >= 0 ? key.slice(sepIdx + 2) : key;
     const sorted = [...durations].sort((a, b) => a - b);
     const runs = (stepSuccess[key] ?? 0) + (stepFail[key] ?? 0);
     return {
