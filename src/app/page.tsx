@@ -41,6 +41,7 @@ function RepoRow({
 }) {
   const ref = useRef<HTMLTableRowElement>(null);
   const [visible, setVisible] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (active) ref.current?.scrollIntoView({ block: "nearest" });
@@ -69,7 +70,7 @@ function RepoRow({
         "group border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer",
         active && "bg-slate-800/60 ring-1 ring-inset ring-violet-500/30"
       )}
-      onClick={() => {/* navigated via Link inside */}}
+      onClick={() => router.push(`/repos/${repo.owner}/${repo.name}`)}
     >
       {/* Repository */}
       <td className="py-3.5 pl-5 pr-4">
@@ -354,7 +355,11 @@ function HomeContent() {
   const clampedActiveIndex = Math.min(activeIndex, paginated.length - 1);
 
   function handleRefresh() {
-    mutate(() => true, undefined, { revalidate: true });
+    mutate(
+      (key) => typeof key === "string" && key.startsWith("/api/github/repo-summary"),
+      undefined,
+      { revalidate: true }
+    );
     mutateRepos();
   }
 
