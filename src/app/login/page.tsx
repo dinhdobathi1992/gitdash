@@ -32,6 +32,12 @@ function LoginContent() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">GitDash</h1>
           <p className="text-sm text-slate-400 mt-1">GitHub Actions Dashboard</p>
+          <a
+            href="/docs"
+            className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-2"
+          >
+            Documentation
+          </a>
         </div>
 
         {/* card */}
@@ -72,11 +78,6 @@ function LoginContent() {
         <div className="text-xs text-slate-600 text-center mt-6 space-y-1">
           <p>For internal use only — self-hosted GitHub Actions dashboard</p>
           <p>MIT License · Made by <span className="text-slate-500">Dinh Do Ba Thi</span></p>
-          <p>
-            <a href="/docs" className="text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2">
-              Documentation
-            </a>
-          </p>
         </div>
       </div>
     </div>
