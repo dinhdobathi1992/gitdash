@@ -9,13 +9,19 @@ import { neon } from "@neondatabase/serverless";
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  return neon(url);
-}
+// Lazy singleton — only initialised when the first query runs, not at module
+// evaluation time.  This prevents build-time crashes when DATABASE_URL is
+// absent (e.g. during Vercel CI where env vars are injected at runtime).
+let _client: ReturnType<typeof neon> | null = null;
 
-export const sql = getDb();
+function getDb(): ReturnType<typeof neon> {
+  if (!_client) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+    _client = neon(url);
+  }
+  return _client;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,7 +112,7 @@ let schemaEnsured = false;
 
 export async function ensureSchema(): Promise<void> {
   if (schemaEnsured) return;
-  await sql`
+  await getDb()`
     CREATE TABLE IF NOT EXISTS workflow_runs (
       id              BIGINT PRIMARY KEY,
       repo            VARCHAR(300) NOT NULL,
@@ -127,11 +133,11 @@ export async function ensureSchema(): Promise<void> {
       synced_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `;
-  await sql`CREATE INDEX IF NOT EXISTS idx_wr_repo_created ON workflow_runs(repo, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_wr_workflow ON workflow_runs(workflow_id, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_wr_conclusion ON workflow_runs(repo, conclusion, created_at DESC)`;
+  await getDb()`CREATE INDEX IF NOT EXISTS idx_wr_repo_created ON workflow_runs(repo, created_at DESC)`;
+  await getDb()`CREATE INDEX IF NOT EXISTS idx_wr_workflow ON workflow_runs(workflow_id, created_at DESC)`;
+  await getDb()`CREATE INDEX IF NOT EXISTS idx_wr_conclusion ON workflow_runs(repo, conclusion, created_at DESC)`;
 
-  await sql`
+  await getDb()`
     CREATE TABLE IF NOT EXISTS sync_cursors (
       repo            VARCHAR(300) PRIMARY KEY,
       last_run_id     BIGINT,
@@ -139,7 +145,7 @@ export async function ensureSchema(): Promise<void> {
     )
   `;
 
-  await sql`
+  await getDb()`
     CREATE TABLE IF NOT EXISTS alert_rules (
       id              SERIAL PRIMARY KEY,
       scope           VARCHAR(300) NOT NULL,
@@ -152,9 +158,9 @@ export async function ensureSchema(): Promise<void> {
       created_at      TIMESTAMPTZ DEFAULT NOW()
     )
   `;
-  await sql`CREATE INDEX IF NOT EXISTS idx_ar_scope ON alert_rules(scope)`;
+  await getDb()`CREATE INDEX IF NOT EXISTS idx_ar_scope ON alert_rules(scope)`;
 
-  await sql`
+  await getDb()`
     CREATE TABLE IF NOT EXISTS alert_events (
       id              SERIAL PRIMARY KEY,
       rule_id         INT REFERENCES alert_rules(id) ON DELETE CASCADE,
@@ -165,7 +171,7 @@ export async function ensureSchema(): Promise<void> {
       details         JSONB
     )
   `;
-  await sql`CREATE INDEX IF NOT EXISTS idx_ae_scope_fired ON alert_events(scope, fired_at DESC)`;
+  await getDb()`CREATE INDEX IF NOT EXISTS idx_ae_scope_fired ON alert_events(scope, fired_at DESC)`;
 
   schemaEnsured = true;
 }
@@ -177,7 +183,7 @@ export async function upsertRuns(rows: RunUpsertRow[]): Promise<number> {
   await ensureSchema();
   // Individual upserts — Neon HTTP is connectionless so batching in a loop is fine
   for (const r of rows) {
-    await sql`
+    await getDb()`
       INSERT INTO workflow_runs
         (id, repo, workflow_id, workflow_name, run_number, status, conclusion,
          event, head_branch, head_sha, actor, created_at, updated_at,
@@ -205,7 +211,7 @@ export async function upsertRuns(rows: RunUpsertRow[]): Promise<number> {
 
 export async function getSyncCursor(repo: string): Promise<number | null> {
   await ensureSchema();
-  const rows = await sql`
+  const rows = await getDb()`
     SELECT last_run_id FROM sync_cursors WHERE repo = ${repo}
   ` as { last_run_id: number | null }[];
   return rows[0]?.last_run_id ?? null;
@@ -213,7 +219,7 @@ export async function getSyncCursor(repo: string): Promise<number | null> {
 
 export async function updateSyncCursor(repo: string, lastRunId: number): Promise<void> {
   await ensureSchema();
-  await sql`
+  await getDb()`
     INSERT INTO sync_cursors (repo, last_run_id, last_synced_at)
     VALUES (${repo}, ${lastRunId}, NOW())
     ON CONFLICT (repo) DO UPDATE SET
@@ -232,14 +238,14 @@ export async function getDbRuns(
 ): Promise<DbWorkflowRun[]> {
   await ensureSchema();
   if (conclusion) {
-    return await sql`
+    return await getDb()`
       SELECT * FROM workflow_runs
       WHERE repo = ${repo} AND conclusion = ${conclusion}
       ORDER BY created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     ` as DbWorkflowRun[];
   }
-  return await sql`
+  return await getDb()`
     SELECT * FROM workflow_runs
     WHERE repo = ${repo}
     ORDER BY created_at DESC
@@ -249,7 +255,7 @@ export async function getDbRuns(
 
 export async function getDbRunCount(repo: string): Promise<number> {
   await ensureSchema();
-  const rows = await sql`
+  const rows = await getDb()`
     SELECT COUNT(*)::int AS cnt FROM workflow_runs WHERE repo = ${repo}
   ` as { cnt: number }[];
   return rows[0]?.cnt ?? 0;
@@ -260,7 +266,7 @@ export async function getDailyTrends(
   days = 90,
 ): Promise<DbDailyTrend[]> {
   await ensureSchema();
-  const rows = await sql`
+  const rows = await getDb()`
     SELECT
       DATE(created_at)::text                                        AS date,
       COUNT(*)::int                                                 AS total,
@@ -283,7 +289,7 @@ export async function getQuarterlySummary(
 ): Promise<DbQuarterSummary[]> {
   await ensureSchema();
   const months = quartersBack * 3;
-  const rows = await sql`
+  const rows = await getDb()`
     SELECT
       EXTRACT(YEAR FROM created_at)::int    AS year,
       EXTRACT(QUARTER FROM created_at)::int AS quarter_num,
@@ -312,7 +318,7 @@ export async function getOrgDailyTrends(
 ): Promise<DbDailyTrend[]> {
   await ensureSchema();
   const pattern = orgPrefix + "/%";
-  const rows = await sql`
+  const rows = await getDb()`
     SELECT
       DATE(created_at)::text                                        AS date,
       COUNT(*)::int                                                 AS total,
@@ -333,21 +339,21 @@ export async function getOrgDailyTrends(
 
 export async function getAlertRules(scope: string): Promise<DbAlertRule[]> {
   await ensureSchema();
-  return await sql`
+  return await getDb()`
     SELECT * FROM alert_rules WHERE scope = ${scope} ORDER BY id
   ` as DbAlertRule[];
 }
 
 export async function getAllAlertRules(): Promise<DbAlertRule[]> {
   await ensureSchema();
-  return await sql`SELECT * FROM alert_rules ORDER BY scope, id` as DbAlertRule[];
+  return await getDb()`SELECT * FROM alert_rules ORDER BY scope, id` as DbAlertRule[];
 }
 
 export async function createAlertRule(
   rule: Omit<DbAlertRule, "id" | "created_at">
 ): Promise<DbAlertRule> {
   await ensureSchema();
-  const rows = await sql`
+  const rows = await getDb()`
     INSERT INTO alert_rules (scope, metric, threshold, window_hours, channel, destination, enabled)
     VALUES (${rule.scope}, ${rule.metric}, ${rule.threshold}, ${rule.window_hours},
             ${rule.channel}, ${rule.destination}, ${rule.enabled})
@@ -361,7 +367,7 @@ export async function updateAlertRule(
   enabled: boolean,
 ): Promise<DbAlertRule | null> {
   await ensureSchema();
-  const rows = await sql`
+  const rows = await getDb()`
     UPDATE alert_rules SET enabled = ${enabled} WHERE id = ${id} RETURNING *
   `;
   return (rows as DbAlertRule[])[0] ?? null;
@@ -369,7 +375,7 @@ export async function updateAlertRule(
 
 export async function deleteAlertRule(id: number): Promise<void> {
   await ensureSchema();
-  await sql`DELETE FROM alert_rules WHERE id = ${id}`;
+  await getDb()`DELETE FROM alert_rules WHERE id = ${id}`;
 }
 
 export async function getAlertEvents(
@@ -377,7 +383,7 @@ export async function getAlertEvents(
   limit = 50,
 ): Promise<DbAlertEvent[]> {
   await ensureSchema();
-  return await sql`
+  return await getDb()`
     SELECT * FROM alert_events
     WHERE scope = ${scope}
     ORDER BY fired_at DESC
@@ -387,7 +393,7 @@ export async function getAlertEvents(
 
 export async function getRecentAlertEvents(limit = 100): Promise<DbAlertEvent[]> {
   await ensureSchema();
-  return await sql`
+  return await getDb()`
     SELECT * FROM alert_events ORDER BY fired_at DESC LIMIT ${limit}
   ` as DbAlertEvent[];
 }
@@ -401,7 +407,7 @@ export async function fireAlertEvent(
 ): Promise<void> {
   await ensureSchema();
   const detailsJson = JSON.stringify(details);
-  await sql`
+  await getDb()`
     INSERT INTO alert_events (rule_id, scope, metric, value, details)
     VALUES (${ruleId}, ${scope}, ${metric}, ${value}, ${detailsJson}::jsonb)
   `;
