@@ -64,6 +64,7 @@ function LoginContent() {
             <code className="text-slate-400 bg-slate-800 px-1 rounded">repo</code>,{" "}
             <code className="text-slate-400 bg-slate-800 px-1 rounded">workflow</code> and{" "}
             <code className="text-slate-400 bg-slate-800 px-1 rounded">read:org</code> scopes.
+            Cost Analytics requires a separate fine-grained PAT with Administration org permission.{" "}
             Your token is stored in an encrypted server-side session and never exposed to the browser.
           </p>
         </div>

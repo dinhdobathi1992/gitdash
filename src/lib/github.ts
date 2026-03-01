@@ -637,3 +637,94 @@ export async function getJobStats(
 
   return { jobs, steps, waterfall };
 }
+
+// ── Audit Trail: workflow file change history ─────────────────────────────────
+
+export interface WorkflowFileCommit {
+  sha: string;
+  message: string;
+  author_login: string | null;
+  author_avatar: string | null;
+  author_name: string | null;
+  date: string;
+  html_url: string;
+  /** Which workflow file was changed (e.g. ".github/workflows/ci.yml"). */
+  file_path: string;
+}
+
+/**
+ * Fetch commits that modified workflow files under `.github/workflows/`.
+ *
+ * Uses `repos.listCommits` with `path` filter for each workflow file path.
+ * Falls back to listing the `.github/workflows` directory first.
+ *
+ * Returns up to `limit` most recent commits, deduplicated by SHA.
+ */
+export async function listWorkflowFileCommits(
+  token: string,
+  owner: string,
+  repo: string,
+  limit: number = 30,
+): Promise<WorkflowFileCommit[]> {
+  const octokit = getOctokit(token);
+
+  // Step 1: List workflow files
+  let workflowPaths: string[] = [];
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: ".github/workflows",
+    });
+    if (Array.isArray(data)) {
+      workflowPaths = data
+        .filter((f) => f.type === "file" && /\.(ya?ml)$/i.test(f.name))
+        .map((f) => f.path);
+    }
+  } catch {
+    // Directory doesn't exist or no access — return empty
+    return [];
+  }
+
+  if (workflowPaths.length === 0) return [];
+
+  // Step 2: Fetch commits for each workflow file (parallel, capped)
+  const perFile = Math.max(5, Math.ceil(limit / workflowPaths.length));
+  const commitsByFile = await Promise.allSettled(
+    workflowPaths.map(async (filePath) => {
+      const { data: commits } = await octokit.rest.repos.listCommits({
+        owner,
+        repo,
+        path: filePath,
+        per_page: perFile,
+      });
+      return commits.map((c): WorkflowFileCommit => ({
+        sha: c.sha,
+        message: (c.commit.message ?? "").split("\n")[0],
+        author_login: c.author?.login ?? null,
+        author_avatar: c.author?.avatar_url ?? null,
+        author_name: c.commit.author?.name ?? null,
+        date: c.commit.author?.date ?? c.commit.committer?.date ?? "",
+        html_url: c.html_url,
+        file_path: filePath,
+      }));
+    }),
+  );
+
+  // Step 3: Merge, deduplicate by SHA (same commit may touch multiple files), sort by date
+  const seen = new Set<string>();
+  const all: WorkflowFileCommit[] = [];
+  for (const result of commitsByFile) {
+    if (result.status === "fulfilled") {
+      for (const c of result.value) {
+        if (!seen.has(c.sha)) {
+          seen.add(c.sha);
+          all.push(c);
+        }
+      }
+    }
+  }
+
+  all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return all.slice(0, limit);
+}

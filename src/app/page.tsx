@@ -13,9 +13,148 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Search, Lock, Unlock, AlertCircle, ChevronRight, ChevronLeft,
   RefreshCw, Building2, User, ChevronDown, X, GitCommit,
+  AlertTriangle, Keyboard,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import { RunHistoryBars, TrendSparkline, StatusBadge, HealthBadge } from "@/components/WorkflowMetrics";
+
+// ── Keyboard shortcuts modal ───────────────────────────────────────────────────
+const SHORTCUTS = [
+  { keys: ["/"], description: "Focus search" },
+  { keys: ["Escape"], description: "Clear search / close modal" },
+  { keys: ["↑", "↓"], description: "Navigate repository list" },
+  { keys: ["Enter"], description: "Open selected repository" },
+  { keys: ["?"], description: "Show keyboard shortcuts" },
+];
+
+function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-sm bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2 text-white font-semibold">
+            <Keyboard className="w-4 h-4 text-violet-400" />
+            Keyboard Shortcuts
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-500 hover:text-white transition-colors"
+            aria-label="Close shortcuts modal"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {SHORTCUTS.map(({ keys, description }) => (
+            <div key={description} className="flex items-center justify-between gap-4">
+              <span className="text-sm text-slate-400">{description}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                {keys.map((k) => (
+                  <kbd
+                    key={k}
+                    className="px-2 py-0.5 text-xs font-mono bg-slate-800 border border-slate-600 rounded text-slate-300"
+                  >
+                    {k}
+                  </kbd>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-5 text-[11px] text-slate-600 text-center">
+          Press <kbd className="px-1 py-0.5 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded">?</kbd> or{" "}
+          <kbd className="px-1 py-0.5 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded">Esc</kbd> to close
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Recent Failures widget ────────────────────────────────────────────────────
+// Cutoff computed at module load to satisfy react-hooks/purity (no Date.now inside hooks)
+const FAILURES_CUTOFF_MS = 24 * 60 * 60 * 1000;
+const MODULE_LOAD_TIME = Date.now();
+
+function RecentFailuresWidget({ repos }: { repos: Repo[] }) {
+  const { cache } = useSWRConfig();
+  const [dismissed, setDismissed] = useState(false);
+
+  const failures = useMemo(() => {
+    const result: Array<{ owner: string; name: string; run_at: string | null }> = [];
+    const cutoff = MODULE_LOAD_TIME - FAILURES_CUTOFF_MS; // last 24h
+
+    for (const repo of repos) {
+      const key = `/api/github/repo-summary?owner=${repo.owner}&repo=${repo.name}`;
+      const cached = cache.get(key);
+      if (!cached?.data) continue;
+      const summary = cached.data as RepoSummary;
+      if (
+        summary.latest_conclusion === "failure" ||
+        summary.latest_conclusion === "cancelled"
+      ) {
+        const runAt = summary.latest_run_at ? new Date(summary.latest_run_at).getTime() : 0;
+        if (runAt >= cutoff) {
+          result.push({ owner: repo.owner, name: repo.name, run_at: summary.latest_run_at });
+        }
+      }
+    }
+
+    return result.slice(0, 5); // cap at 5
+  }, [repos, cache]);
+
+  if (dismissed || failures.length === 0) return null;
+
+  return (
+    <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-red-500/8 border border-red-500/20 rounded-xl">
+      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-red-300 mb-1.5">
+          {failures.length} repo{failures.length > 1 ? "s" : ""} with recent failures (last 24h)
+        </p>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          {failures.map(({ owner, name, run_at }) => (
+            <Link
+              key={`${owner}/${name}`}
+              href={`/repos/${owner}/${name}`}
+              className="text-xs font-mono text-red-300/80 hover:text-red-200 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {owner}/{name}
+              {run_at && (
+                <span className="text-red-500/60 ml-1">
+                  · {formatDistanceToNow(new Date(run_at))} ago
+                </span>
+              )}
+            </Link>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="text-red-500/60 hover:text-red-300 transition-colors shrink-0"
+        aria-label="Dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
 
 // ── Highlighted text ──────────────────────────────────────────────────────────
 function Highlighted({ text, indices }: { text: string; indices: number[] }) {
@@ -291,6 +430,7 @@ function HomeContent() {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [visFilter, setVisFilter] = useState<VisibilityFilter>("all");
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const PAGE_SIZE = 20;
   const [pageState, setPageState] = useState<{ page: number; key: string }>({ page: 1, key: "" });
   const searchRef = useRef<HTMLInputElement>(null);
@@ -377,6 +517,9 @@ function HomeContent() {
     if (e.key === "/") {
       e.preventDefault();
       searchRef.current?.focus();
+    } else if (e.key === "?") {
+      e.preventDefault();
+      setShowShortcuts((v) => !v);
     }
   }, []);
 
@@ -405,6 +548,10 @@ function HomeContent() {
 
   return (
     <div className="p-8">
+      {showShortcuts && (
+        <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
@@ -449,6 +596,14 @@ function HomeContent() {
           >
             <RefreshCw className={cn("w-3.5 h-3.5", (isLoading || isValidating) && "animate-spin")} />
             Refresh
+          </button>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -531,6 +686,8 @@ function HomeContent() {
           {error.message ?? "Failed to load repositories"}
         </div>
       )}
+
+      <RecentFailuresWidget repos={displayed} />
 
       {/* Table */}
       <div className="rounded-xl border border-slate-800 overflow-hidden">

@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
   LayoutDashboard, Settings, GitBranch, ChevronRight,
-  ChevronDown, LogOut, Key,
+  ChevronDown, LogOut, Key, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,6 +15,7 @@ import { GitHubOrg } from "@/lib/github";
 
 const NAV = [
   { href: "/", label: "Repositories", icon: LayoutDashboard },
+  { href: "/cost-analytics", label: "Cost Analytics", icon: DollarSign },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -54,20 +55,21 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Version info — sits under logo, above nav */}
+      {/* Version badge — prominent v2 display */}
       <div className="px-3 mb-6">
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
-          <span className="font-mono text-slate-500">v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
-          <span className="text-slate-700">·</span>
-          <a
-            href="https://github.com/dinhdobathi1992/gitdash"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-slate-400 transition-colors"
-          >
-            GitHub
-          </a>
-        </div>
+        <a
+          href="https://github.com/dinhdobathi1992/gitdash/releases"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/15 hover:border-violet-500/35 transition-colors w-fit"
+        >
+          <span className="text-xs font-bold text-violet-300 font-mono tracking-tight">
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.0.0"}
+          </span>
+          <span className="text-[10px] text-violet-500 group-hover:text-violet-400 transition-colors">
+            Release Notes ↗
+          </span>
+        </a>
       </div>
 
       {/* Nav */}
@@ -95,22 +97,28 @@ export default function Sidebar() {
         <div className="mt-6">
           <p className="px-3 mb-1.5 text-xs font-medium text-slate-600 uppercase tracking-wider">Organizations</p>
           <div className="flex flex-col gap-0.5">
-            {orgs.map((org) => (
-              <Link
-                key={org.login}
-                href={`/?org=${org.login}`}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                  path === "/" && searchParams.get("org") === org.login
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={org.avatar_url} alt={org.login} width={20} height={20} className="w-5 h-5 rounded-md shrink-0" />
-                <span className="truncate font-mono text-xs">{org.login}</span>
-              </Link>
-            ))}
+            {orgs.map((org) => {
+              const orgPath = `/org/${org.login}`;
+              const isActive =
+                path === orgPath ||
+                (path === "/" && searchParams.get("org") === org.login);
+              return (
+                <Link
+                  key={org.login}
+                  href={orgPath}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                    isActive
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={org.avatar_url} alt={org.login} width={20} height={20} className="w-5 h-5 rounded-md shrink-0" />
+                  <span className="truncate font-mono text-xs">{org.login}</span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

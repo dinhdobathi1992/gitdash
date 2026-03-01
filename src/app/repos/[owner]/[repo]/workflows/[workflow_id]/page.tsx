@@ -10,6 +10,7 @@ import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import StatCard from "@/components/StatCard";
 import { ConclusionBadge } from "@/components/Badge";
 import { formatDuration, cn } from "@/lib/utils";
+import { estimateRunCost } from "@/lib/cost";
 import { format, getHours, getDay } from "date-fns";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -20,8 +21,35 @@ import {
   CheckCircle, Clock, Activity, Calendar, GitCommit, User,
   ExternalLink, AlertCircle, RefreshCw, Timer, Zap, TrendingUp,
   TrendingDown, GitPullRequest, RotateCcw, Shield, Cpu, FlameKindling,
-  ChevronDown, Download, ArrowUpDown,
+  ChevronDown, Download, ArrowUpDown, BarChart3, X, Lightbulb,
 } from "lucide-react";
+import {
+  calculateDoraMetrics,
+  LEVEL_COLORS,
+  LEVEL_LABELS,
+  BENCHMARKS,
+  type DoraLevel,
+} from "@/lib/dora";
+import {
+  computeQueueStats,
+  computeQueueHeatmap,
+  computeBranchQueueImpact,
+  computeQueueDistribution,
+  computeQueueTrend,
+  estimateQueueCost,
+} from "@/lib/queue-analysis";
+import {
+  analyzeWorkflow,
+  SEVERITY_STYLES,
+  CATEGORY_LABELS,
+} from "@/lib/optimization";
+import {
+  detectAnomalies,
+  formatAnomalyTooltip,
+  anomalySeverity,
+  ANOMALY_BADGE_STYLES,
+  type RunAnomalies,
+} from "@/lib/anomaly";
 
 // ── colour palette ────────────────────────────────────────────────────────────
 const OUTCOME_COLORS: Record<string, string> = {
@@ -75,7 +103,7 @@ function ChartTip({
 }
 
 // ── tab types ────────────────────────────────────────────────────────────────
-type Tab = "overview" | "performance" | "reliability" | "triggers" | "runs";
+type Tab = "overview" | "performance" | "reliability" | "triggers" | "dora" | "runs";
 
 // Statuses that mean a run is still active — module-level so it is allocated once.
 const ACTIVE_RUN_STATUSES = new Set(["in_progress", "queued", "waiting", "requested", "pending"]);
@@ -87,6 +115,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "performance",  label: "Performance",  icon: Cpu },
   { id: "reliability",  label: "Reliability",  icon: Shield },
   { id: "triggers",     label: "Triggers",     icon: Zap },
+  { id: "dora",         label: "DORA",         icon: BarChart3 },
   { id: "runs",         label: "Runs",         icon: GitCommit },
 ];
 
@@ -136,7 +165,7 @@ function WorkflowContent() {
 
   // Active tab is stored in the URL (?tab=overview) so it survives refresh / link sharing.
   const rawTab = searchParams.get("tab") as Tab | null;
-  const VALID_TABS: Tab[] = ["overview", "performance", "reliability", "triggers", "runs"];
+  const VALID_TABS: Tab[] = ["overview", "performance", "reliability", "triggers", "dora", "runs"];
   const tab: Tab = rawTab && VALID_TABS.includes(rawTab) ? rawTab : "overview";
   function setTab(t: Tab) {
     const params = new URLSearchParams(searchParams.toString());
@@ -217,6 +246,9 @@ function WorkflowContent() {
   const p95Duration   = durations.length ? pct(durations, 0.95) : undefined;
   const queues        = safeRuns.map(r => r.queue_wait_ms ?? 0).filter(Boolean);
   const avgQueue      = queues.length ? Math.round(avg(queues)) : undefined;
+
+  // ── anomaly detection ─────────────────────────────────────────────────────
+  const anomalyMap = useMemo(() => detectAnomalies(safeRuns), [safeRuns]);
 
   return (
     <div className="p-8">
@@ -318,10 +350,11 @@ function WorkflowContent() {
           {/* All tabs are always mounted — display:none keeps charts alive so
               Recharts never re-measures on switch, making tabs instant. */}
           <div role="tabpanel" id="tabpanel-overview"     aria-labelledby="tab-overview"     hidden={tab !== "overview"}><OverviewTab    runs={safeRuns} completed={completed} /></div>
-          <div role="tabpanel" id="tabpanel-performance"  aria-labelledby="tab-performance"  hidden={tab !== "performance"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} /></div>
-          <div role="tabpanel" id="tabpanel-reliability"  aria-labelledby="tab-reliability"  hidden={tab !== "reliability"}><ReliabilityTab runs={safeRuns} completed={completed} /></div>
+          <div role="tabpanel" id="tabpanel-performance"  aria-labelledby="tab-performance"  hidden={tab !== "performance"}><PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} runs={safeRuns} /></div>
+          <div role="tabpanel" id="tabpanel-reliability"  aria-labelledby="tab-reliability"  hidden={tab !== "reliability"}><ReliabilityTab runs={safeRuns} completed={completed} anomalyMap={anomalyMap} /></div>
           <div role="tabpanel" id="tabpanel-triggers"     aria-labelledby="tab-triggers"     hidden={tab !== "triggers"}><TriggersTab    runs={safeRuns} /></div>
-          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} onRefresh={() => mutateRuns()} isRefreshing={runsValidating} /></div>
+          <div role="tabpanel" id="tabpanel-dora"         aria-labelledby="tab-dora"         hidden={tab !== "dora"}><DoraTab        runs={safeRuns} /></div>
+          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} onRefresh={() => mutateRuns()} isRefreshing={runsValidating} anomalyMap={anomalyMap} /></div>
         </>
       )}
     </div>
@@ -332,6 +365,16 @@ function WorkflowContent() {
 // OVERVIEW TAB
 // ══════════════════════════════════════════════════════════════════════════════
 function OverviewTab({ runs, completed }: { runs: WorkflowRun[]; completed: WorkflowRun[] }) {
+  // ── Optimization tips ──────────────────────────────────────────────────────
+  const tips = useMemo(() => analyzeWorkflow(runs), [runs]);
+  const [dismissedTips, setDismissedTips] = useState<Set<string>>(new Set());
+  const visibleTips = useMemo(
+    () => tips.filter((t) => !dismissedTips.has(t.id)),
+    [tips, dismissedTips],
+  );
+  const dismissTip = (id: string) =>
+    setDismissedTips((prev) => new Set(prev).add(id));
+
   // rolling 7-run success rate
   const rollingRate = useMemo(() => {
     const window = 7;
@@ -374,6 +417,48 @@ function OverviewTab({ runs, completed }: { runs: WorkflowRun[]; completed: Work
 
   return (
     <div className="space-y-6">
+      {/* ── Optimization Tips (dismissible) ─────────────────────────────── */}
+      {visibleTips.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Lightbulb className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-semibold text-white">Optimization Tips</h3>
+            <span className="text-[10px] text-slate-500 ml-1">{visibleTips.length} suggestion{visibleTips.length !== 1 ? "s" : ""}</span>
+          </div>
+          {visibleTips.map((tip) => {
+            const style = SEVERITY_STYLES[tip.severity];
+            return (
+              <div
+                key={tip.id}
+                className={cn(
+                  "flex items-start gap-3 px-4 py-3 rounded-lg border",
+                  style.bg, style.border,
+                )}
+              >
+                <AlertCircle className={cn("w-4 h-4 shrink-0 mt-0.5", style.icon)} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={cn("text-xs font-semibold", style.text)}>{tip.title}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/50 text-slate-400">{CATEGORY_LABELS[tip.category]}</span>
+                    {tip.impact && (
+                      <span className="text-[10px] text-slate-500">{tip.impact}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">{tip.description}</p>
+                </div>
+                <button
+                  onClick={() => dismissTip(tip.id)}
+                  className="shrink-0 p-1 rounded hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors"
+                  aria-label={`Dismiss tip: ${tip.title}`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* rolling success + duration */}
       <div className="grid lg:grid-cols-2 gap-6">
         <ChartCard title="Rolling Success Rate" sub="7-run sliding window">
@@ -454,7 +539,15 @@ function OverviewTab({ runs, completed }: { runs: WorkflowRun[]; completed: Work
 // ══════════════════════════════════════════════════════════════════════════════
 // PERFORMANCE TAB
 // ══════════════════════════════════════════════════════════════════════════════
-function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCount }: { jobStats: JobStatsResponse | undefined; loading: boolean; error?: Error; analysedCount: number; requestedCount: number }) {
+function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCount, runs }: { jobStats: JobStatsResponse | undefined; loading: boolean; error?: Error; analysedCount: number; requestedCount: number; runs: WorkflowRun[] }) {
+  // ── Queue analysis (computed from runs — no extra API calls) ──────────────
+  const queueStats = useMemo(() => computeQueueStats(runs), [runs]);
+  const queueHeatmap = useMemo(() => computeQueueHeatmap(runs), [runs]);
+  const branchImpact = useMemo(() => computeBranchQueueImpact(runs), [runs]);
+  const queueDist = useMemo(() => computeQueueDistribution(runs), [runs]);
+  const queueTrend = useMemo(() => computeQueueTrend(runs), [runs]);
+  const queueCost = useMemo(() => estimateQueueCost(runs), [runs]);
+
   if (loading) return <LoadingSkeleton />;
   if (error) return <EmptyState icon={Cpu} message={`Failed to load job stats: ${error.message}`} />;
   if (!jobStats) return <EmptyState icon={Cpu} message="No job-level data available yet." />;
@@ -554,14 +647,177 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
           </table>
         </div>
       </ChartCard>
+
+      {/* ── Queue Wait Analysis ─────────────────────────────────────────────── */}
+      {queueStats.total > 0 && (
+        <>
+          <div className="mt-4 pt-6 border-t border-slate-700/40">
+            <h3 className="text-base font-semibold text-white mb-1">Queue Wait Analysis</h3>
+            <p className="text-xs text-slate-500 mb-4">Time spent waiting for a runner before execution begins (UTC timestamps)</p>
+          </div>
+
+          {/* queue stat cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Avg Queue Wait" value={formatDuration(queueStats.avg_ms)}
+              sub={`p50: ${formatDuration(queueStats.p50_ms)}`}
+              icon={Timer} iconColor="text-amber-400" />
+            <StatCard label="p95 Queue Wait" value={formatDuration(queueStats.p95_ms)}
+              sub={queueStats.p95_ms > 300_000 ? "SLA: <5m — BREACH" : "SLA: <5m — OK"}
+              icon={AlertCircle} iconColor={queueStats.p95_ms > 300_000 ? "text-red-400" : "text-green-400"} />
+            <StatCard label="Runs Delayed" value={`${queueStats.delayed} / ${queueStats.total}`}
+              sub={`${queueStats.delayed_pct}% waited >5 min`}
+              icon={Clock} iconColor="text-orange-400" />
+            <StatCard label="Dev Time Wasted" value={queueCost.totalWaitHours > 0 ? `${queueCost.totalWaitHours}h` : "—"}
+              sub={queueCost.costUsd > 0 ? `~$${queueCost.costUsd} @ $75/hr` : "No significant wait"}
+              icon={TrendingDown} iconColor="text-rose-400" />
+          </div>
+
+          {/* queue wait heatmap (day × hour) */}
+          <QueueHeatmap cells={queueHeatmap} />
+
+          {/* queue distribution + trend side by side */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <ChartCard title="Queue Wait Distribution" sub="How long runs wait for a runner">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={queueDist} barSize={20}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTip unit=" runs" />} />
+                  <Bar dataKey="count" name="Runs" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            {queueTrend.length > 0 && (
+              <ChartCard title="Queue Wait Trend" sub="Wait time per run (minutes) — oldest to newest">
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={queueTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
+                    <Tooltip content={<ChartTip unit="m" />} />
+                    <Area type="monotone" dataKey="queue_min" name="Queue wait" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartCard>
+            )}
+          </div>
+
+          {/* branch impact table */}
+          {branchImpact.length > 0 && (
+            <ChartCard title="Queue Impact by Branch" sub="Branches most affected by queue waits">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm mt-2">
+                  <thead>
+                    <tr className="border-b border-slate-700/50">
+                      {["Branch", "Runs", "Avg Wait", "p95 Wait", "Delayed", "Time Wasted"].map(h => (
+                        <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/30">
+                    {branchImpact.map((b) => (
+                      <tr key={b.branch} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="px-3 py-2.5 text-slate-200 text-xs font-mono font-medium max-w-[200px] truncate">{b.branch}</td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs tabular-nums">{b.runs}</td>
+                        <td className="px-3 py-2.5 text-amber-300 text-xs tabular-nums font-medium">{formatDuration(b.avg_ms)}</td>
+                        <td className="px-3 py-2.5 text-blue-300 text-xs tabular-nums">{formatDuration(b.p95_ms)}</td>
+                        <td className="px-3 py-2.5 text-xs tabular-nums">
+                          {b.delayed > 0
+                            ? <span className="text-red-300">{b.delayed}</span>
+                            : <span className="text-slate-500">0</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-rose-300 text-xs tabular-nums">{b.wasted_min > 0 ? `${b.wasted_min} min` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ChartCard>
+          )}
+        </>
+      )}
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// QUEUE HEATMAP (day-of-week × hour-of-day)
+// ══════════════════════════════════════════════════════════════════════════════
+const HEATMAP_DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function QueueHeatmap({ cells }: { cells: { day: number; hour: number; avg_ms: number; count: number }[] }) {
+  // Find max for colour normalisation
+  const maxAvg = Math.max(...cells.map(c => c.avg_ms), 1);
+
+  function cellColor(avg_ms: number): string {
+    if (avg_ms === 0) return "bg-slate-800/40";
+    const ratio = avg_ms / maxAvg;
+    if (ratio < 0.2) return "bg-emerald-500/30";
+    if (ratio < 0.4) return "bg-emerald-500/50";
+    if (ratio < 0.6) return "bg-amber-500/40";
+    if (ratio < 0.8) return "bg-orange-500/50";
+    return "bg-red-500/60";
+  }
+
+  return (
+    <ChartCard title="Queue Wait Heatmap" sub="Average wait by day of week and hour of day (UTC)">
+      <div className="overflow-x-auto">
+        <div className="min-w-[600px]">
+          {/* hour labels */}
+          <div className="flex mb-1 ml-10">
+            {Array.from({ length: 24 }, (_, i) => (
+              <div key={i} className="flex-1 text-center text-[10px] text-slate-500 tabular-nums">
+                {i % 3 === 0 ? `${i}` : ""}
+              </div>
+            ))}
+          </div>
+          {/* rows: one per day */}
+          {HEATMAP_DAY_LABELS.map((dayLabel, dayIdx) => (
+            <div key={dayIdx} className="flex items-center gap-1 mb-0.5">
+              <span className="w-9 text-right text-[11px] text-slate-400 shrink-0">{dayLabel}</span>
+              <div className="flex flex-1 gap-px">
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const cell = cells.find(c => c.day === dayIdx && c.hour === hour);
+                  const avg = cell?.avg_ms ?? 0;
+                  const count = cell?.count ?? 0;
+                  return (
+                    <div
+                      key={hour}
+                      className={cn(
+                        "flex-1 h-5 rounded-[3px] transition-colors cursor-default",
+                        cellColor(avg),
+                      )}
+                      title={count > 0
+                        ? `${dayLabel} ${hour}:00 — avg ${formatDuration(avg)} (${count} runs)`
+                        : `${dayLabel} ${hour}:00 — no runs`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {/* legend */}
+          <div className="flex items-center justify-end gap-2 mt-2">
+            <span className="text-[10px] text-slate-500">Low</span>
+            <div className="flex gap-px">
+              {["bg-slate-800/40", "bg-emerald-500/30", "bg-emerald-500/50", "bg-amber-500/40", "bg-orange-500/50", "bg-red-500/60"].map((bg, i) => (
+                <div key={i} className={cn("w-4 h-3 rounded-[2px]", bg)} />
+              ))}
+            </div>
+            <span className="text-[10px] text-slate-500">High</span>
+          </div>
+        </div>
+      </div>
+    </ChartCard>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // RELIABILITY TAB
 // ══════════════════════════════════════════════════════════════════════════════
-function ReliabilityTab({ runs, completed }: { runs: WorkflowRun[]; completed: WorkflowRun[] }) {
+function ReliabilityTab({ runs, completed, anomalyMap }: { runs: WorkflowRun[]; completed: WorkflowRun[]; anomalyMap: Map<number, RunAnomalies> }) {
   // MTTR: mean time from a failure to the next success on same branch
   const mttr = useMemo(() => {
     const byBranch: Record<string, WorkflowRun[]> = {};
@@ -683,6 +939,41 @@ function ReliabilityTab({ runs, completed }: { runs: WorkflowRun[]; completed: W
                 {b}
               </span>
             ))}
+          </div>
+        </ChartCard>
+      )}
+
+      {/* ── Anomaly Detection ──────────────────────────────────────────────── */}
+      {anomalyMap.size > 0 && (
+        <ChartCard title="Anomaly Detection" sub={`${anomalyMap.size} run${anomalyMap.size !== 1 ? "s" : ""} with statistical outliers (> 2 stddev from rolling baseline)`}>
+          <div className="space-y-2 mt-2">
+            {Array.from(anomalyMap.values())
+              .sort((a, b) => Math.abs(b.worstZ) - Math.abs(a.worstZ))
+              .slice(0, 15)
+              .map((entry) => {
+                const sev = anomalySeverity(entry.worstZ);
+                const style = ANOMALY_BADGE_STYLES[sev];
+                return (
+                  <div
+                    key={entry.runId}
+                    className={cn("flex items-center gap-3 px-3 py-2 rounded-lg border", style.bg, style.border)}
+                  >
+                    <span className={cn("text-xs font-semibold tabular-nums shrink-0", style.text)}>
+                      #{entry.runNumber}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                      {entry.anomalies.map((a, i) => (
+                        <span key={i} className="text-xs text-slate-300 leading-relaxed">
+                          {formatAnomalyTooltip(a)}
+                        </span>
+                      ))}
+                    </div>
+                    <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold border shrink-0", style.bg, style.text, style.border)}>
+                      {sev}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </ChartCard>
       )}
@@ -838,7 +1129,7 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
 // ══════════════════════════════════════════════════════════════════════════════
 type SortCol = "run" | "status" | "branch" | "trigger" | "actor" | "duration" | "queue" | "started";
 
-function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: WorkflowRun[]; owner: string; repo: string; onRefresh: () => void; isRefreshing: boolean }) {
+function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { runs: WorkflowRun[]; owner: string; repo: string; onRefresh: () => void; isRefreshing: boolean; anomalyMap: Map<number, RunAnomalies> }) {
   const [sortCol, setSortCol] = useState<SortCol>("run");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -883,11 +1174,16 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: Workflo
     function csvField(v: string | number | undefined | null): string {
       return `"${String(v ?? "").replace(/"/g, '""')}"`;
     }
-    const headers = ["Run#", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Started", "SHA", "Commit Message"];
+    const headers = ["Run#", "Attempt", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Est_Cost_USD", "Started", "SHA", "Commit Message"];
     const rows = sortedRuns.map(r => {
       const isActive = r.status != null && ACTIVE_RUN_STATUSES.has(r.status);
+      // Estimate cost from duration using actor/branch/name as proxy for runner OS
+      const estCost = (!isActive && r.duration_ms != null)
+        ? estimateRunCost(r.duration_ms, r.name ?? "")
+        : null;
       return [
         csvField(r.run_number),
+        csvField(r.run_attempt),
         csvField(r.status),
         csvField(isActive ? "(in progress at export)" : r.conclusion),
         csvField(r.head_branch),
@@ -895,6 +1191,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: Workflo
         csvField(r.actor?.login),
         csvField(isActive ? "(in progress)" : r.duration_ms),
         csvField(r.queue_wait_ms),
+        csvField(estCost !== null ? estCost.toFixed(4) : ""),
         csvField(r.created_at),
         csvField(r.head_sha),
         csvField((r.head_commit?.message ?? "").split("\n")[0]),
@@ -980,9 +1277,26 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing }: { runs: Workflo
                       <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </a>
                   </td>
-                  {/* status */}
+                  {/* status + anomaly badge */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <ConclusionBadge conclusion={run.conclusion} status={run.status} />
+                    <div className="flex items-center gap-1.5">
+                      <ConclusionBadge conclusion={run.conclusion} status={run.status} />
+                      {(() => {
+                        const a = anomalyMap.get(run.id);
+                        if (!a?.hasAnomaly) return null;
+                        const sev = anomalySeverity(a.worstZ);
+                        const style = ANOMALY_BADGE_STYLES[sev];
+                        const tooltipLines = a.anomalies.map(formatAnomalyTooltip);
+                        return (
+                          <span
+                            className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold border", style.bg, style.text, style.border)}
+                            title={tooltipLines.join("\n")}
+                          >
+                            Anomaly
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </td>
                   {/* commit / PR */}
                   <td className="px-4 py-3 max-w-[220px]">
@@ -1211,6 +1525,188 @@ function RunJobsRow({
       </td>
     </tr>
   );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DORA TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function DoraTab({ runs }: { runs: WorkflowRun[] }) {
+  const dora = useMemo(() => calculateDoraMetrics(runs), [runs]);
+
+  const metrics: {
+    key: keyof typeof BENCHMARKS;
+    label: string;
+    value: string;
+    level: DoraLevel;
+    sub: string;
+    icon: React.ElementType;
+    detail: string;
+  }[] = [
+    {
+      key: "deployment_frequency",
+      label: "Deploy Frequency",
+      value: dora.deployment_frequency.label,
+      level: dora.deployment_frequency.level,
+      sub: `${dora.deployment_frequency.total} runs over ${dora.deployment_frequency.period_days} days`,
+      icon: Activity,
+      detail: BENCHMARKS.deployment_frequency[dora.deployment_frequency.level],
+    },
+    {
+      key: "lead_time",
+      label: "Lead Time",
+      value: dora.lead_time.label,
+      level: dora.lead_time.level,
+      sub: `p95: ${dora.lead_time.p95_ms > 0 ? formatLeadTime(dora.lead_time.p95_ms) : "—"} (${dora.lead_time.sample_size} samples)`,
+      icon: Clock,
+      detail: BENCHMARKS.lead_time[dora.lead_time.level],
+    },
+    {
+      key: "change_failure_rate",
+      label: "Change Failure Rate",
+      value: dora.change_failure_rate.label,
+      level: dora.change_failure_rate.level,
+      sub: `${dora.change_failure_rate.failures} failures / ${dora.change_failure_rate.total} runs`,
+      icon: AlertCircle,
+      detail: BENCHMARKS.change_failure_rate[dora.change_failure_rate.level],
+    },
+    {
+      key: "mttr",
+      label: "MTTR",
+      value: dora.mttr.label,
+      level: dora.mttr.level,
+      sub: `${dora.mttr.recoveries} recovery event${dora.mttr.recoveries !== 1 ? "s" : ""}`,
+      icon: TrendingUp,
+      detail: BENCHMARKS.mttr[dora.mttr.level],
+    },
+  ];
+
+  const overallColors = LEVEL_COLORS[dora.overall_level];
+
+  return (
+    <div className="space-y-6">
+      {/* Overall DORA level */}
+      <div className={cn(
+        "rounded-xl border p-5 flex items-center justify-between",
+        overallColors.bg, overallColors.border,
+      )}>
+        <div>
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-1">
+            Overall DORA Performance
+          </p>
+          <p className={cn("text-2xl font-bold", overallColors.text)}>
+            {LEVEL_LABELS[dora.overall_level]}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Based on the worst-performing metric (industry standard)
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {LEVEL_ORDER_DISPLAY.map((lvl) => (
+            <div
+              key={lvl}
+              className={cn(
+                "w-3 h-10 rounded-sm transition-all",
+                dora.overall_level === lvl
+                  ? cn(LEVEL_COLORS[lvl].text.replace("text-", "bg-"), "opacity-100")
+                  : "bg-slate-700/50 opacity-40"
+              )}
+              title={LEVEL_LABELS[lvl]}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Four metric cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {metrics.map((m) => {
+          const colors = LEVEL_COLORS[m.level];
+          const Icon = m.icon;
+          return (
+            <div
+              key={m.key}
+              className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={cn("p-1.5 rounded-lg bg-slate-700/50", colors.text)}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    {m.label}
+                  </span>
+                </div>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border",
+                  colors.bg, colors.border, colors.text,
+                )}>
+                  {LEVEL_LABELS[m.level]}
+                </span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white tabular-nums">{m.value}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{m.sub}</p>
+              </div>
+              <div className="pt-2 border-t border-slate-700/40">
+                <p className="text-[11px] text-slate-500">
+                  <span className="text-slate-400 font-medium">Benchmark:</span> {m.detail}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* DORA benchmark reference */}
+      <ChartCard title="DORA Performance Levels" sub="Industry benchmarks from the State of DevOps Report">
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-700/50">
+                <th className="text-left px-3 py-2 text-slate-400 uppercase tracking-wider font-medium">Metric</th>
+                {LEVEL_ORDER_DISPLAY.map((lvl) => (
+                  <th key={lvl} className={cn("text-center px-3 py-2 uppercase tracking-wider font-medium", LEVEL_COLORS[lvl].text)}>
+                    {LEVEL_LABELS[lvl]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700/30">
+              {(Object.keys(BENCHMARKS) as (keyof typeof BENCHMARKS)[]).map((metricKey) => (
+                <tr key={metricKey} className="hover:bg-slate-700/20 transition-colors">
+                  <td className="px-3 py-2.5 text-slate-300 font-medium capitalize">
+                    {metricKey.replace(/_/g, " ")}
+                  </td>
+                  {LEVEL_ORDER_DISPLAY.map((lvl) => {
+                    const isCurrentLevel = metrics.find((m) => m.key === metricKey)?.level === lvl;
+                    return (
+                      <td
+                        key={lvl}
+                        className={cn(
+                          "text-center px-3 py-2.5 text-slate-500",
+                          isCurrentLevel && cn("font-semibold", LEVEL_COLORS[lvl].text, LEVEL_COLORS[lvl].bg, "rounded")
+                        )}
+                      >
+                        {BENCHMARKS[metricKey][lvl]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ChartCard>
+    </div>
+  );
+}
+
+const LEVEL_ORDER_DISPLAY: DoraLevel[] = ["elite", "high", "medium", "low"];
+
+function formatLeadTime(ms: number): string {
+  const hours = ms / 3_600_000;
+  if (hours < 1) return `${Math.round(ms / 60_000)}m`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

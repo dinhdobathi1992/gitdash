@@ -7,10 +7,10 @@ import Link from "next/link";
 import { fetcher } from "@/lib/swr";
 import { WorkflowOverview } from "@/lib/github";
 import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
-import { RunHistoryBars, TrendSparkline, StatusBadge, HealthBadge } from "@/components/WorkflowMetrics";
+import { RunHistoryBars, TrendSparkline, StatusBadge, HealthScoreRing } from "@/components/WorkflowMetrics";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
-  Search, X, ChevronRight, Zap,
+  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import {
@@ -168,9 +168,9 @@ function WorkflowRow({
         <StatusBadge summary={wf.summary} />
       </td>
 
-      {/* Health */}
+      {/* Health Score */}
       <td className="py-3.5 px-4 w-36">
-        <HealthBadge summary={wf.summary} />
+        <HealthScoreRing summary={wf.summary} />
       </td>
 
       {/* Run History (10) */}
@@ -331,6 +331,24 @@ export default function RepoDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/repos/${owner}/${repo}/audit`}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+          >
+            <Shield className="w-3.5 h-3.5" /> Audit Trail
+          </Link>
+          <Link
+            href={`/repos/${owner}/${repo}/team`}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+          >
+            <Users className="w-3.5 h-3.5" /> Team
+          </Link>
+          <Link
+            href={`/repos/${owner}/${repo}/security`}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" /> Security
+          </Link>
           <button
             onClick={() => mutate()}
             disabled={isValidating}

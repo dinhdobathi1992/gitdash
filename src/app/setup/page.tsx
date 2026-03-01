@@ -138,13 +138,21 @@ export default function SetupPage() {
                 </li>
               ))}
             </ul>
+            <p className="font-medium text-slate-400 pt-1">Cost Analytics</p>
+            <p>
+              Requires a separate{" "}
+              <strong className="text-slate-300">fine-grained PAT</strong> with{" "}
+              <code className="text-violet-400 bg-slate-800 px-1 rounded">Administration</code>{" "}
+              org permission (read). Classic PATs do not support the Enhanced
+              Billing API.
+            </p>
             <a
               href="https://github.com/settings/tokens/new?scopes=repo,workflow,read:org,read:user,user:email"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 transition-colors"
             >
-              Generate token on GitHub <ExternalLink className="w-3 h-3" />
+              Generate classic token on GitHub <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         </div>

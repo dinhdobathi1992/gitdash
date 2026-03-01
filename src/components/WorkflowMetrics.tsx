@@ -147,6 +147,93 @@ export function StatusBadge({ summary }: { summary: RepoSummary | undefined }) {
   return <span className="text-xs text-slate-600">No runs</span>;
 }
 
+// ── Health Score ring (0-100) ─────────────────────────────────────────────────
+/**
+ * Composite health score:
+ *   60% success rate (last 10 completed runs)
+ *   40% recency stability (no failures in last 3 runs → bonus)
+ */
+export function computeHealthScore(summary: RepoSummary): number {
+  const hasRuns = summary.recent_runs.some((r) => r.conclusion);
+  if (!hasRuns) return 0;
+
+  const successScore = summary.success_rate; // 0-100
+
+  // Recency: last 3 runs — each success = 1, else 0
+  const last3 = summary.recent_runs
+    .filter((r) => r.conclusion)
+    .slice(0, 3);
+  const recentSuccess = last3.filter((r) => r.conclusion === "success").length;
+  const recentScore = last3.length > 0 ? (recentSuccess / last3.length) * 100 : 50;
+
+  return Math.round(successScore * 0.6 + recentScore * 0.4);
+}
+
+export function HealthScoreRing({
+  summary,
+  size = 36,
+}: {
+  summary: RepoSummary | undefined;
+  size?: number;
+}) {
+  if (!summary || summary.recent_runs.every((r) => !r.conclusion)) {
+    return <span className="text-xs text-slate-600">—</span>;
+  }
+
+  const score = computeHealthScore(summary);
+  const r = size / 2 - 3;
+  const circ = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+
+  const stroke =
+    score >= 80 ? "#10b981" : score >= 60 ? "#f59e0b" : "#ef4444";
+
+  const label =
+    score >= 80 ? "Good" : score >= 60 ? "Fair" : "Poor";
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      title={`Health score: ${score}/100 — ${label}`}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="rotate-[-90deg] shrink-0"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#1e293b"
+          strokeWidth="3"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="3"
+          strokeDasharray={`${filled} ${circ - filled}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: stroke }}
+        >
+          {score}
+        </span>
+        <p className="text-[11px] text-slate-500 -mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Health badge ──────────────────────────────────────────────────────────────
 export function HealthBadge({ summary }: { summary: RepoSummary | undefined }) {
   if (!summary || summary.recent_runs.every((r) => !r.conclusion)) {
