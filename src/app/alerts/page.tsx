@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
+import { useAuth } from "@/components/AuthProvider";
 import { Breadcrumb } from "@/components/Sidebar";
 import { RepoPicker } from "@/components/RepoPicker";
 import {
@@ -285,8 +286,11 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AlertsPage() {
+  const { mode } = useAuth();
+  const isStandalone = mode === "standalone";
+
   const { data, isLoading, mutate } = useSWR<AlertsResponse>(
-    "/api/alerts?events=1",
+    isStandalone ? null : "/api/alerts?events=1",
     fetcher<AlertsResponse>,
     { revalidateOnFocus: false }
   );
@@ -308,6 +312,35 @@ export default function AlertsPage() {
 
   const rules = data?.rules ?? [];
   const events = data?.events ?? [];
+
+  if (isStandalone) {
+    return (
+      <div className="p-8 space-y-6">
+        <Breadcrumb items={[{ label: "Alerts" }]} />
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+            <Bell className="w-5 h-5 text-amber-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Alert Rules</h1>
+            <p className="text-sm text-slate-400">Define thresholds — alerts are evaluated when runs are synced to DB</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-4 px-5 py-4 bg-amber-500/8 border border-amber-500/20 rounded-xl">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-amber-300">
+              Not available in standalone mode
+            </p>
+            <p className="text-xs text-amber-500/80">
+              Alert rules require a PostgreSQL database and GitHub OAuth. Switch to organization mode,
+              configure a GitHub OAuth App, and set a <span className="font-mono">DATABASE_URL</span> to use this feature.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">

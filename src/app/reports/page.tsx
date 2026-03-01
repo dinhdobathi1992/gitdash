@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRMutation from "swr/mutation";
 import { fetcher } from "@/lib/swr";
+import { useAuth } from "@/components/AuthProvider";
 import { Breadcrumb } from "@/components/Sidebar";
 import { RepoPicker } from "@/components/RepoPicker";
 import {
@@ -195,6 +196,9 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function ReportsPage() {
+  const { mode } = useAuth();
+  const isStandalone = mode === "standalone";
+
   const [activeRepo, setActiveRepo] = useState("");
   const [days, setDays] = useState(7);
   const [syncResult, setSyncResult] = useState<SyncResponse | null>(null);
@@ -248,6 +252,35 @@ export default function ReportsPage() {
   const totalSuccess = daily.reduce((s, d) => s + d.success, 0);
   const totalFailure = daily.reduce((s, d) => s + d.failure, 0);
   const avgRate = totalRuns > 0 ? Math.round((totalSuccess / totalRuns) * 100) : 0;
+
+  if (isStandalone) {
+    return (
+      <div className="p-8 space-y-6">
+        <Breadcrumb items={[{ label: "Reports" }]} />
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Historical Reports</h1>
+            <p className="text-sm text-slate-400">Long-term trends and quarterly comparisons from Neon DB</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-4 px-5 py-4 bg-amber-500/8 border border-amber-500/20 rounded-xl">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-amber-300">
+              Not available in standalone mode
+            </p>
+            <p className="text-xs text-amber-500/80">
+              Historical reports require a PostgreSQL database and GitHub OAuth. Switch to organization mode,
+              configure a GitHub OAuth App, and set a <span className="font-mono">DATABASE_URL</span> to use this feature.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">
