@@ -472,34 +472,92 @@ export default function CostAnalyticsPage() {
         </div>
       )}
 
-      {/* Not found — Enhanced Billing Platform not enabled */}
+      {/* Not found — most likely insufficient PAT permissions (GitHub returns 404 for both) */}
       {isNotFound && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 space-y-3">
-          <div className="flex items-center gap-2 text-amber-400">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 space-y-4">
+          <div className="flex items-center gap-2 text-red-400">
             <AlertCircle className="w-5 h-5 shrink-0" />
-            <span className="font-semibold">Billing data not found</span>
+            <span className="font-semibold">
+              Your API key does not have enough permission for{" "}
+              <code className="font-mono bg-red-500/10 px-1.5 py-0.5 rounded text-red-300">
+                {activeOrg || "this organization"}
+              </code>
+            </span>
           </div>
+
           <p className="text-sm text-slate-400 leading-relaxed">
-            No billing data was found for{" "}
-            <code className="text-slate-300 bg-slate-800 px-1 rounded">
-              {activeOrg || "your account"}
-            </code>
-            . The Enhanced Billing Platform is typically available on GitHub{" "}
-            <strong className="text-slate-300">Team</strong> and{" "}
-            <strong className="text-slate-300">Enterprise</strong> plans.
-            GitHub Free orgs may not have access.
+            GitHub returned <code className="text-slate-300 bg-slate-800 px-1 rounded">404</code> for the
+            Enhanced Billing API. This almost always means your current PAT does{" "}
+            <strong className="text-red-400">not</strong> have the{" "}
+            <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code> organization
+            permission (read) scoped to{" "}
+            <code className="text-slate-300 bg-slate-800 px-1 rounded">{activeOrg}</code>.
+            GitHub hides the resource entirely rather than returning 403.
           </p>
-          {activeOrg && (
+
+          <div className="space-y-2 text-sm text-slate-400">
+            <p className="font-medium text-slate-300">To fix this:</p>
+            <ol className="list-decimal list-inside space-y-1.5 pl-1">
+              <li>
+                Go to{" "}
+                <a
+                  href="https://github.com/settings/personal-access-tokens/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 underline underline-offset-2"
+                >
+                  github.com/settings/personal-access-tokens/new
+                </a>{" "}
+                and create a <strong className="text-slate-300">Fine-grained token</strong>
+              </li>
+              <li>
+                Under <em>Resource owner</em>, select{" "}
+                <code className="text-slate-300 bg-slate-800 px-1 rounded">{activeOrg}</code>
+              </li>
+              <li>
+                Under <em>Organization permissions</em> → set{" "}
+                <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code> →{" "}
+                <strong className="text-slate-300">Read-only</strong>
+              </li>
+              <li>Go to GitDash Settings and replace your current PAT with the new one</li>
+            </ol>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 pt-1">
             <a
-              href={`https://github.com/organizations/${activeOrg}/settings/billing/platform`}
+              href="https://github.com/settings/personal-access-tokens/new"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-violet-400 hover:text-violet-300 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 rounded-lg text-sm text-violet-300 transition-colors"
             >
-              Enable Enhanced Billing for {activeOrg}{" "}
-              <ExternalLink className="w-3.5 h-3.5" />
+              Create new fine-grained PAT <ExternalLink className="w-3.5 h-3.5" />
             </a>
-          )}
+            {activeOrg && (
+              <a
+                href={`https://github.com/organizations/${activeOrg}/settings/billing`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-300 transition-colors"
+              >
+                View org billing on GitHub <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+
+          <p className="text-[11px] text-slate-600 border-t border-slate-700/40 pt-3">
+            If your PAT is correct and you are a billing admin, the org may not be on the{" "}
+            GitHub Enhanced Billing Platform (requires Team or Enterprise plan).{" "}
+            {activeOrg && (
+              <a
+                href={`https://github.com/organizations/${activeOrg}/settings/billing/platform`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-500 hover:text-slate-400 underline underline-offset-2"
+              >
+                Enable Enhanced Billing for {activeOrg}
+              </a>
+            )}
+          </p>
         </div>
       )}
 
