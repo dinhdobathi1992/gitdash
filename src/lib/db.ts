@@ -516,15 +516,66 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
 
     // Check threshold
     if (value >= rule.threshold) {
-      await fireAlertEvent(rule.id, rule.scope, rule.metric, value, {
+      const details = {
         repo: repoKey,
         threshold: rule.threshold,
         window_hours: rule.window_hours,
         triggered_at: new Date().toISOString(),
-      });
+      };
+      await fireAlertEvent(rule.id, rule.scope, rule.metric, value, details);
       fired++;
+
+      // Deliver Slack notification (best-effort, never throws)
+      if (rule.channel === "slack" && rule.destination) {
+        deliverSlackAlert(rule, repoKey, value, details).catch((e) => {
+          console.error("[alerts] Slack delivery error:", e);
+        });
+      }
     }
   }
 
   return fired;
+}
+
+// ── Slack delivery ────────────────────────────────────────────────────────────
+
+const METRIC_LABELS: Record<string, { label: string; unit: string }> = {
+  failure_rate:    { label: "Failure Rate",   unit: "%" },
+  duration_p95:   { label: "Duration P95",    unit: " min" },
+  queue_wait_p95: { label: "Queue Wait P95",  unit: " min" },
+  success_streak: { label: "Failure Streak",  unit: " runs" },
+};
+
+async function deliverSlackAlert(
+  rule: DbAlertRule,
+  repo: string,
+  value: number,
+  details: Record<string, unknown>,
+): Promise<void> {
+  const meta = METRIC_LABELS[rule.metric] ?? { label: rule.metric, unit: "" };
+  const text =
+    `*GitDash Alert* — \`${repo}\`\n` +
+    `*${meta.label}* exceeded threshold\n` +
+    `Value: *${value}${meta.unit}* (threshold: ${rule.threshold}${meta.unit})\n` +
+    `Window: ${rule.window_hours}h — triggered at ${details.triggered_at ?? new Date().toISOString()}`;
+
+  const body = JSON.stringify({
+    text,
+    blocks: [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text },
+      },
+    ],
+  });
+
+  const res = await fetch(rule.destination!, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Slack webhook returned ${res.status}`);
+  }
 }
