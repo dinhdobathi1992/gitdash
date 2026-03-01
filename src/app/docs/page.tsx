@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/Sidebar";
 import {
   BookOpen, Rocket, Server, Settings2, GitBranch,
   Layers, Shield, HelpCircle, Terminal, ChevronRight,
-  AlertTriangle, Info, CheckCircle,
+  AlertTriangle, Info, CheckCircle, Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const SECTIONS = [
   { id: "features",        label: "Features",           icon: Layers },
   { id: "security",        label: "Security",           icon: Shield },
   { id: "faq",             label: "FAQ & Troubleshooting", icon: HelpCircle },
+  { id: "release-notes",   label: "Release Notes",      icon: Tag },
 ];
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -710,7 +711,186 @@ function FAQ() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function ReleaseNotes() {
+  const releases = [
+    {
+      version: "2.3.0",
+      date: "2026-03-01",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "In-app /docs page with 7 sections, sticky table of contents, and version badge",
+          "GitHub webhook receiver at /api/webhooks/github — workflow_run events now auto-sync into Neon DB without manual triggers",
+          "Alert rule evaluation wired into POST /api/db/sync — rules are checked after every sync",
+          "Slack webhook delivery for alert rules (channel=slack)",
+          "alerts_fired count shown in Reports page sync result banner",
+          "/docs publicly accessible before authentication (no login required)",
+          "Documentation link added to /login and /setup footers",
+        ],
+        fixed: [
+          "Sidebar no longer renders on /docs for unauthenticated visitors",
+          "SWR global 401 handler no longer redirects away from /docs",
+        ],
+        improved: [
+          "upsertRuns() replaced N+1 per-row SQL loop with a single Neon HTTP transaction — up to 500× fewer round-trips per sync",
+        ],
+      },
+    },
+    {
+      version: "2.2.0",
+      date: "2026-02-20",
+      badge: null,
+      badgeColor: "",
+      changes: {
+        added: [
+          "Reports page — DB-backed historical reporting with daily area chart and quarterly breakdown",
+          "Alert rules CRUD UI at /alerts with per-repo and per-org scopes",
+          "Neon PostgreSQL integration with idempotent schema migration (ensureSchema)",
+          "POST /api/db/sync — incremental GitHub → DB sync with cursor tracking",
+          "GET /api/db/runs and /api/db/trends endpoints for historical queries",
+          "Quarterly summary SQL aggregation (getQuarterlySummary)",
+          "Org daily trend aggregation across all repos (getOrgDailyTrends)",
+        ],
+        fixed: [],
+        improved: [
+          "Sync cursor prevents re-fetching already-stored runs on repeated syncs",
+        ],
+      },
+    },
+    {
+      version: "2.1.0",
+      date: "2026-02-10",
+      badge: null,
+      badgeColor: "",
+      changes: {
+        added: [
+          "Cost Analytics page at /cost-analytics — GitHub Actions billing breakdown by SKU/runner type",
+          "Monthly burn rate progress bar with warning/critical thresholds",
+          "Projected end-of-month minutes calculation",
+          "Org dashboard at /org/[orgName] — reliability heatmap and sortable repo table",
+          "Audit tab at /repos/[owner]/[repo]/audit — workflow file commit history",
+          "Security tab at /repos/[owner]/[repo]/security",
+          "Team stats tab at /repos/[owner]/[repo]/team — per-contributor heatmaps and leaderboard",
+        ],
+        fixed: [
+          "OAuth state now expires after 5 minutes to prevent stale CSRF tokens",
+        ],
+        improved: [
+          "Repo overview fetches up to 10 workflows in parallel batches of 5",
+        ],
+      },
+    },
+    {
+      version: "2.0.0",
+      date: "2026-01-15",
+      badge: null,
+      badgeColor: "",
+      changes: {
+        added: [
+          "Organization mode — GitHub OAuth App login with isolated per-user sessions",
+          "Multi-arch Docker image (linux/amd64 + linux/arm64)",
+          "Automated CI pipeline: lint → typecheck → build on every push to main",
+          "Vercel deployment pipeline with automatic preview and production deploys",
+          "Middleware-based auth gate (proxy.ts) with ALWAYS_PUBLIC path list",
+          "iron-session v8 with AES-256-GCM cookie encryption",
+          "HTTP security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options",
+          "Rate limiting on /api/auth/setup (5 req/min) and /api/auth/login (10 req/min)",
+          "Input validation for all owner/repo/org path parameters",
+          "HTTP → HTTPS redirect via x-forwarded-proto in production",
+          "Non-root Docker user (nextjs uid 1001)",
+        ],
+        fixed: [],
+        improved: [
+          "SESSION_SECRET minimum length enforced at startup in production",
+          "Lazy Neon DB singleton — no build-time crash when DATABASE_URL is absent",
+        ],
+      },
+    },
+    {
+      version: "1.0.0",
+      date: "2025-12-01",
+      badge: null,
+      badgeColor: "",
+      changes: {
+        added: [
+          "Initial release — standalone mode with PAT-based authentication",
+          "Repositories list with fuzzy search and keyboard navigation",
+          "Workflow dashboard with 5 tabs: Overview, Performance, Reliability, Triggers, Runs",
+          "Per-job and per-step drill-down with timing waterfall",
+          "Auto-refresh every 30 seconds while runs are in-progress",
+          "Browser notifications for new workflow failures (opt-in)",
+          "CSV export from the Runs tab",
+          "Per-chart PNG download",
+          "Success rate, MTTR, failure streaks, and flaky branch detection",
+          "Trigger analytics: event breakdown, actor leaderboard, hour/day heatmaps",
+        ],
+        fixed: [],
+        improved: [],
+      },
+    },
+  ];
+
+  const chipColors: Record<string, string> = {
+    added:    "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    fixed:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    improved: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  };
+
+  const dotColors: Record<string, string> = {
+    added:    "text-emerald-400",
+    fixed:    "text-blue-400",
+    improved: "text-violet-400",
+  };
+
+  return (
+    <section id="release-notes" className="scroll-mt-6">
+      <SectionHeading id="release-notes" icon={Tag}>Release Notes</SectionHeading>
+      <div className="space-y-6">
+        {releases.map((r) => (
+          <Card key={r.version}>
+            {/* version header */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono text-lg font-bold text-white">v{r.version}</span>
+              {r.badge && (
+                <span className={`text-xs px-2 py-0.5 rounded border font-medium ${r.badgeColor}`}>
+                  {r.badge}
+                </span>
+              )}
+              <span className="text-xs text-slate-500">{r.date}</span>
+            </div>
+
+            {/* change groups */}
+            <div className="space-y-4 pt-1">
+              {(["added", "fixed", "improved"] as const).map((kind) => {
+                const items = r.changes[kind];
+                if (!items.length) return null;
+                const label = kind === "added" ? "Added" : kind === "fixed" ? "Fixed" : "Improved";
+                return (
+                  <div key={kind}>
+                    <span className={`inline-block text-xs px-2 py-0.5 rounded border font-semibold mb-2 ${chipColors[kind]}`}>
+                      {label}
+                    </span>
+                    <ul className="space-y-1.5">
+                      {items.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                          <ChevronRight className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${dotColors[kind]}`} />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
 export default function DocsPage() {
   const [active, setActive] = useState("getting-started");
 
@@ -773,6 +953,7 @@ export default function DocsPage() {
           <Features />
           <Security />
           <FAQ />
+          <ReleaseNotes />
         </div>
       </div>
     </div>
