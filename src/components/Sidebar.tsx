@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
   LayoutDashboard, Settings, GitBranch, ChevronRight,
-  ChevronDown, LogOut, Key, DollarSign, BarChart3, Bell,
+  ChevronDown, LogOut, Key, DollarSign, BarChart3, Bell, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/cost-analytics", label: "Cost Analytics", icon: DollarSign },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/docs", label: "Docs", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
