@@ -19,9 +19,13 @@ import {
   Activity,
   CheckCircle2,
   ExternalLink,
-  ArrowUpRight,
+  ChevronRight,
+  Lock,
+  Unlock,
+  GitCommit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
@@ -79,13 +83,39 @@ export default function OrgDashboardPage({
               </div>
             ))}
           </div>
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6">
-            <div className="h-4 w-40 rounded skeleton mb-4" />
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-12 rounded skeleton" />
-              ))}
-            </div>
+          <div className="rounded-xl border border-slate-800 overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-900/60">
+                  {["Repository", "Status", "Health", "Run History (10)", "Trend (30d)", ""].map((h, i) => (
+                    <th key={i} className="py-2.5 pl-5 pr-4 text-left text-xs font-medium text-slate-400 tracking-wide">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(6)].map((_, i) => (
+                  <tr key={i} className="border-b border-slate-800">
+                    <td className="py-4 pl-5 pr-4">
+                      <div className="h-4 w-48 rounded skeleton mb-1.5" />
+                      <div className="h-3 w-64 rounded skeleton" />
+                    </td>
+                    <td className="py-4 px-4"><div className="h-5 w-16 rounded-full skeleton" /></td>
+                    <td className="py-4 px-4"><div className="h-5 w-12 rounded skeleton" /></td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-end gap-0.5 h-6">
+                        {Array.from({ length: 10 }).map((_, j) => (
+                          <div key={j} className="w-2.5 h-full rounded-sm skeleton" />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4"><div className="h-8 w-28 rounded skeleton" /></td>
+                    <td className="py-4 pr-5" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -142,7 +172,7 @@ export default function OrgDashboardPage({
             />
           </div>
 
-          {/* Reliability heatmap (simplified: color-coded grid) */}
+          {/* Reliability heatmap */}
           {data.repos.length > 0 && (
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6 space-y-4">
               <div>
@@ -198,9 +228,9 @@ export default function OrgDashboardPage({
             </div>
           )}
 
-          {/* Repos table */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6 space-y-4">
-            <div>
+          {/* Repos table — matches home page style */}
+          <div>
+            <div className="mb-3">
               <h2 className="text-sm font-semibold text-white">
                 Top Repositories
               </h2>
@@ -215,84 +245,104 @@ export default function OrgDashboardPage({
                 No repositories found for this organization.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="rounded-xl border border-slate-800 overflow-hidden">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-700/50">
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
+                    <tr className="border-b border-slate-800 bg-slate-900/60">
+                      <th className="py-2.5 pl-5 pr-4 text-left text-xs font-medium text-slate-400 tracking-wide">
                         Repository
                       </th>
-                      <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
+                      <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
                         Status
                       </th>
-                      <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
+                      <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
                         Health
                       </th>
-                      <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
-                        History
+                      <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-48">
+                        Run History (10)
                       </th>
-                      <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
+                      <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
                         Trend (30d)
                       </th>
-                      <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider py-3 px-4">
-                        Workflows
-                      </th>
-                      <th className="w-8" />
+                      <th className="py-2.5 pr-5 w-10" />
                     </tr>
                   </thead>
                   <tbody>
                     {data.repos.map((r) => (
                       <tr
                         key={r.repo.id}
-                        className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors"
+                        className="group border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        onClick={() => {
+                          window.location.href = `/repos/${r.repo.owner}/${r.repo.name}`;
+                        }}
                       >
-                        <td className="py-3 px-4">
-                          <Link
-                            href={`/repos/${r.repo.owner}/${r.repo.name}`}
-                            className="group"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-sm text-white group-hover:text-violet-400 transition-colors">
+                        {/* Repository */}
+                        <td className="py-3.5 pl-5 pr-4">
+                          <div className="flex items-start gap-2.5">
+                            {r.repo.private
+                              ? <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                              : <Unlock className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />}
+                            <div className="min-w-0">
+                              <Link
+                                href={`/repos/${r.repo.owner}/${r.repo.name}`}
+                                className="text-sm font-semibold text-white hover:text-violet-300 transition-colors font-mono truncate block"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="text-slate-400">{r.repo.owner}/</span>
                                 {r.repo.name}
-                              </span>
-                              {r.repo.private && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 border border-slate-600/30">
-                                  private
-                                </span>
-                              )}
+                              </Link>
+                              {r.summary.latest_sha ? (
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                                  <GitCommit className="w-3 h-3 shrink-0" />
+                                  <span className="font-mono">{r.summary.latest_sha}</span>
+                                  {r.summary.latest_message && (
+                                    <span className="truncate max-w-[180px]">{r.summary.latest_message}</span>
+                                  )}
+                                  {r.summary.latest_actor && (
+                                    <span>by {r.summary.latest_actor}</span>
+                                  )}
+                                  {r.summary.latest_run_at && (
+                                    <span>{formatDistanceToNow(new Date(r.summary.latest_run_at))} ago</span>
+                                  )}
+                                </div>
+                              ) : r.repo.updated_at ? (
+                                <p className="text-[11px] text-slate-600 mt-0.5">
+                                  Updated {formatDistanceToNow(new Date(r.repo.updated_at))} ago
+                                </p>
+                              ) : null}
                             </div>
-                            {r.repo.description && (
-                              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">
-                                {r.repo.description}
-                              </p>
-                            )}
-                          </Link>
+                          </div>
                         </td>
-                        <td className="py-3 px-4 text-center">
+
+                        {/* Status */}
+                        <td className="py-3.5 px-4 w-36">
                           <StatusBadge summary={r.summary} />
                         </td>
-                        <td className="py-3 px-4 text-center">
+
+                        {/* Health */}
+                        <td className="py-3.5 px-4 w-36">
                           <HealthBadge summary={r.summary} />
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex justify-center">
-                            <RunHistoryBars runs={r.summary.recent_runs} />
-                          </div>
+
+                        {/* Run History */}
+                        <td className="py-3.5 px-4 w-48">
+                          <RunHistoryBars runs={r.summary.recent_runs} />
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex justify-center">
-                            <TrendSparkline points={r.summary.trend_30d} />
-                          </div>
+
+                        {/* Trend */}
+                        <td className="py-3.5 px-4 w-36">
+                          <TrendSparkline points={r.summary.trend_30d} />
                         </td>
-                        <td className="text-right py-3 px-4 text-slate-400 tabular-nums">
-                          {r.workflow_count}
-                        </td>
-                        <td className="py-3 px-4">
+
+                        {/* Arrow */}
+                        <td className="py-3.5 pr-5 w-10 text-right">
                           <Link
                             href={`/repos/${r.repo.owner}/${r.repo.name}`}
-                            className="text-slate-500 hover:text-violet-400 transition-colors"
+                            className="inline-flex text-slate-600 group-hover:text-slate-300 transition-colors"
+                            aria-label={`Open ${r.repo.name}`}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <ArrowUpRight className="w-4 h-4" />
+                            <ChevronRight className="w-4 h-4" />
                           </Link>
                         </td>
                       </tr>
