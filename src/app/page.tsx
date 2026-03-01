@@ -302,21 +302,21 @@ function TableSkeleton() {
   return (
     <tbody>
       {Array.from({ length: 8 }).map((_, i) => (
-        <tr key={i} className="border-b border-slate-800">
+        <tr key={i} className="border-b border-slate-800 animate-pulse">
           <td className="py-4 pl-5 pr-4">
-            <div className="h-4 w-48 bg-slate-800 rounded animate-pulse mb-1.5" />
-            <div className="h-3 w-64 bg-slate-800/60 rounded animate-pulse" />
+            <div className="h-4 w-48 bg-slate-700 rounded mb-1.5" />
+            <div className="h-3 w-64 bg-slate-700/60 rounded" />
           </td>
-          <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-800 rounded-full animate-pulse" /></td>
-          <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-800 rounded animate-pulse" /></td>
+          <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-700 rounded-full" /></td>
+          <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-700 rounded" /></td>
           <td className="py-4 px-4">
             <div className="flex items-end gap-0.5 h-6">
               {Array.from({ length: 10 }).map((_, j) => (
-                <div key={j} className="w-2.5 h-full bg-slate-800 rounded-sm animate-pulse" />
+                <div key={j} className="w-2.5 h-full bg-slate-700 rounded-sm" />
               ))}
             </div>
           </td>
-          <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-800 rounded animate-pulse" /></td>
+          <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-700 rounded" /></td>
           <td className="py-4 pr-5" />
         </tr>
       ))}

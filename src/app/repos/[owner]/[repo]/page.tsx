@@ -200,18 +200,18 @@ function WorkflowRow({
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-pulse">
       {/* Chart skeleton */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <div className="h-4 w-40 bg-slate-800 rounded animate-pulse mb-1.5" />
-        <div className="h-3 w-56 bg-slate-800/60 rounded animate-pulse mb-5" />
-        <div className="h-48 bg-slate-800/40 rounded animate-pulse" />
+      <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+        <div className="h-4 w-40 bg-slate-700 rounded mb-1.5" />
+        <div className="h-3 w-56 bg-slate-700/60 rounded mb-5" />
+        <div className="h-48 bg-slate-700/40 rounded" />
       </div>
       {/* Table skeleton */}
-      <div className="rounded-xl border border-slate-800 overflow-hidden">
+      <div className="rounded-xl border border-slate-700/50 overflow-hidden">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-900/60">
+            <tr className="border-b border-slate-700/50 bg-slate-900/60">
               {["Workflow", "Status", "Health", "Run History (10)", "Trend (30d)", ""].map((h, i) => (
                 <th key={i} className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide">
                   {h}
@@ -221,26 +221,26 @@ function Skeleton() {
           </thead>
           <tbody>
             {Array.from({ length: 3 }).map((_, i) => (
-              <tr key={i} className="border-b border-slate-800">
+              <tr key={i} className="border-b border-slate-700/30">
                 <td className="py-4 pl-5 pr-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-800 animate-pulse" />
+                    <div className="w-7 h-7 rounded-lg bg-slate-700" />
                     <div>
-                      <div className="h-4 w-32 bg-slate-800 rounded animate-pulse mb-1.5" />
-                      <div className="h-3 w-48 bg-slate-800/60 rounded animate-pulse" />
+                      <div className="h-4 w-32 bg-slate-700 rounded mb-1.5" />
+                      <div className="h-3 w-48 bg-slate-700/60 rounded" />
                     </div>
                   </div>
                 </td>
-                <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-800 rounded-full animate-pulse" /></td>
-                <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-800 rounded animate-pulse" /></td>
+                <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-700 rounded-full" /></td>
+                <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-700 rounded" /></td>
                 <td className="py-4 px-4">
                   <div className="flex items-end gap-0.5 h-6">
                     {Array.from({ length: 10 }).map((_, j) => (
-                      <div key={j} className="w-2.5 h-full bg-slate-800 rounded-sm animate-pulse" />
+                      <div key={j} className="w-2.5 h-full bg-slate-700 rounded-sm" />
                     ))}
                   </div>
                 </td>
-                <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-800 rounded animate-pulse" /></td>
+                <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-700 rounded" /></td>
                 <td className="py-4 pr-5" />
               </tr>
             ))}
