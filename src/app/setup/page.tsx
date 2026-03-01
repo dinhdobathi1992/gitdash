@@ -175,9 +175,10 @@ export default function SetupPage() {
           </div>
         </div>
 
-        <p className="text-xs text-slate-600 text-center mt-6">
-          Standalone mode · self-hosted GitHub Actions dashboard
-        </p>
+        <div className="text-xs text-slate-600 text-center mt-6 space-y-1">
+          <p>Standalone mode · self-hosted GitHub Actions dashboard</p>
+          <p>MIT License · Made by <span className="text-slate-500">Dinh Do Ba Thi</span></p>
+        </div>
       </div>
     </div>
   );
