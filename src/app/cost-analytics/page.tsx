@@ -20,6 +20,7 @@ import {
   Server,
   Gauge,
   Building2,
+  User,
   Info,
   ChevronLeft,
   ChevronRight,
@@ -214,8 +215,12 @@ const now = new Date();
 const DEFAULT_YEAR = now.getFullYear();
 const DEFAULT_MONTH = now.getMonth() + 1;
 
+// Sentinel value — means "use personal account, not an org"
+const PERSONAL = "__personal__";
+
 export default function CostAnalyticsPage() {
-  const [org, setOrg] = useState<string>("");
+  // "" = not yet chosen; PERSONAL = personal account; anything else = org login
+  const [selection, setSelection] = useState<string>("");
   const [year, setYear] = useState(DEFAULT_YEAR);
   const [month, setMonth] = useState(DEFAULT_MONTH);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -223,13 +228,17 @@ export default function CostAnalyticsPage() {
   // Load the user's orgs from the same endpoint used by the sidebar
   const { data: orgs } = useSWR<GitHubOrg[]>("/api/github/orgs", fetcher<GitHubOrg[]>);
 
-  // Derive active org: user pick OR first available — no useEffect needed
-  const activeOrg = org || orgs?.[0]?.login || "";
+  // Derive active selection: user pick OR default to personal account once orgs load
+  const activeSelection = selection || PERSONAL;
+  const isPersonal = activeSelection === PERSONAL;
+  const activeOrg = isPersonal ? "" : activeSelection;
 
-  // Only fetch when an org is resolved
-  const key = activeOrg
-    ? `/api/github/billing/cost-analysis?year=${year}&month=${month}&org=${encodeURIComponent(activeOrg)}`
-    : null;
+  // Build query key — personal account: no org param; org: include org param
+  const key = isPersonal
+    ? `/api/github/billing/cost-analysis?year=${year}&month=${month}`
+    : activeOrg
+      ? `/api/github/billing/cost-analysis?year=${year}&month=${month}&org=${encodeURIComponent(activeOrg)}`
+      : null;
 
   const { data, error, isLoading } = useSWR<CostAnalysisResponse>(
     key,
@@ -240,7 +249,7 @@ export default function CostAnalyticsPage() {
   const isPermissionError = error instanceof FetchError && error.status === 403;
   const isNotFound = error instanceof FetchError && error.status === 404;
 
-  const selectedOrg = orgs?.find((o) => o.login === activeOrg) ?? null;
+  const selectedOrg = isPersonal ? null : (orgs?.find((o) => o.login === activeOrg) ?? null);
 
   const goPrev = () => {
     const p = prevMonth(year, month);
@@ -280,27 +289,28 @@ export default function CostAnalyticsPage() {
       {/* Controls: org dropdown + period */}
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 space-y-3">
 
-        {/* Org dropdown */}
+        {/* Account / Org dropdown */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-400 shrink-0">
             <Building2 className="w-4 h-4" />
-            <span>Organization:</span>
+            <span>Account:</span>
           </div>
 
           {orgs === undefined ? (
             // Loading skeleton
             <div className="h-9 w-48 bg-slate-700/50 rounded-lg animate-pulse" />
-          ) : orgs.length === 0 ? (
-            <span className="text-sm text-slate-500 italic">
-              No organizations found — add your GitHub org to see billing data.
-            </span>
           ) : (
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
                 className="flex items-center gap-2.5 px-3 py-2 bg-slate-900/60 border border-slate-700 hover:border-slate-500 rounded-lg text-sm text-slate-100 transition-colors min-w-[200px]"
               >
-                {selectedOrg ? (
+                {isPersonal ? (
+                  <>
+                    <User className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="flex-1 text-left">Personal Account</span>
+                  </>
+                ) : selectedOrg ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -313,35 +323,55 @@ export default function CostAnalyticsPage() {
                     <span className="font-mono flex-1 text-left">{selectedOrg.login}</span>
                   </>
                 ) : (
-                  <span className="flex-1 text-left text-slate-500">Select organization…</span>
+                  <span className="flex-1 text-left text-slate-500">Select account…</span>
                 )}
                 <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", dropdownOpen && "rotate-180")} />
               </button>
 
               {dropdownOpen && (
                 <div className="absolute left-0 top-full mt-1 w-full min-w-[220px] bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1">
-                  {orgs.map((o) => (
-                    <button
-                      key={o.login}
-                      onClick={() => { setOrg(o.login); setDropdownOpen(false); }}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
-                        activeOrg === o.login
-                          ? "text-white bg-slate-700/50"
-                          : "text-slate-300 hover:text-white hover:bg-slate-700/30"
-                      )}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={o.avatar_url}
-                        alt={o.login}
-                        width={16}
-                        height={16}
-                        className="w-4 h-4 rounded-sm shrink-0"
-                      />
-                      <span className="font-mono truncate">{o.login}</span>
-                    </button>
-                  ))}
+                  {/* Personal account option */}
+                  <button
+                    onClick={() => { setSelection(PERSONAL); setDropdownOpen(false); }}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
+                      isPersonal
+                        ? "text-white bg-slate-700/50"
+                        : "text-slate-300 hover:text-white hover:bg-slate-700/30"
+                    )}
+                  >
+                    <User className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>Personal Account</span>
+                  </button>
+
+                  {/* Org divider + entries */}
+                  {orgs.length > 0 && (
+                    <>
+                      <div className="mx-3 my-1 border-t border-slate-700/50" />
+                      {orgs.map((o) => (
+                        <button
+                          key={o.login}
+                          onClick={() => { setSelection(o.login); setDropdownOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
+                            activeOrg === o.login
+                              ? "text-white bg-slate-700/50"
+                              : "text-slate-300 hover:text-white hover:bg-slate-700/30"
+                          )}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={o.avatar_url}
+                            alt={o.login}
+                            width={16}
+                            height={16}
+                            className="w-4 h-4 rounded-sm shrink-0"
+                          />
+                          <span className="font-mono truncate">{o.login}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -385,13 +415,7 @@ export default function CostAnalyticsPage() {
         </div>
       </div>
 
-      {/* No org selected */}
-      {!org && orgs && orgs.length > 0 && (
-        <div className="flex items-center gap-2 p-4 bg-slate-800/40 border border-slate-700/40 rounded-xl text-sm text-slate-400">
-          <Building2 className="w-4 h-4 shrink-0" />
-          Select an organization above to view its Actions billing data.
-        </div>
-      )}
+      {/* This block is no longer needed — personal account is always selected by default */}
 
       {/* Loading state */}
       {isLoading && (
@@ -576,9 +600,11 @@ export default function CostAnalyticsPage() {
       {/* Data loaded */}
       {data && !isLoading && (
         <>
-          {/* ── Organization context banner ─────────────────────────────── */}
+          {/* ── Account context banner ───────────────────────────────────── */}
           <div className="flex items-center gap-3 px-4 py-3 bg-violet-500/8 border border-violet-500/20 rounded-xl">
-            {selectedOrg && (
+            {isPersonal ? (
+              <User className="w-5 h-5 text-violet-400 shrink-0" />
+            ) : selectedOrg ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={selectedOrg.avatar_url}
@@ -587,11 +613,16 @@ export default function CostAnalyticsPage() {
                 height={28}
                 className="w-7 h-7 rounded-lg shrink-0"
               />
+            ) : (
+              <Building2 className="w-5 h-5 text-violet-400 shrink-0" />
             )}
-            {!selectedOrg && <Building2 className="w-5 h-5 text-violet-400 shrink-0" />}
             <div>
-              <p className="text-xs text-violet-400/70 uppercase tracking-wider font-medium">Organization</p>
-              <p className="text-sm font-semibold text-white font-mono">{data.login}</p>
+              <p className="text-xs text-violet-400/70 uppercase tracking-wider font-medium">
+                {isPersonal ? "Personal Account" : "Organization"}
+              </p>
+              <p className="text-sm font-semibold text-white font-mono">
+                {isPersonal ? data.login || "your account" : data.login}
+              </p>
             </div>
             <div className="ml-auto text-right">
               <p className="text-xs text-slate-500 uppercase tracking-wider">Period</p>
