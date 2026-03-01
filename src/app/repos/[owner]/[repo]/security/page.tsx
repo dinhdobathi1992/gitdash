@@ -423,21 +423,58 @@ export default function SecurityPage() {
 
       {/* Loading */}
       {isLoading && (
-        <div className="space-y-4">
+        <div className="space-y-4 animate-pulse">
+          {/* Summary strip skeleton — score ring card + 4 severity count cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 animate-pulse h-24"
-              />
+            {/* Score ring card */}
+            <div className="col-span-2 md:col-span-1 bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full bg-slate-700 shrink-0" />
+              <div className="space-y-2">
+                <div className="h-3 w-20 rounded bg-slate-700/60" />
+                <div className="h-4 w-14 rounded bg-slate-700" />
+                <div className="h-3 w-16 rounded bg-slate-700/60" />
+              </div>
+            </div>
+            {/* 4 severity count cards */}
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 rounded bg-slate-700" />
+                  <div className="h-3 w-14 rounded bg-slate-700/60" />
+                </div>
+                <div className="h-8 w-8 rounded bg-slate-700" />
+              </div>
             ))}
           </div>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 animate-pulse h-16"
-            />
-          ))}
+
+          {/* Workflow file result cards skeleton */}
+          <div className="space-y-3">
+            <div className="h-4 w-36 rounded bg-slate-700" />
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  {/* Mini score ring */}
+                  <div className="w-10 h-10 rounded-full bg-slate-700 shrink-0" />
+                  {/* File path + badges */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 rounded bg-slate-700" style={{ width: `${40 + (i % 3) * 15}%` }} />
+                    <div className="flex gap-2">
+                      <div className="h-4 w-16 rounded bg-slate-700/60" />
+                      <div className="h-4 w-12 rounded bg-slate-700/60" />
+                    </div>
+                  </div>
+                  {/* Check badges (desktop) */}
+                  <div className="hidden md:flex items-center gap-3">
+                    {Array.from({ length: 4 }, (_, j) => (
+                      <div key={j} className="h-3 w-12 rounded bg-slate-700/60" />
+                    ))}
+                  </div>
+                  {/* Chevron */}
+                  <div className="w-4 h-4 rounded bg-slate-700/40 shrink-0" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

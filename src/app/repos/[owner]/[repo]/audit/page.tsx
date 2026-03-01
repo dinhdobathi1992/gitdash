@@ -103,10 +103,56 @@ export default function AuditPage() {
 
       {/* Loading */}
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 8 }, (_, i) => (
-            <div key={i} className="h-16 bg-slate-800/60 rounded-xl animate-pulse" />
-          ))}
+        <div className="space-y-6 animate-pulse">
+          {/* Stat cards skeleton — 4 columns matching real layout */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                {/* Icon + label row */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 rounded bg-slate-700" />
+                  <div className="h-3 w-24 rounded bg-slate-700" />
+                </div>
+                {/* Value */}
+                <div className="h-8 w-12 rounded bg-slate-700 mb-1" />
+                {/* Sub-label */}
+                <div className="h-3 w-28 rounded bg-slate-700/60" />
+              </div>
+            ))}
+          </div>
+
+          {/* Timeline card skeleton */}
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+            {/* Card header */}
+            <div className="px-5 py-4 border-b border-slate-700/50 space-y-1.5">
+              <div className="h-4 w-52 rounded bg-slate-700" />
+              <div className="h-3 w-72 rounded bg-slate-700/60" />
+            </div>
+            {/* Timeline rows */}
+            <div className="divide-y divide-slate-700/30">
+              {Array.from({ length: 8 }, (_, i) => (
+                <div key={i} className="flex items-start gap-4 px-5 py-4">
+                  {/* Avatar */}
+                  <div className="w-8 h-8 rounded-full bg-slate-700 shrink-0 mt-0.5" />
+                  {/* Content */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {/* Commit message */}
+                    <div className="h-4 rounded bg-slate-700" style={{ width: `${55 + (i % 4) * 10}%` }} />
+                    {/* Meta row: author · time · file badge */}
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-20 rounded bg-slate-700/60" />
+                      <div className="h-3 w-1 rounded-full bg-slate-700/40" />
+                      <div className="h-3 w-12 rounded bg-slate-700/60" />
+                      <div className="h-3 w-1 rounded-full bg-slate-700/40" />
+                      <div className="h-5 w-36 rounded bg-slate-700/60" />
+                    </div>
+                  </div>
+                  {/* SHA chip */}
+                  <div className="h-6 w-16 rounded-lg bg-slate-700/60 shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
