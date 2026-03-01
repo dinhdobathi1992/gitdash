@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRMutation from "swr/mutation";
 import { fetcher } from "@/lib/swr";
 import { Breadcrumb } from "@/components/Sidebar";
 import {
   BarChart3, TrendingUp, Calendar, Database, RefreshCw,
-  AlertCircle, Info, ChevronDown,
+  AlertCircle, Info, ChevronDown, Search, GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +15,7 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import type { DbDailyTrend, DbQuarterSummary } from "@/lib/db";
+import type { Repo } from "@/lib/github";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,29 +30,111 @@ interface SyncResponse {
   latest_run_id: number | null;
 }
 
-// ── Repo picker ───────────────────────────────────────────────────────────────
+// ── Repo picker dropdown ───────────────────────────────────────────────────────
 
-function RepoInput({
+function RepoPicker({
   value,
   onChange,
 }: {
   value: string;
   onChange: (v: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Fetch user's repos (same endpoint as home page)
+  const { data: repos, isLoading } = useSWR<Repo[]>(
+    "/api/github/repos",
+    fetcher<Repo[]>,
+    { revalidateOnFocus: false }
+  );
+
+  const filtered = (repos ?? []).filter((r) =>
+    r.full_name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function select(fullName: string) {
+    onChange(fullName);
+    setQuery("");
+    setOpen(false);
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="text"
-        placeholder="owner/repo  (e.g. vercel/next.js)"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-72 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50"
-      />
+    <div ref={ref} className="relative w-80">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50 hover:border-slate-600 transition-colors"
+      >
+        <GitBranch className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+        <span className={cn("flex-1 truncate", value ? "text-slate-100" : "text-slate-500")}>
+          {value || "Pick a repository…"}
+        </span>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden">
+          {/* Search */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800">
+            <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Filter repos…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
+            />
+          </div>
+
+          {/* List */}
+          <ul className="max-h-64 overflow-y-auto">
+            {isLoading && (
+              <li className="px-4 py-3 text-xs text-slate-500 italic">Loading repos…</li>
+            )}
+            {!isLoading && filtered.length === 0 && (
+              <li className="px-4 py-3 text-xs text-slate-500 italic">No repos found</li>
+            )}
+            {filtered.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => select(r.full_name)}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2",
+                    r.full_name === value ? "text-violet-400 bg-slate-800/60" : "text-slate-300"
+                  )}
+                >
+                  <span className="truncate">{r.full_name}</span>
+                  {r.private && (
+                    <span className="ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+                      private
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Sync button ───────────────────────────────────────────────────────────────
+// ── Sync fetcher ───────────────────────────────────────────────────────────────
 
 async function doSync(
   _key: string,
@@ -207,16 +290,17 @@ function QuarterlyBarChart({ data }: { data: DbQuarterSummary[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const PERIOD_OPTIONS = [
+  { label: "7 days",  value: 7 },
+  { label: "14 days", value: 14 },
   { label: "30 days", value: 30 },
   { label: "90 days", value: 90 },
   { label: "180 days", value: 180 },
-  { label: "1 year", value: 365 },
+  { label: "1 year",  value: 365 },
 ];
 
 export default function ReportsPage() {
-  const [repoInput, setRepoInput] = useState("");
   const [activeRepo, setActiveRepo] = useState("");
-  const [days, setDays] = useState(90);
+  const [days, setDays] = useState(7);
   const [syncResult, setSyncResult] = useState<SyncResponse | null>(null);
 
   const { mutate } = useSWRConfig();
@@ -251,9 +335,8 @@ export default function ReportsPage() {
     }
   );
 
-  function handleLoad() {
-    const trimmed = repoInput.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
-    setActiveRepo(trimmed);
+  function handleRepoChange(fullName: string) {
+    setActiveRepo(fullName);
     setSyncResult(null);
   }
 
@@ -285,14 +368,17 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Repo picker + controls */}
+      {/* Controls */}
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
         <div className="flex flex-wrap items-end gap-3">
+
+          {/* Repo picker */}
           <div className="flex-1 min-w-0">
             <label className="block text-xs font-medium text-slate-400 mb-1.5">Repository</label>
-            <RepoInput value={repoInput} onChange={setRepoInput} />
+            <RepoPicker value={activeRepo} onChange={handleRepoChange} />
           </div>
 
+          {/* Period */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">Period</label>
             <div className="relative">
@@ -309,19 +395,12 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleLoad}
-            disabled={!repoInput.trim()}
-            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Load
-          </button>
-
+          {/* Sync button — always visible once a repo is selected */}
           {activeRepo && (
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
               {syncing ? "Syncing…" : "Sync from GitHub"}
@@ -329,6 +408,7 @@ export default function ReportsPage() {
           )}
         </div>
 
+        {/* Sync result */}
         {syncResult && (
           <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400">
             <Database className="w-3.5 h-3.5" />
@@ -336,7 +416,8 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {dailyError && (
+        {/* No DB data hint */}
+        {dailyError && activeRepo && (
           <div className="mt-3 flex items-center gap-2 text-xs text-amber-400">
             <Info className="w-3.5 h-3.5" />
             No data in DB yet — click &quot;Sync from GitHub&quot; to populate historical data.
@@ -344,10 +425,11 @@ export default function ReportsPage() {
         )}
       </div>
 
+      {/* Empty state */}
       {!activeRepo && (
         <div className="flex flex-col items-center justify-center py-20 text-slate-600 space-y-3">
           <BarChart3 className="w-12 h-12 opacity-40" />
-          <p className="text-sm">Enter a repository above to view historical reports.</p>
+          <p className="text-sm">Pick a repository above to view historical reports.</p>
           <p className="text-xs text-slate-700">
             Data is stored in Neon PostgreSQL and persists across sessions.
           </p>
@@ -360,10 +442,10 @@ export default function ReportsPage() {
           {!dailyLoading && daily.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "Total Runs", value: totalRuns.toLocaleString(), color: "text-violet-400" },
-                { label: "Success", value: totalSuccess.toLocaleString(), color: "text-emerald-400" },
-                { label: "Failure", value: totalFailure.toLocaleString(), color: "text-red-400" },
-                { label: "Success Rate", value: `${avgRate}%`, color: avgRate >= 90 ? "text-emerald-400" : avgRate >= 70 ? "text-amber-400" : "text-red-400" },
+                { label: "Total Runs",    value: totalRuns.toLocaleString(),    color: "text-violet-400" },
+                { label: "Success",       value: totalSuccess.toLocaleString(), color: "text-emerald-400" },
+                { label: "Failure",       value: totalFailure.toLocaleString(), color: "text-red-400" },
+                { label: "Success Rate",  value: `${avgRate}%`,                 color: avgRate >= 90 ? "text-emerald-400" : avgRate >= 70 ? "text-amber-400" : "text-red-400" },
               ].map((s) => (
                 <div key={s.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                   <p className="text-xs text-slate-400 mb-1">{s.label}</p>
@@ -403,7 +485,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {/* DB info footer */}
+          {/* No data callout */}
           {daily.length === 0 && !dailyLoading && (
             <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/8 border border-amber-500/20 rounded-xl">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
