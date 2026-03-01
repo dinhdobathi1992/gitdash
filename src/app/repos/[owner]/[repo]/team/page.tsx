@@ -348,33 +348,27 @@ export default function TeamAnalyticsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 animate-pulse"
-              >
-                <div className="h-3 w-20 bg-slate-700 rounded mb-3" />
-                <div className="h-6 w-12 bg-slate-700 rounded" />
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div className="h-3 w-20 rounded skeleton mb-3" />
+                <div className="h-6 w-12 rounded skeleton" />
               </div>
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 animate-pulse space-y-4"
-              >
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-700" />
+                  <div className="w-10 h-10 rounded-full skeleton" />
                   <div className="space-y-1.5">
-                    <div className="h-3 w-24 bg-slate-700 rounded" />
-                    <div className="h-2.5 w-16 bg-slate-700/60 rounded" />
+                    <div className="h-3 w-24 rounded skeleton" />
+                    <div className="h-2.5 w-16 rounded skeleton" />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {Array.from({ length: 3 }).map((_, j) => (
                     <div key={j} className="bg-slate-900/50 rounded-lg p-2.5">
-                      <div className="h-2 w-8 bg-slate-700 rounded mx-auto mb-1.5" />
-                      <div className="h-5 w-10 bg-slate-700 rounded mx-auto" />
+                      <div className="h-2 w-8 rounded skeleton mx-auto mb-1.5" />
+                      <div className="h-5 w-10 rounded skeleton mx-auto" />
                     </div>
                   ))}
                 </div>

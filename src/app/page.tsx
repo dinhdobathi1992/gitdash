@@ -268,7 +268,7 @@ function RepoRow({
         ) : (
           <div className="flex items-end gap-0.5 h-6">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="w-2.5 h-2 rounded-sm bg-slate-700 animate-pulse" />
+              <div key={i} className="w-2.5 h-2 rounded-sm skeleton" />
             ))}
           </div>
         )}
@@ -279,7 +279,7 @@ function RepoRow({
         {summary ? (
           <TrendSparkline points={summary.trend_30d} />
         ) : (
-          <div className="h-8 w-28 rounded bg-slate-700 animate-pulse" />
+          <div className="h-8 w-28 rounded skeleton" />
         )}
       </td>
 
@@ -302,21 +302,21 @@ function TableSkeleton() {
   return (
     <tbody>
       {Array.from({ length: 8 }).map((_, i) => (
-        <tr key={i} className="border-b border-slate-800 animate-pulse">
+        <tr key={i} className="border-b border-slate-800">
           <td className="py-4 pl-5 pr-4">
-            <div className="h-4 w-48 bg-slate-700 rounded mb-1.5" />
-            <div className="h-3 w-64 bg-slate-700/60 rounded" />
+            <div className="h-4 w-48 rounded skeleton mb-1.5" />
+            <div className="h-3 w-64 rounded skeleton" />
           </td>
-          <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-700 rounded-full" /></td>
-          <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-700 rounded" /></td>
+          <td className="py-4 px-4"><div className="h-5 w-16 rounded-full skeleton" /></td>
+          <td className="py-4 px-4"><div className="h-5 w-12 rounded skeleton" /></td>
           <td className="py-4 px-4">
             <div className="flex items-end gap-0.5 h-6">
               {Array.from({ length: 10 }).map((_, j) => (
-                <div key={j} className="w-2.5 h-full bg-slate-700 rounded-sm" />
+                <div key={j} className="w-2.5 h-full rounded-sm skeleton" />
               ))}
             </div>
           </td>
-          <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-700 rounded" /></td>
+          <td className="py-4 px-4"><div className="h-8 w-28 rounded skeleton" /></td>
           <td className="py-4 pr-5" />
         </tr>
       ))}

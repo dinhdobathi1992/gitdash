@@ -25,3 +25,24 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ── Shimmer skeleton ────────────────────────────────────────────────────────
+   Usage: add class="skeleton" to any placeholder shape.
+   The highlight sweeps left→right over a dark base.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e293b 25%,   /* slate-800 — base */
+    #334155 50%,   /* slate-700 — highlight peak */
+    #1e293b 75%    /* slate-800 — base again */
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  /* border-radius intentionally omitted — use rounded-* Tailwind classes per shape */
+}

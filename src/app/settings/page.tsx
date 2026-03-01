@@ -77,10 +77,10 @@ function BillingWidget() {
       </div>
 
       {isLoading && (
-        <div className="space-y-2 animate-pulse">
-          <div className="h-4 w-40 bg-slate-700 rounded" />
-          <div className="h-2 w-full bg-slate-700 rounded" />
-          <div className="h-3 w-24 bg-slate-700 rounded" />
+        <div className="space-y-2">
+          <div className="h-4 w-40 rounded skeleton" />
+          <div className="h-2 w-full rounded skeleton" />
+          <div className="h-3 w-24 rounded skeleton" />
         </div>
       )}
 

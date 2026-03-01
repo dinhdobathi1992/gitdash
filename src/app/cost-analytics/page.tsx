@@ -298,7 +298,7 @@ export default function CostAnalyticsPage() {
 
           {orgs === undefined ? (
             // Loading skeleton
-            <div className="h-9 w-48 bg-slate-700/50 rounded-lg animate-pulse" />
+            <div className="h-9 w-48 rounded-lg skeleton" />
           ) : (
             <div className="relative">
               <button
@@ -422,20 +422,17 @@ export default function CostAnalyticsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 animate-pulse"
-              >
-                <div className="h-3 w-20 bg-slate-700 rounded mb-3" />
-                <div className="h-6 w-16 bg-slate-700 rounded" />
+              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div className="h-3 w-20 rounded skeleton mb-3" />
+                <div className="h-6 w-16 rounded skeleton" />
               </div>
             ))}
           </div>
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6 animate-pulse">
-            <div className="h-4 w-40 bg-slate-700 rounded mb-4" />
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6">
+            <div className="h-4 w-40 rounded skeleton mb-4" />
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-8 bg-slate-700 rounded" />
+                <div key={i} className="h-8 rounded skeleton" />
               ))}
             </div>
           </div>

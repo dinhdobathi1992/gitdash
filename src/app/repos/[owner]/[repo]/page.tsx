@@ -200,12 +200,12 @@ function WorkflowRow({
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       {/* Chart skeleton */}
       <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-        <div className="h-4 w-40 bg-slate-700 rounded mb-1.5" />
-        <div className="h-3 w-56 bg-slate-700/60 rounded mb-5" />
-        <div className="h-48 bg-slate-700/40 rounded" />
+        <div className="h-4 w-40 rounded skeleton mb-1.5" />
+        <div className="h-3 w-56 rounded skeleton mb-5" />
+        <div className="h-48 rounded skeleton" />
       </div>
       {/* Table skeleton */}
       <div className="rounded-xl border border-slate-700/50 overflow-hidden">
@@ -224,23 +224,23 @@ function Skeleton() {
               <tr key={i} className="border-b border-slate-700/30">
                 <td className="py-4 pl-5 pr-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-700" />
+                    <div className="w-7 h-7 rounded-lg skeleton" />
                     <div>
-                      <div className="h-4 w-32 bg-slate-700 rounded mb-1.5" />
-                      <div className="h-3 w-48 bg-slate-700/60 rounded" />
+                      <div className="h-4 w-32 rounded skeleton mb-1.5" />
+                      <div className="h-3 w-48 rounded skeleton" />
                     </div>
                   </div>
                 </td>
-                <td className="py-4 px-4"><div className="h-5 w-16 bg-slate-700 rounded-full" /></td>
-                <td className="py-4 px-4"><div className="h-5 w-12 bg-slate-700 rounded" /></td>
+                <td className="py-4 px-4"><div className="h-5 w-16 rounded-full skeleton" /></td>
+                <td className="py-4 px-4"><div className="h-5 w-12 rounded skeleton" /></td>
                 <td className="py-4 px-4">
                   <div className="flex items-end gap-0.5 h-6">
                     {Array.from({ length: 10 }).map((_, j) => (
-                      <div key={j} className="w-2.5 h-full bg-slate-700 rounded-sm" />
+                      <div key={j} className="w-2.5 h-full rounded-sm skeleton" />
                     ))}
                   </div>
                 </td>
-                <td className="py-4 px-4"><div className="h-8 w-28 bg-slate-700 rounded" /></td>
+                <td className="py-4 px-4"><div className="h-8 w-28 rounded skeleton" /></td>
                 <td className="py-4 pr-5" />
               </tr>
             ))}
