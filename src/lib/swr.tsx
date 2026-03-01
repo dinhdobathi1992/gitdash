@@ -49,7 +49,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
             err instanceof FetchError &&
             err.status === 401 &&
             typeof window !== "undefined" &&
-            !["/login", "/setup"].includes(window.location.pathname)
+            !["/login", "/setup", "/docs"].includes(window.location.pathname)
           ) {
             window.location.href = "/";
           }
