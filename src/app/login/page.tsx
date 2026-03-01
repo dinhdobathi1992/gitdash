@@ -34,7 +34,7 @@ function LoginContent() {
           <p className="text-sm text-slate-400 mt-1">GitHub Actions Dashboard</p>
           <a
             href="/docs"
-            className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-2"
+            className="mt-3 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-4"
           >
             Documentation
           </a>
