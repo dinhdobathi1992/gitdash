@@ -29,6 +29,7 @@ interface SyncResponse {
   synced: number;
   total_in_db: number;
   latest_run_id: number | null;
+  alerts_fired: number;
 }
 
 // ── Sync fetcher ───────────────────────────────────────────────────────────────
@@ -339,9 +340,16 @@ export default function ReportsPage() {
 
         {/* Sync result */}
         {syncResult && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400">
-            <Database className="w-3.5 h-3.5" />
-            Synced {syncResult.synced} runs · {syncResult.total_in_db.toLocaleString()} total in DB
+          <div className="mt-3 flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <Database className="w-3.5 h-3.5" />
+              Synced {syncResult.synced} runs · {syncResult.total_in_db.toLocaleString()} total in DB
+            </span>
+            {syncResult.alerts_fired > 0 && (
+              <span className="flex items-center gap-1 text-amber-400">
+                · {syncResult.alerts_fired} alert{syncResult.alerts_fired !== 1 ? "s" : ""} fired
+              </span>
+            )}
           </div>
         )}
 
