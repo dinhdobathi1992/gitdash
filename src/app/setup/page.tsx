@@ -155,6 +155,24 @@ export default function SetupPage() {
               Generate classic token on GitHub <ExternalLink className="w-3 h-3" />
             </a>
           </div>
+
+          {/* PAT security section */}
+          <div className="mt-4 pt-5 border-t border-slate-800">
+            <p className="text-xs font-medium text-slate-400 mb-2">How this application handles your PAT</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Your token is encrypted inside a server-side session cookie and never stored on disk,
+              logged, or forwarded to any third party. Every GitHub API call is made server-side
+              using your token — the raw value is never exposed to the browser.
+            </p>
+            <a
+              href="https://github.com/dinhdobathi1992/gitdash?tab=readme-ov-file#-your-pat-is-yours--we-protect-it-like-its-gold"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+            >
+              Read our full PAT security policy <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
 
         <p className="text-xs text-slate-600 text-center mt-6">
