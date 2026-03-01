@@ -13,6 +13,7 @@ import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import {
   upsertRuns, getSyncCursor, updateSyncCursor, getDbRunCount,
+  evaluateAlertRulesForRepo,
   type RunUpsertRow,
 } from "@/lib/db";
 import { safeError } from "@/lib/validation";
@@ -103,10 +104,20 @@ export async function POST(req: NextRequest) {
 
     const totalInDb = await getDbRunCount(repoKey);
 
+    // Evaluate alert rules after every sync — only runs if rules exist
+    let alertsFired = 0;
+    try {
+      alertsFired = await evaluateAlertRulesForRepo(repoKey);
+    } catch (alertErr) {
+      // Alert evaluation is best-effort — log but don't fail the sync response
+      console.error("[sync] Alert evaluation error:", alertErr);
+    }
+
     return NextResponse.json({
       synced,
       total_in_db: totalInDb,
       latest_run_id: latestRunId,
+      alerts_fired: alertsFired,
     });
   } catch (e) {
     return safeError(e, "Sync failed");

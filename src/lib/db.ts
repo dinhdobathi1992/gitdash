@@ -412,3 +412,119 @@ export async function fireAlertEvent(
     VALUES (${ruleId}, ${scope}, ${metric}, ${value}, ${detailsJson}::jsonb)
   `;
 }
+
+// ── Alert rule evaluation ─────────────────────────────────────────────────────
+
+/**
+ * Evaluates all enabled alert rules whose scope matches `repoKey` (format:
+ * "repo:owner/name" or "org:orgname").  For each rule that is breached and
+ * hasn't already fired within its window, inserts an alert_event row.
+ *
+ * Returns the number of new events fired.
+ */
+export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number> {
+  await ensureSchema();
+
+  // Build the list of scopes to check: exact repo match + org prefix
+  const parts = repoKey.split("/");          // ["owner", "repo"]
+  const orgScope  = parts[0] ? `org:${parts[0]}` : null;
+  const repoScope = `repo:${repoKey}`;
+
+  const scopes = [repoScope, ...(orgScope ? [orgScope] : [])];
+
+  // Fetch all enabled rules for those scopes
+  const rules: DbAlertRule[] = [];
+  for (const s of scopes) {
+    const r = await getDb()`
+      SELECT * FROM alert_rules WHERE scope = ${s} AND enabled = TRUE
+    ` as DbAlertRule[];
+    rules.push(...r);
+  }
+
+  if (!rules.length) return 0;
+
+  let fired = 0;
+
+  for (const rule of rules) {
+    // De-duplicate: skip if an event for this rule already fired in the window
+    const recent = await getDb()`
+      SELECT id FROM alert_events
+      WHERE rule_id = ${rule.id}
+        AND fired_at >= NOW() - (${rule.window_hours} || ' hours')::INTERVAL
+      LIMIT 1
+    ` as { id: number }[];
+    if (recent.length > 0) continue;
+
+    // Compute the current metric value for this rule's scope over the window
+    let value: number | null = null;
+
+    if (rule.metric === "failure_rate") {
+      // Failure rate (%) of completed runs in the window for this repo
+      const rows = await getDb()`
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE conclusion = 'failure')::int AS failures
+        FROM workflow_runs
+        WHERE repo = ${repoKey}
+          AND status = 'completed'
+          AND created_at >= NOW() - (${rule.window_hours} || ' hours')::INTERVAL
+      ` as { total: number; failures: number }[];
+      const row = rows[0];
+      if (row && row.total > 0) {
+        value = Math.round((row.failures / row.total) * 100);
+      }
+    } else if (rule.metric === "duration_p95") {
+      // P95 duration in minutes
+      const rows = await getDb()`
+        SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)::int AS p95
+        FROM workflow_runs
+        WHERE repo = ${repoKey}
+          AND duration_ms > 0
+          AND created_at >= NOW() - (${rule.window_hours} || ' hours')::INTERVAL
+      ` as { p95: number | null }[];
+      const p95ms = rows[0]?.p95 ?? null;
+      if (p95ms !== null) value = Math.round(p95ms / 60000);
+    } else if (rule.metric === "queue_wait_p95") {
+      // P95 queue wait in minutes
+      const rows = await getDb()`
+        SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY queue_wait_ms)::int AS p95
+        FROM workflow_runs
+        WHERE repo = ${repoKey}
+          AND queue_wait_ms > 0
+          AND created_at >= NOW() - (${rule.window_hours} || ' hours')::INTERVAL
+      ` as { p95: number | null }[];
+      const p95ms = rows[0]?.p95 ?? null;
+      if (p95ms !== null) value = Math.round(p95ms / 60000);
+    } else if (rule.metric === "success_streak") {
+      // Count consecutive failures from the most recent completed runs
+      const rows = await getDb()`
+        SELECT conclusion FROM workflow_runs
+        WHERE repo = ${repoKey}
+          AND status = 'completed'
+        ORDER BY created_at DESC
+        LIMIT 100
+      ` as { conclusion: string | null }[];
+      let streak = 0;
+      for (const r of rows) {
+        if (r.conclusion === "failure") streak++;
+        else break;
+      }
+      value = streak;
+    }
+
+    if (value === null) continue;
+
+    // Check threshold
+    if (value >= rule.threshold) {
+      await fireAlertEvent(rule.id, rule.scope, rule.metric, value, {
+        repo: repoKey,
+        threshold: rule.threshold,
+        window_hours: rule.window_hours,
+        triggered_at: new Date().toISOString(),
+      });
+      fired++;
+    }
+  }
+
+  return fired;
+}
