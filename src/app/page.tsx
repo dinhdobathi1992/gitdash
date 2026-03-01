@@ -268,7 +268,7 @@ function RepoRow({
         ) : (
           <div className="flex items-end gap-0.5 h-6">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="w-2.5 h-2 rounded-sm bg-slate-800 animate-pulse" />
+              <div key={i} className="w-2.5 h-2 rounded-sm bg-slate-700 animate-pulse" />
             ))}
           </div>
         )}
@@ -279,7 +279,7 @@ function RepoRow({
         {summary ? (
           <TrendSparkline points={summary.trend_30d} />
         ) : (
-          <div className="h-8 w-28 rounded bg-slate-800 animate-pulse" />
+          <div className="h-8 w-28 rounded bg-slate-700 animate-pulse" />
         )}
       </td>
 
