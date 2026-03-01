@@ -6,6 +6,57 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.0] — 2026-03-01
+
+### Overview
+Post-release polish: personal account billing support in Cost Analytics, fully-structured loading skeletons on every page, and a shimmer sweep animation replacing the invisible pulse effect.
+
+---
+
+### Added
+
+#### Cost Analytics — Personal Account Billing
+- **Personal Account** option added as the first entry in the Cost Analytics account dropdown
+- Defaults to Personal Account on load — no org selection needed to see your own metered usage
+- Calls `GET /users/{login}/settings/billing/usage/summary` (Enhanced Billing API) when Personal Account is selected
+- Org entries remain available below a divider for switching to org billing
+- Context banner now shows "Personal Account" label with a User icon (vs Building2 for orgs)
+
+#### Shimmer Loading Animation
+- New `@keyframes shimmer` + `.skeleton` CSS utility class in `globals.css`
+- A bright highlight sweeps left→right across each placeholder shape (slate-800 → slate-700 → slate-800) at 1.6 s, matching the loading style used by GitHub, Linear, and similar apps
+- Single utility: `class="skeleton rounded-*"` — border-radius controlled independently per shape
+
+---
+
+### Improved
+
+#### Loading Skeletons — Audit Trail page
+- Replaced 8 identical `h-16` blobs with a fully-structured skeleton:
+  - 4 stat cards (icon + label + large value + sub-label)
+  - Timeline card with header lines + 8 commit rows each showing avatar circle, varying-width message line, author · time · file-badge meta row, and SHA chip
+
+#### Loading Skeletons — Security page
+- Replaced 5 uniform `h-24` + 3 `h-16` blobs with a fully-structured skeleton:
+  - Score ring card (large circle + 3 text lines) + 4 severity count cards in the summary strip
+  - Section heading + 4 workflow file result rows with mini ring, file path, badge pills, check-mark row, and chevron
+
+#### Loading Skeletons — All pages
+- Fixed invisible pulse: all skeleton shapes were using `bg-slate-800` on a `bg-slate-900` background — near-zero contrast, making `animate-pulse` imperceptible
+- Bumped all skeleton fill colours to `bg-slate-700` (and subsequently replaced with `.skeleton` shimmer)
+- Migrated all pages from `animate-pulse bg-slate-700` to `.skeleton` class: homepage, repo detail, workflow detail, cost-analytics, org overview, team, audit trail, security, settings
+
+---
+
+### Fixed
+
+#### Cost Analytics — 404 error clarity
+- GitHub returns `404` (not `403`) when a PAT lacks org billing permission — the resource is hidden entirely
+- Error block now clearly states "Your API key does not have enough permission" with the org name
+- Explains the 404 behaviour, lists 4 actionable fix steps, and provides CTA buttons to create a fine-grained PAT and view org billing directly
+
+---
+
 ## [2.0.0] — 2026-03-01
 
 ### Overview
