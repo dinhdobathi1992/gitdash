@@ -181,29 +181,32 @@ export async function ensureSchema(): Promise<void> {
 export async function upsertRuns(rows: RunUpsertRow[]): Promise<number> {
   if (!rows.length) return 0;
   await ensureSchema();
-  // Individual upserts — Neon HTTP is connectionless so batching in a loop is fine
-  for (const r of rows) {
-    await getDb()`
-      INSERT INTO workflow_runs
-        (id, repo, workflow_id, workflow_name, run_number, status, conclusion,
-         event, head_branch, head_sha, actor, created_at, updated_at,
-         duration_ms, queue_wait_ms, run_attempt)
-      VALUES (
-        ${r.id}, ${r.repo}, ${r.workflow_id}, ${r.workflow_name}, ${r.run_number},
-        ${r.status}, ${r.conclusion}, ${r.event}, ${r.head_branch}, ${r.head_sha},
-        ${r.actor}, ${r.created_at}, ${r.updated_at}, ${r.duration_ms},
-        ${r.queue_wait_ms}, ${r.run_attempt}
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        status        = EXCLUDED.status,
-        conclusion    = EXCLUDED.conclusion,
-        updated_at    = EXCLUDED.updated_at,
-        duration_ms   = EXCLUDED.duration_ms,
-        queue_wait_ms = EXCLUDED.queue_wait_ms,
-        run_attempt   = EXCLUDED.run_attempt,
-        synced_at     = NOW()
-    `;
-  }
+  const db = getDb();
+  // Bulk upsert: send all queries in a single Neon HTTP transaction (one round-trip)
+  await db.transaction(
+    rows.map(
+      (r) => db`
+        INSERT INTO workflow_runs
+          (id, repo, workflow_id, workflow_name, run_number, status, conclusion,
+           event, head_branch, head_sha, actor, created_at, updated_at,
+           duration_ms, queue_wait_ms, run_attempt)
+        VALUES (
+          ${r.id}, ${r.repo}, ${r.workflow_id}, ${r.workflow_name}, ${r.run_number},
+          ${r.status}, ${r.conclusion}, ${r.event}, ${r.head_branch}, ${r.head_sha},
+          ${r.actor}, ${r.created_at}, ${r.updated_at}, ${r.duration_ms},
+          ${r.queue_wait_ms}, ${r.run_attempt}
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          status        = EXCLUDED.status,
+          conclusion    = EXCLUDED.conclusion,
+          updated_at    = EXCLUDED.updated_at,
+          duration_ms   = EXCLUDED.duration_ms,
+          queue_wait_ms = EXCLUDED.queue_wait_ms,
+          run_attempt   = EXCLUDED.run_attempt,
+          synced_at     = NOW()
+      `
+    )
+  );
   return rows.length;
 }
 
