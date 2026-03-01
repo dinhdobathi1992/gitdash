@@ -4,7 +4,7 @@ import { SessionData, sessionOptions } from "@/lib/session";
 import { isStandaloneMode } from "@/lib/mode";
 
 // Paths that never require auth
-const ALWAYS_PUBLIC = ["/_next", "/favicon"];
+const ALWAYS_PUBLIC = ["/_next", "/favicon", "/docs"];
 
 // Mode-specific public paths
 const STANDALONE_PUBLIC = ["/setup", "/api/auth/setup"];

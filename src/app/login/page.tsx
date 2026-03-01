@@ -72,6 +72,11 @@ function LoginContent() {
         <div className="text-xs text-slate-600 text-center mt-6 space-y-1">
           <p>For internal use only — self-hosted GitHub Actions dashboard</p>
           <p>MIT License · Made by <span className="text-slate-500">Dinh Do Ba Thi</span></p>
+          <p>
+            <a href="/docs" className="text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2">
+              Documentation
+            </a>
+          </p>
         </div>
       </div>
     </div>
