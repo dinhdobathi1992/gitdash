@@ -6,6 +6,31 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.0] — 2026-03-01
+
+### Overview
+Automated Vercel deployment via GitHub Actions CI/CD, setup and login page improvements including PAT security transparency and author attribution.
+
+---
+
+### Added
+
+#### Vercel Deployment Workflow
+- New `.github/workflows/vercel.yml` — deploys to Vercel production automatically on every push to `main`, and can be triggered manually via `workflow_dispatch`
+- Uses `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` GitHub secrets (no CLI login required)
+- Build step runs `vercel build --prod` in CI before deploying the prebuilt output — consistent reproducible deploys
+
+#### Setup Page — PAT Security Section
+- New "How this application handles your PAT?" section below the token scopes list
+- Plain-English explanation: encrypted session cookie, never stored or forwarded to third parties
+- Links to the README PAT security policy anchor
+
+#### Author & License Attribution
+- Footer of setup page now shows: `MIT License · Made by Dinh Do Ba Thi`
+- Footer of login page updated to match for consistency
+
+---
+
 ## [2.1.0] — 2026-03-01
 
 ### Overview
