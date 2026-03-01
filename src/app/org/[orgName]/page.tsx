@@ -43,7 +43,7 @@ export default function OrgDashboardPage({
   );
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-8 space-y-6">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },
