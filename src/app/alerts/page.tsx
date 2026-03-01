@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import { Breadcrumb } from "@/components/Sidebar";
+import { RepoPicker } from "@/components/RepoPicker";
 import {
   Bell, Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle,
   CheckCircle2, Clock, TrendingUp, Zap, Info,
@@ -187,13 +188,12 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Scope (owner/repo or org)</label>
-          <input
-            required
-            placeholder="owner/repo or orgName"
+          <label className="block text-xs text-slate-400 mb-1">Repository (scope)</label>
+          <RepoPicker
             value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+            onChange={setScope}
+            placeholder="Pick a repository…"
+            className="w-full"
           />
         </div>
 

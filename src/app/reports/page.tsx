@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRMutation from "swr/mutation";
 import { fetcher } from "@/lib/swr";
 import { Breadcrumb } from "@/components/Sidebar";
+import { RepoPicker } from "@/components/RepoPicker";
 import {
   BarChart3, TrendingUp, Calendar, Database, RefreshCw,
-  AlertCircle, Info, ChevronDown, Search, GitBranch,
+  AlertCircle, Info, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -15,7 +16,6 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import type { DbDailyTrend, DbQuarterSummary } from "@/lib/db";
-import type { Repo } from "@/lib/github";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,110 +28,6 @@ interface SyncResponse {
   synced: number;
   total_in_db: number;
   latest_run_id: number | null;
-}
-
-// ── Repo picker dropdown ───────────────────────────────────────────────────────
-
-function RepoPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Fetch user's repos (same endpoint as home page)
-  const { data: repos, isLoading } = useSWR<Repo[]>(
-    "/api/github/repos",
-    fetcher<Repo[]>,
-    { revalidateOnFocus: false }
-  );
-
-  const filtered = (repos ?? []).filter((r) =>
-    r.full_name.toLowerCase().includes(query.toLowerCase())
-  );
-
-  // Close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  function select(fullName: string) {
-    onChange(fullName);
-    setQuery("");
-    setOpen(false);
-  }
-
-  return (
-    <div ref={ref} className="relative w-80">
-      {/* Trigger */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50 hover:border-slate-600 transition-colors"
-      >
-        <GitBranch className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-        <span className={cn("flex-1 truncate", value ? "text-slate-100" : "text-slate-500")}>
-          {value || "Pick a repository…"}
-        </span>
-        <ChevronDown className={cn("w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform", open && "rotate-180")} />
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden">
-          {/* Search */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800">
-            <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <input
-              autoFocus
-              type="text"
-              placeholder="Filter repos…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
-            />
-          </div>
-
-          {/* List */}
-          <ul className="max-h-64 overflow-y-auto">
-            {isLoading && (
-              <li className="px-4 py-3 text-xs text-slate-500 italic">Loading repos…</li>
-            )}
-            {!isLoading && filtered.length === 0 && (
-              <li className="px-4 py-3 text-xs text-slate-500 italic">No repos found</li>
-            )}
-            {filtered.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => select(r.full_name)}
-                  className={cn(
-                    "w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2",
-                    r.full_name === value ? "text-violet-400 bg-slate-800/60" : "text-slate-300"
-                  )}
-                >
-                  <span className="truncate">{r.full_name}</span>
-                  {r.private && (
-                    <span className="ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-                      private
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── Sync fetcher ───────────────────────────────────────────────────────────────
