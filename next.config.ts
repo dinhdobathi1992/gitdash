@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  experimental: {
+    // Zscaler TLS inspection requires system certificates for outbound requests
+    // (e.g. fetching Google Fonts woff2 files during dev)
+    turbopackUseSystemTlsCerts: true,
+  },
 
   async headers() {
     return [
