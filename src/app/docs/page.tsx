@@ -7,6 +7,8 @@ import {
   Tag, Search, Menu, X, Code2, Users, ChevronDown,
   ExternalLink, GitPullRequest, Cpu, Lock, Globe,
   CheckCircle, AlertTriangle, Info,
+  Activity, FileText, ShieldAlert, User, DollarSign,
+  TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Callout } from "@/components/docs/Callout";
@@ -18,31 +20,49 @@ import { DocSearch } from "@/components/docs/DocSearch";
 
 // ── Navigation structure ──────────────────────────────────────────────────────
 
-type NavItem = { id: string; label: string; icon: React.ElementType };
+type NavItem = { id: string; label: string; icon: React.ElementType; sub?: boolean };
 type NavSection = { title: string; items: NavItem[] };
 
 const NAV: NavSection[] = [
   {
     title: "Getting Started",
     items: [
-      { id: "getting-started", label: "Introduction", icon: Rocket },
-      { id: "deployment",      label: "Deployment",   icon: Server },
+      { id: "getting-started", label: "Introduction",  icon: Rocket },
+      { id: "deployment",      label: "Deployment",    icon: Server },
       { id: "configuration",   label: "Configuration", icon: Settings2 },
     ],
   },
   {
     title: "Core Concepts",
     items: [
-      { id: "modes",        label: "Auth Modes",       icon: GitBranch },
-      { id: "security",     label: "Security Model",   icon: Shield },
-      { id: "core-concepts", label: "Data Sources",    icon: Cpu },
+      { id: "modes",         label: "Auth Modes",     icon: GitBranch },
+      { id: "security",      label: "Security Model", icon: Shield },
+      { id: "core-concepts", label: "Data Sources",   icon: Cpu },
     ],
   },
   {
     title: "Features",
     items: [
-      { id: "features",       label: "Feature Overview", icon: Layers },
-      { id: "api-reference",  label: "API Reference",    icon: Code2 },
+      { id: "features",           label: "Feature Overview",    icon: Layers },
+      { id: "feat-repositories",  label: "Repositories",        icon: List,       sub: true },
+      { id: "feat-repo-overview", label: "Repository Overview", icon: BarChart3,  sub: true },
+      { id: "feat-workflow",      label: "Workflow Detail",      icon: Activity,   sub: true },
+      { id: "feat-audit",         label: "Audit Trail",          icon: FileText,   sub: true },
+      { id: "feat-security",      label: "Security Scan",        icon: ShieldAlert, sub: true },
+      { id: "feat-repo-team",     label: "Repo Team Stats",      icon: Trophy,     sub: true },
+      { id: "feat-team",          label: "Team Insights",        icon: Users,      sub: true },
+      { id: "feat-contributor",   label: "Contributor Profile",  icon: User,       sub: true },
+      { id: "feat-cost",          label: "Cost Analytics",       icon: DollarSign, sub: true },
+      { id: "feat-reports",       label: "Reports",              icon: TrendingUp, sub: true },
+      { id: "feat-alerts",        label: "Alerts",               icon: Bell,       sub: true },
+      { id: "feat-settings",      label: "Settings",             icon: Sliders,    sub: true },
+      { id: "feat-org",           label: "Org Overview",         icon: Building2,  sub: true },
+    ],
+  },
+  {
+    title: "Reference",
+    items: [
+      { id: "api-reference", label: "API Reference", icon: Code2 },
     ],
   },
   {
@@ -571,83 +591,179 @@ Webhook: POST /api/webhooks/github
   );
 }
 
-function Features() {
+// ── Feature page shared header ────────────────────────────────────────────────
+
+function FeaturePageHeader({
+  icon: Icon, name, path, chips,
+}: {
+  icon: React.ElementType; name: string; path: string; chips: string[];
+}) {
+  return (
+    <div className="mb-8 pb-4 border-b border-slate-800">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-violet-400" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold text-white">{name}</h2>
+            <Code>{path}</Code>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 pl-12">
+        {chips.map((c) => (
+          <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 border border-slate-600/50">
+            {c}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Screenshot slot ───────────────────────────────────────────────────────────
+// Drop a PNG into /public/screenshots/<file> and it renders automatically.
+// If the file is absent a placeholder shows the expected filename instead.
+function ScreenshotSlot({ file, alt }: { file: string; alt: string }) {
+  const [missing, setMissing] = useState(false);
+  const src = `/screenshots/${file}`;
+  if (missing) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-slate-600 bg-slate-800/40 flex flex-col items-center justify-center gap-2 py-8 text-center">
+        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 21h18" />
+          </svg>
+        </div>
+        <p className="text-xs text-slate-500">
+          Add a screenshot at{" "}
+          <code className="text-slate-400 bg-slate-700/60 px-1.5 py-0.5 rounded">
+            public/screenshots/{file}
+          </code>
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 rounded-lg overflow-hidden border border-slate-700/60 bg-slate-900">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        className="w-full object-cover object-top"
+        onError={() => setMissing(true)}
+      />
+    </div>
+  );
+}
+
+// ── Feature Overview index ────────────────────────────────────────────────────
+
+function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
   const pages = [
     {
+      id: "feat-repositories",
       name: "Repositories",
       path: "/",
+      screenshot: "00-repos.png",
       desc: "Browse all personal and org repositories in one table. Fuzzy search with keyboard navigation (/ to focus, ↑↓ to navigate, Enter to open). Run history bars, 30-day trend sparkline, health badges, and org switcher in the sidebar.",
       chips: ["Fuzzy search", "Keyboard shortcuts", "Org switcher", "Health badges", "Run history"],
     },
     {
+      id: "feat-repo-overview",
       name: "Repository Overview",
       path: "/repos/[owner]/[repo]",
+      screenshot: "08-repo-overview.png",
       desc: "Repository-level DORA KPI cards (Deploy Frequency, Lead Time, CFR, MTTR) computed from real PR and release data. Expandable drill-down with four charts: PR Cycle Time Breakdown, PR Size vs Velocity scatter, PR Throughput (12 weeks), and Workflow Stability (30d). Below that: Action Duration Trend and a searchable workflow table.",
       chips: ["DORA 4 Keys", "PR Cycle Breakdown", "Scatter plot", "Throughput chart", "Stability chart"],
     },
     {
+      id: "feat-workflow",
       name: "Workflow Detail",
       path: "/repos/[owner]/[repo]/workflows/[id]",
+      screenshot: "01-overview.png",
       desc: "5-tab deep-dive into a single workflow. Auto-refreshes every 30 seconds while runs are active. Includes DORA metrics (CI-based), cost estimation per run, queue wait analysis, anomaly detection, and optimization recommendations.",
       chips: ["5 tabs", "DORA metrics", "Cost estimate", "Queue analysis", "Anomaly detection", "Optimization tips"],
     },
     {
+      id: "feat-audit",
       name: "Workflow Audit Trail",
       path: "/repos/[owner]/[repo]/audit",
+      screenshot: "09-audit.png",
       desc: "Full commit history of every .github/workflows/*.yml file in the repo. Shows author, timestamp, commit message, and links to GitHub. Highlights changes made in the last 24 hours.",
       chips: ["Workflow file history", "Author + timestamp", "Recent-change highlight"],
     },
     {
+      id: "feat-security",
       name: "Security Scan",
       path: "/repos/[owner]/[repo]/security",
+      screenshot: "10-security.png",
       desc: "Static analysis of all workflow YAML files for common security anti-patterns: secret injection via env, pull_request_target misuse, unpin third-party actions, and more. Findings grouped by severity (critical, high, medium, low, info).",
       chips: ["Static analysis", "Severity grouping", "Per-file findings"],
     },
     {
+      id: "feat-repo-team",
       name: "Repo Team Stats",
       path: "/repos/[owner]/[repo]/team",
+      screenshot: "11-repo-team.png",
       desc: "Per-contributor delivery metrics for a repository: CI pass rate, avg run duration, run count. Reviewer load matrix (author × reviewer heatmap). Bus factor analysis showing which modules have fewer than 2 active contributors.",
       chips: ["CI leaderboard", "Reviewer matrix", "Bus factor"],
     },
     {
+      id: "feat-team",
       name: "Team Insights",
       path: "/team",
+      screenshot: "12-team-insights.png",
       desc: "Global team performance view — select any repository to see a sortable contributor leaderboard (PRs merged, reviews given, avg lead time, avg PR size, review response time, first-pass approval rate, self-merges, comments) and a reviewer load heatmap.",
       chips: ["Sortable leaderboard", "Reviewer load matrix", "Repo picker"],
     },
     {
+      id: "feat-contributor",
       name: "Contributor Profile",
       path: "/contributor/[login]",
+      screenshot: "13-contributor.png",
       desc: "\"Player card\" for any developer. Shows KPI cards (PRs merged, avg lead time, reviews given, CI pass rate), 52-week activity heatmap, weekly commit bar chart, PR lifecycle funnel, commit hour distribution, languages touched, and a recent PRs table.",
       chips: ["KPI cards", "52-week heatmap", "PR funnel", "Commit hours", "Languages"],
     },
     {
+      id: "feat-cost",
       name: "Cost Analytics",
       path: "/cost-analytics",
+      screenshot: "cost-analytics.png",
       desc: "GitHub Actions billing breakdown by SKU and runner type. Month-by-month navigation, burn rate progress bar with warning/critical thresholds, per-org and per-repo drill-down. Requires Enhanced Billing Platform (GitHub Team/Enterprise).",
       chips: ["Monthly navigation", "SKU breakdown", "Burn rate", "Org mode + Enhanced Billing"],
     },
     {
+      id: "feat-reports",
       name: "Reports",
       path: "/reports",
+      screenshot: "14-reports.png",
       desc: "DB-backed historical reporting. Daily area chart of pass/fail rates and quarterly summary table. Includes a manual sync trigger to pull the latest runs into the database.",
       chips: ["Daily trend", "Quarterly summary", "DB sync"],
     },
     {
+      id: "feat-alerts",
       name: "Alerts",
       path: "/alerts",
+      screenshot: "15-alerts.png",
       desc: "Define alert rules for CI metrics (failure rate, duration P95, queue wait P95, success streak) and people metrics (PR throughput drop, review response P90, after-hours commit %, PR abandon rate, unreviewed PR age). Rules fire events visible in-app; Slack and email delivery supported.",
       chips: ["CI alerts", "People alerts", "Browser / Slack / Email", "Rule history"],
     },
     {
+      id: "feat-settings",
       name: "Settings",
       path: "/settings",
+      screenshot: "16-settings.png",
       desc: "Manage your PAT in standalone mode or view your OAuth session details in org mode. Shows GitHub Actions billing widget with remaining free minutes for the current billing period.",
       chips: ["PAT management", "Session info", "Billing widget"],
     },
     {
+      id: "feat-org",
       name: "Org Overview",
       path: "/org/[orgName]",
+      screenshot: "17-org-overview.png",
       desc: "Organisation-level reliability heatmap and a sortable repository table with health scores, run history bars, and quick links to each repo's workflow dashboard.",
       chips: ["Org heatmap", "Repo table", "Health scores"],
     },
@@ -657,24 +773,41 @@ function Features() {
     <section id="features" className="scroll-mt-8 space-y-6">
       <SectionHeading id="features" icon={Layers}>Feature Overview</SectionHeading>
 
-      <div className="grid gap-4">
+      <ProseP>
+        GitDash has {pages.length} pages. Click any card to open the full feature page with
+        screenshots, detailed descriptions, and reference tables.
+      </ProseP>
+
+      <div className="grid gap-3">
         {pages.map((p) => (
-          <DocCard key={p.name}>
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-white">{p.name}</h3>
-                <Code>{p.path}</Code>
-              </div>
-              <p className="text-sm text-slate-400">{p.desc}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {p.chips.map((c) => (
-                  <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 border border-slate-600/50">
-                    {c}
+          <button
+            key={p.id}
+            onClick={() => onNavigate(p.id)}
+            className="group w-full text-left rounded-xl border border-slate-800 bg-slate-900/40 p-4 hover:border-violet-500/40 hover:bg-slate-800/60 transition-all"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-white group-hover:text-violet-300 transition-colors">
+                    {p.name}
                   </span>
-                ))}
+                  <Code>{p.path}</Code>
+                </div>
+                <p className="text-xs text-slate-500 line-clamp-2">{p.desc}</p>
+                <div className="flex flex-wrap gap-1">
+                  {p.chips.slice(0, 3).map((c) => (
+                    <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-400 border border-slate-600/50">
+                      {c}
+                    </span>
+                  ))}
+                  {p.chips.length > 3 && (
+                    <span className="text-xs px-2 py-0.5 text-slate-600">+{p.chips.length - 3} more</span>
+                  )}
+                </div>
               </div>
+              <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-violet-400 shrink-0 mt-0.5 transition-colors" />
             </div>
-          </DocCard>
+          </button>
         ))}
       </div>
 
@@ -705,6 +838,395 @@ function Features() {
     </section>
   );
 }
+
+// ── Individual Feature Pages ──────────────────────────────────────────────────
+
+function FeatureRepositories() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={List} name="Repositories" path="/"
+        chips={["Fuzzy search", "Keyboard shortcuts", "Org switcher", "Health badges", "Run history"]}
+      />
+      <ProseP>
+        The main dashboard lists every personal and org repository in a searchable, keyboard-navigable table.
+        Each row shows the latest workflow status, a 10-run history bar, a 30-day trend sparkline, and a
+        health badge. Switch between personal repos and any GitHub org from the sidebar.
+      </ProseP>
+      <ScreenshotSlot file="00-repos.png" alt="Repositories dashboard" />
+      <DocCard>
+        <SubHeading>Keyboard Shortcuts</SubHeading>
+        <DocTable
+          headers={["Key", "Action"]}
+          rows={[
+            ["/", "Focus the search box"],
+            ["↑ / ↓", "Move selection up / down"],
+            ["Enter", "Open the selected repository"],
+            ["Escape", "Clear search or close modal"],
+            ["?", "Show shortcuts reference modal"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureRepoOverview() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={BarChart3} name="Repository Overview" path="/repos/[owner]/[repo]"
+        chips={["DORA 4 Keys", "PR Cycle Breakdown", "Scatter plot", "Throughput chart", "Stability chart"]}
+      />
+      <ProseP>
+        The repository overview page is the health scorecard for a single codebase. At the top, four
+        DORA KPI cards are computed from real merged PRs and GitHub Releases — no extra config needed.
+        Expand the drill-down section to see four charts that explain <em>why</em> the numbers look the
+        way they do. Below that, an Action Duration Trend and a searchable workflow table.
+      </ProseP>
+      <ScreenshotSlot file="08-repo-overview.png" alt="Repository Overview — DORA KPI cards" />
+      <DocCard>
+        <SubHeading>DORA KPI Cards</SubHeading>
+        <DocTable
+          headers={["Metric", "Data source", "DORA levels"]}
+          rows={[
+            ["Deploy Frequency", "GitHub Releases → fallback: merged PRs to main", "Elite ≥ 1/day · High ≥ 1/week"],
+            ["Lead Time for Changes", "First commit on PR → PR merged timestamp", "Elite < 1h · High < 1d"],
+            ["Change Failure Rate", "Hotfix/revert PRs ÷ total merged PRs", "Elite < 5% · High < 10%"],
+            ["Time to Restore (MTTR)", "Hotfix/revert PR open → merged duration", "Elite < 1h · High < 1d"],
+          ]}
+        />
+      </DocCard>
+      <DocCard>
+        <SubHeading>Drill-Down Charts</SubHeading>
+        <DocTable
+          headers={["Chart", "What it shows"]}
+          rows={[
+            ["PR Cycle Time Breakdown", "Proportional segmented bar: Time to Open → Pickup → Review → Merge"],
+            ["PR Size vs Velocity", "Scatter plot — lines changed (X) vs hours to merge (Y) with regression line"],
+            ["PR Throughput", "12-week bar chart of merged PRs per week"],
+            ["Workflow Stability", "30-day pass rate line chart with Elite (95%) and High (80%) reference lines"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureWorkflowDetail() {
+  const tabs = [
+    {
+      name: "Overview",
+      desc: "Rolling 30-day success rate, outcome pie chart, run frequency heatmap, DORA 4 Keys (CI-based), and Action Duration Trend.",
+      screenshots: ["01-overview.png", "02-overview-stats.png"],
+    },
+    {
+      name: "Performance",
+      desc: "Per-job avg/p50/p95 bar chart, stacked job waterfall per run, slowest steps table, cost estimate per run, and queue wait analysis.",
+      screenshots: ["03-performance-jobs.png", "04-performance-steps.png"],
+    },
+    {
+      name: "Reliability",
+      desc: "MTTR, failure streaks, flaky branch detection, re-run rate, anomaly detection with severity badges, and a pass/fail timeline.",
+      screenshots: ["05-reliability.png"],
+    },
+    {
+      name: "Triggers",
+      desc: "Event breakdown (push/PR/schedule/manual), top branches, hour-of-day heatmap, day-of-week chart, and actor leaderboard.",
+      screenshots: ["06-triggers.png"],
+    },
+    {
+      name: "Runs",
+      desc: "Sortable and filterable run table with commit message, PR link, attempt count, queue wait, CSV export, and re-run button.",
+      screenshots: ["07-runs.png"],
+    },
+  ];
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Activity} name="Workflow Detail" path="/repos/[owner]/[repo]/workflows/[id]"
+        chips={["5 tabs", "DORA metrics", "Cost estimate", "Queue analysis", "Anomaly detection", "Optimization tips", "Auto-refresh"]}
+      />
+      <ProseP>
+        The deepest view in GitDash. Pick any workflow from the repository overview and explore five
+        analytical tabs. The page auto-refreshes every 30 seconds while runs are active, and shows
+        CI-based DORA metrics alongside cost, queue, anomaly, and optimization insights.
+      </ProseP>
+      <div className="space-y-6">
+        {tabs.map((tab) => (
+          <DocCard key={tab.name}>
+            <SubHeading>{tab.name}</SubHeading>
+            <ProseP>{tab.desc}</ProseP>
+            <div className={tab.screenshots.length > 1 ? "grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4" : ""}>
+              {tab.screenshots.map((file) => (
+                <ScreenshotSlot key={file} file={file} alt={`${tab.name} tab`} />
+              ))}
+            </div>
+          </DocCard>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FeatureAudit() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={FileText} name="Workflow Audit Trail" path="/repos/[owner]/[repo]/audit"
+        chips={["Workflow file history", "Author + timestamp", "Recent-change highlight"]}
+      />
+      <ProseP>
+        Shows the full commit history of every <Code>.github/workflows/*.yml</Code> file in a
+        repository — sorted newest first. Each entry links to the commit on GitHub. Changes made
+        within the last 24 hours are highlighted so you can quickly see what was recently modified.
+      </ProseP>
+      <ScreenshotSlot file="09-audit.png" alt="Workflow Audit Trail" />
+    </section>
+  );
+}
+
+function FeatureSecurity() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={ShieldAlert} name="Security Scan" path="/repos/[owner]/[repo]/security"
+        chips={["Static analysis", "Severity grouping", "Per-file findings"]}
+      />
+      <ProseP>
+        Runs static analysis on all workflow YAML files in the repository, checking for common
+        security anti-patterns without executing any code. Findings are grouped by severity and
+        collapsed per file for easy triage.
+      </ProseP>
+      <ScreenshotSlot file="10-security.png" alt="Security Scan results" />
+      <DocCard>
+        <SubHeading>Checks performed</SubHeading>
+        <DocTable
+          headers={["Check", "Severity"]}
+          rows={[
+            ["Secrets injected via env: on untrusted input (pull_request_target)", "Critical"],
+            ["pull_request_target with checkout of PR head", "High"],
+            ["Third-party actions not pinned to a commit SHA", "Medium"],
+            ["Secrets referenced in run: steps (risk of log exposure)", "Medium"],
+            ["Deprecated runner OS versions", "Low"],
+            ["Missing permissions: block at workflow or job level", "Info"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureRepoTeam() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Trophy} name="Repo Team Stats" path="/repos/[owner]/[repo]/team"
+        chips={["CI leaderboard", "Reviewer matrix", "Bus factor"]}
+      />
+      <ProseP>
+        Three panels that answer "who is doing what?" inside a single repository. The CI leaderboard
+        shows per-actor build stats. The reviewer load matrix reveals review distribution. The bus
+        factor heatmap flags knowledge concentration risks.
+      </ProseP>
+      <ScreenshotSlot file="11-repo-team.png" alt="Repo Team Stats" />
+      <DocCard>
+        <SubHeading>Panels</SubHeading>
+        <DocTable
+          headers={["Panel", "Description"]}
+          rows={[
+            ["CI Leaderboard", "Per-contributor run count, success rate, avg duration over the last 90 days"],
+            ["Reviewer Load Matrix", "Author × reviewer heatmap — who reviews whose PRs"],
+            ["Bus Factor Heatmap", "Per-module contributor count and Herfindahl index — flags modules with <2 active contributors"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureTeamInsights() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Users} name="Team Insights" path="/team"
+        chips={["Sortable leaderboard", "Reviewer load matrix", "Repo picker"]}
+      />
+      <ProseP>
+        A global team performance view — not scoped to a single workflow. Pick any repository from the
+        dropdown and see a contributor leaderboard with eight delivery metrics alongside a reviewer load
+        heatmap.
+      </ProseP>
+      <ScreenshotSlot file="12-team-insights.png" alt="Team Insights page" />
+      <DocCard>
+        <SubHeading>Leaderboard columns</SubHeading>
+        <DocTable
+          headers={["Column", "Meaning"]}
+          rows={[
+            ["PRs Merged", "Total PRs merged to default branch in the last 90 days"],
+            ["Reviews Given", "Number of PR reviews submitted"],
+            ["Avg Lead Time", "Average time from first commit to PR merge"],
+            ["Avg PR Size", "Average lines changed per merged PR"],
+            ["Review Response", "Median time from PR open to first review comment"],
+            ["First-Pass Approval", "% of PRs approved on the first review round"],
+            ["Self-Merges", "PRs merged by the author without external approval"],
+            ["Comments", "Total review comments left"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureContributor() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={User} name="Contributor Profile" path="/contributor/[login]"
+        chips={["KPI cards", "52-week heatmap", "PR funnel", "Commit hours", "Languages"]}
+      />
+      <ProseP>
+        A full "player card" for any GitHub user. Navigate here by clicking a contributor name in the
+        Team Insights leaderboard or Team Stats page. The profile aggregates data from the PR, review,
+        and commit APIs for the selected repository context.
+      </ProseP>
+      <ScreenshotSlot file="13-contributor.png" alt="Contributor Profile" />
+      <DocCard>
+        <SubHeading>Sections</SubHeading>
+        <DocTable
+          headers={["Section", "What it shows"]}
+          rows={[
+            ["KPI Cards", "PRs merged, avg lead time, reviews given, CI pass rate"],
+            ["Activity Heatmap", "52-week contribution calendar (GitHub-style)"],
+            ["Weekly Commits", "12-week bar chart of commits per week"],
+            ["PR Lifecycle Funnel", "Opened → reviewed → approved → merged counts"],
+            ["Commit Hours", "Hour-of-day distribution — burnout risk indicator"],
+            ["Languages", "Top languages touched by file extensions in commits"],
+            ["Recent PRs", "Last 20 PRs with status, size, and lead time"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureCost() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={DollarSign} name="Cost Analytics" path="/cost-analytics"
+        chips={["Monthly navigation", "SKU breakdown", "Burn rate", "Org mode + Enhanced Billing"]}
+      />
+      <Callout type="warning">
+        Requires org mode and the <strong>GitHub Enhanced Billing Platform</strong> (available on
+        GitHub Team and Enterprise). The billing API is not available for personal accounts or on
+        the legacy billing plan.
+      </Callout>
+      <ProseP>
+        Browse GitHub Actions spend month by month. A burn rate progress bar shows how much of the
+        monthly budget has been consumed. The SKU breakdown table shows cost per runner type
+        (ubuntu-latest, macos-latest, windows-latest, etc.) and per repository.
+      </ProseP>
+      <ScreenshotSlot file="cost-analytics.png" alt="Cost Analytics page" />
+    </section>
+  );
+}
+
+function FeatureReports() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={TrendingUp} name="Reports" path="/reports"
+        chips={["Daily trend", "Quarterly summary", "DB sync"]}
+      />
+      <ProseP>
+        DB-backed historical reporting using the SQLite (or Neon PostgreSQL) database. The daily area
+        chart shows pass/fail run counts over time. The quarterly breakdown table aggregates by quarter.
+        A manual sync button pulls the latest runs from GitHub into the database on demand.
+      </ProseP>
+      <ScreenshotSlot file="14-reports.png" alt="Reports page" />
+    </section>
+  );
+}
+
+function FeatureAlerts() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Bell} name="Alerts" path="/alerts"
+        chips={["CI alerts", "People alerts", "Browser / Slack / Email", "Rule history"]}
+      />
+      <ProseP>
+        Define threshold-based alert rules that fire when a metric exceeds or drops below a value.
+        Rules are evaluated after every database sync. Fired alerts appear in the event log and can
+        be delivered via browser notification, Slack webhook, or email.
+      </ProseP>
+      <ScreenshotSlot file="15-alerts.png" alt="Alerts page" />
+      <DocCard>
+        <SubHeading>CI Metrics</SubHeading>
+        <DocTable
+          headers={["Metric", "Threshold unit", "Description"]}
+          rows={[
+            ["Failure Rate", "%", "Alert when failure rate exceeds threshold in the time window"],
+            ["Duration P95", "minutes", "Alert when the 95th-percentile run duration exceeds threshold"],
+            ["Queue Wait P95", "minutes", "Alert when P95 queue wait time exceeds threshold"],
+            ["Success Streak", "runs", "Alert when consecutive failures exceed threshold"],
+          ]}
+        />
+      </DocCard>
+      <DocCard>
+        <SubHeading>People Metrics</SubHeading>
+        <DocTable
+          headers={["Metric", "Threshold unit", "Description"]}
+          rows={[
+            ["PR Throughput Drop", "%", "Alert when merged PRs drop >N% week-over-week"],
+            ["Review Response P90", "hours", "Alert when P90 time-to-first-review exceeds N hours"],
+            ["After-Hours Commits", "%", "Alert when after-hours commit % exceeds threshold (burnout risk)"],
+            ["PR Abandon Rate", "%", "Alert when closed-without-merge PRs exceed N% of opened"],
+            ["Unreviewed PR Age", "days", "Alert when any open PR has no review after N business days"],
+          ]}
+        />
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureSettings() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Sliders} name="Settings" path="/settings"
+        chips={["PAT management", "Session info", "Billing widget"]}
+      />
+      <ProseP>
+        In <strong>standalone mode</strong> — update or revoke your GitHub Personal Access Token.
+        In <strong>org mode</strong> — view your OAuth session details (scopes, user, expiry).
+        Both modes show a GitHub Actions billing widget with remaining free minutes for the current
+        billing period.
+      </ProseP>
+      <ScreenshotSlot file="16-settings.png" alt="Settings page" />
+    </section>
+  );
+}
+
+function FeatureOrg() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Building2} name="Org Overview" path="/org/[orgName]"
+        chips={["Org heatmap", "Repo table", "Health scores"]}
+      />
+      <ProseP>
+        A bird's-eye view of an entire GitHub organization. The reliability heatmap shows which
+        repositories are red or green at a glance. The sortable repo table includes health scores,
+        run history bars, open PR counts, and quick links to each repo's workflow dashboard.
+      </ProseP>
+      <ScreenshotSlot file="17-org-overview.png" alt="Org Overview page" />
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function APIReference() {
   return (
@@ -1002,10 +1524,33 @@ npm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "2.9.0",
+      version: "2.10.0",
       date: "2026-03-03",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Feature Overview index page — 13 clickable feature cards replacing the long scroll, each navigates to a dedicated feature sub-page",
+          "13 individual feature detail pages in docs (one per page in the app): Repositories, Repository Overview, Workflow Detail, Audit Trail, Security Scan, Repo Team Stats, Team Insights, Contributor Profile, Cost Analytics, Reports, Alerts, Settings, Org Overview",
+          "Workflow Detail tabs section — each of the 5 tabs (Overview, Performance, Reliability, Triggers, Runs) now has its own card with description and screenshot slots; Performance shows a 2-column screenshot grid",
+          "Screenshot slots in every feature page — drop a PNG into public/screenshots/<name>.png and it renders automatically; absent files show a placeholder with the expected filename",
+          "Screenshots for Repositories, Workflow Detail (Overview, Performance, Reliability, Triggers, Runs), and Cost Analytics now pre-loaded from docs/screenshots/",
+          "Sidebar sub-items for all 13 feature pages — visually indented, smaller text, lighter colour when inactive",
+          "⌘K search index expanded with all 13 feature sub-pages (individually searchable with accurate excerpts)",
+          "FeaturePageHeader shared component — consistent icon + name + path badge + chip row across all feature pages",
+        ],
+        fixed: [],
+        improved: [
+          "Full feature audit — API Reference updated with all 14 endpoints, descriptions corrected to match live code",
+          "DocSearch section labels now distinguish Features / Reference / Support groups",
+        ],
+      },
+    },
+    {
+      version: "2.9.0",
+      date: "2026-03-03",
+      badge: null,
+      badgeColor: "",
       changes: {
         added: [
           "DORA 4 Keys at repository level — Deploy Frequency, Lead Time, CFR, MTTR computed from real merged PRs and GitHub Releases",
@@ -1210,7 +1755,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.9.0"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.10.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -1249,7 +1794,7 @@ function DocSidebar({
               </button>
               {!isCollapsed && (
                 <ul className="mt-0.5 space-y-0.5">
-                  {section.items.map(({ id, label, icon: Icon }) => (
+                  {section.items.map(({ id, label, icon: Icon, sub }) => (
                     <li key={id}>
                       <button
                         onClick={() => {
@@ -1257,13 +1802,18 @@ function DocSidebar({
                           onMobileClose();
                         }}
                         className={cn(
-                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors",
+                          "w-full flex items-center gap-2 rounded-lg text-left transition-colors",
+                          sub
+                            ? "pl-7 pr-3 py-1.5 text-xs"
+                            : "px-3 py-2 text-sm",
                           active === id
                             ? "bg-violet-500/15 text-violet-300 border border-violet-500/20"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                            : sub
+                              ? "text-slate-500 hover:text-slate-200 hover:bg-slate-800/40"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                         )}
                       >
-                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        <Icon className={cn("shrink-0", sub ? "w-3 h-3" : "w-3.5 h-3.5")} />
                         {label}
                       </button>
                     </li>
@@ -1319,26 +1869,38 @@ function DocSidebar({
   );
 }
 
-// ── Section registry ──────────────────────────────────────────────────────────
-
-const SECTION_COMPONENTS: Record<string, React.ReactNode> = {
-  "getting-started": <GettingStarted />,
-  "deployment":      <Deployment />,
-  "configuration":   <Configuration />,
-  "modes":           <Modes />,
-  "security":        <Security />,
-  "core-concepts":   <CoreConcepts />,
-  "features":        <Features />,
-  "api-reference":   <APIReference />,
-  "faq":             <FAQ />,
-  "contributing":    <Contributing />,
-  "release-notes":   <ReleaseNotes />,
-};
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DocsPage() {
   const [active, setActive] = useState("getting-started");
+
+  // Section registry is defined here so Features can receive onNavigate
+  const SECTION_COMPONENTS: Record<string, React.ReactNode> = {
+    "getting-started":    <GettingStarted />,
+    "deployment":         <Deployment />,
+    "configuration":      <Configuration />,
+    "modes":              <Modes />,
+    "security":           <Security />,
+    "core-concepts":      <CoreConcepts />,
+    "features":           <Features onNavigate={setActive} />,
+    "feat-repositories":  <FeatureRepositories />,
+    "feat-repo-overview": <FeatureRepoOverview />,
+    "feat-workflow":      <FeatureWorkflowDetail />,
+    "feat-audit":         <FeatureAudit />,
+    "feat-security":      <FeatureSecurity />,
+    "feat-repo-team":     <FeatureRepoTeam />,
+    "feat-team":          <FeatureTeamInsights />,
+    "feat-contributor":   <FeatureContributor />,
+    "feat-cost":          <FeatureCost />,
+    "feat-reports":       <FeatureReports />,
+    "feat-alerts":        <FeatureAlerts />,
+    "feat-settings":      <FeatureSettings />,
+    "feat-org":           <FeatureOrg />,
+    "api-reference":      <APIReference />,
+    "faq":                <FAQ />,
+    "contributing":       <Contributing />,
+    "release-notes":      <ReleaseNotes />,
+  };
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -1429,7 +1991,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.9.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.10.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
