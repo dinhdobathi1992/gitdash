@@ -39,18 +39,31 @@ export async function GET(req: NextRequest) {
   try {
     const octokit = getOctokit(token);
     if (org) {
-      const { data } = await octokit.rest.billing.getGithubActionsBillingOrg({ org });
-      const result: BillingData = {
-        total_minutes_used: data.total_minutes_used,
-        total_paid_minutes_used: data.total_paid_minutes_used,
-        included_minutes: data.included_minutes,
-        minutes_used_breakdown: data.minutes_used_breakdown ?? {},
-        kind: "org",
-        login: org,
-      };
-      return NextResponse.json(result, {
-        headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
-      });
+      try {
+        const { data } = await octokit.rest.billing.getGithubActionsBillingOrg({ org });
+        const result: BillingData = {
+          total_minutes_used: data.total_minutes_used,
+          total_paid_minutes_used: data.total_paid_minutes_used,
+          included_minutes: data.included_minutes,
+          minutes_used_breakdown: data.minutes_used_breakdown ?? {},
+          kind: "org",
+          login: org,
+        };
+        return NextResponse.json(result, {
+          headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
+        });
+      } catch (orgErr: unknown) {
+        const status = (orgErr as { status?: number })?.status;
+        const message =
+          status === 404
+            ? `Organization "${org}" not found. Check the org slug or try your personal billing (leave the field blank).`
+            : status === 403
+            ? `Access denied for "${org}". Your PAT needs the "read:org" scope to access org billing.`
+            : status === 422
+            ? `"${org}" is a personal account, not an organization. Leave the field blank to view personal billing.`
+            : `Failed to fetch billing data for "${org}". GitHub returned: ${status ?? "unknown error"}.`;
+        return NextResponse.json({ error: message }, { status: status ?? 500 });
+      }
     } else {
       const { data: me } = await octokit.rest.users.getAuthenticated();
       try {
