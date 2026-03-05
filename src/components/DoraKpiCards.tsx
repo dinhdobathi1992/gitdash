@@ -76,7 +76,7 @@ const METRICS: MetricConfig[] = [
     getLevel: d => d.deployment_frequency.level,
     getValue: d => d.deployment_frequency.label,
     getDetail: d =>
-      `${d.deployment_frequency.total} deploys · ${d.deployment_frequency.period_days}d window`,
+      `${d.deployment_frequency.total} ${d.releases_analysed > 0 ? "releases" : "merged PRs"} over ${d.deployment_frequency.period_days} days`,
   },
   {
     key: "lead_time",
@@ -86,7 +86,7 @@ const METRICS: MetricConfig[] = [
     Icon: Clock,
     getLevel: d => d.lead_time.level,
     getValue: d => d.lead_time.label,
-    getDetail: d => `${d.lead_time.sample_size} PRs · p95 ${formatMs(d.lead_time.p95_ms)}`,
+    getDetail: d => `p95: ${formatMs(d.lead_time.p95_ms)} · from ${d.lead_time.sample_size} PRs`,
   },
   {
     key: "change_failure_rate",
@@ -97,7 +97,7 @@ const METRICS: MetricConfig[] = [
     getLevel: d => d.change_failure_rate.level,
     getValue: d => d.change_failure_rate.label,
     getDetail: d =>
-      `${d.change_failure_rate.failures} of ${d.change_failure_rate.total} merged PRs`,
+      `${d.change_failure_rate.failures} failures / ${d.change_failure_rate.total} merged PRs`,
   },
   {
     key: "mttr",
@@ -109,8 +109,8 @@ const METRICS: MetricConfig[] = [
     getValue: d => d.mttr.label,
     getDetail: d =>
       d.mttr.recoveries > 0
-        ? `${d.mttr.recoveries} recovery event${d.mttr.recoveries !== 1 ? "s" : ""}`
-        : "No failures detected",
+        ? `from ${d.mttr.recoveries} hotfix / revert PR${d.mttr.recoveries !== 1 ? "s" : ""}`
+        : "no hotfix / revert PRs detected",
   },
 ];
 

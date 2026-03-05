@@ -349,6 +349,7 @@ export function PrLifecycleExtension({
             <MetricTooltip text="Total number of pull requests currently open in this repository. A growing count over time signals a review bottleneck or accumulating WIP." align="left" />
           </div>
           <p className="text-2xl font-bold text-white">{data.total_open}</p>
+          <p className="text-[11px] text-slate-500 mt-1">currently open</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -359,6 +360,7 @@ export function PrLifecycleExtension({
           <p className="text-2xl font-bold text-white">
             {fmtHours(data.time_to_first_review_p50_hours)}
           </p>
+          <p className="text-[11px] text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -369,6 +371,7 @@ export function PrLifecycleExtension({
           <p className="text-2xl font-bold text-white">
             {fmtHours(data.time_to_first_review_p90_hours)}
           </p>
+          <p className="text-[11px] text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -382,6 +385,7 @@ export function PrLifecycleExtension({
           )}>
             {data.abandon_rate}%
           </p>
+          <p className="text-[11px] text-slate-500 mt-1">{data.closed_prs_analysed} closed PRs analysed</p>
         </div>
       </div>
 
