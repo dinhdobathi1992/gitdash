@@ -89,7 +89,8 @@ function BillingWidget() {
 
       {error && (
         <div className="flex flex-col gap-2 text-sm">
-          {error instanceof FetchError && error.status === 410 ? (
+          {/* 410 = personal billing deprecated — only relevant when no org was entered */}
+          {error instanceof FetchError && error.status === 410 && !org ? (
             <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <div className="flex items-center gap-2 text-amber-400">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -112,9 +113,9 @@ function BillingWidget() {
               </p>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-red-400">
-              <AlertCircle className="w-4 h-4" />
-              {error.message ?? "Failed to load billing data"}
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error.message ?? "Failed to load billing data"}</span>
             </div>
           )}
         </div>

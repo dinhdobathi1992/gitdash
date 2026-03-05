@@ -59,10 +59,12 @@ export async function GET(req: NextRequest) {
             ? `Organization "${org}" not found. Check the org slug or try your personal billing (leave the field blank).`
             : status === 403
             ? `Access denied for "${org}". Your PAT needs the "read:org" scope to access org billing.`
-            : status === 422
-            ? `"${org}" is a personal account, not an organization. Leave the field blank to view personal billing.`
-            : `Failed to fetch billing data for "${org}". GitHub returned: ${status ?? "unknown error"}.`;
-        return NextResponse.json({ error: message }, { status: status ?? 500 });
+            : status === 410 || status === 422
+            ? `"${org}" appears to be a personal account, not an organization. Leave the field blank to load personal billing.`
+            : `Failed to fetch billing for "${org}" (GitHub status: ${status ?? "unknown"}).`;
+        // Never forward 410 for org errors — the UI reserves 410 for the personal billing deprecation notice
+        const responseStatus = status === 410 || status === 422 ? 422 : (status ?? 500);
+        return NextResponse.json({ error: message }, { status: responseStatus });
       }
     } else {
       const { data: me } = await octokit.rest.users.getAuthenticated();
