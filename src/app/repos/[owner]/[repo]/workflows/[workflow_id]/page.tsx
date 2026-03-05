@@ -315,7 +315,7 @@ function WorkflowContent() {
         <StatCard label="Avg Queue Wait" value={runsLoading ? "—" : formatDuration(avgQueue)}
           sub="Time before first step"
           icon={Timer} iconColor="text-amber-400"
-          tooltip="Average time between a run being triggered and its first job actually starting. This is pure runner wait time. High values indicate runner capacity constraints, not slow tests." />
+          tooltip="Time from trigger (created_at) to runner ready (run_started_at) — a proxy for queue wait. Note: the true queue time (trigger → first job executing) is shown inside the expanded run detail and may be longer if setup jobs run first." />
         <StatCard label="Total Runs" value={runsLoading ? "—" : safeRuns.length}
           sub={`${failureCount} failed`}
           icon={Activity} iconColor="text-blue-400"
@@ -1375,7 +1375,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
                 </tr>
                 {/* expandable job/step drill-down */}
                 {expanded.has(run.id) && (
-                  <RunJobsRow runId={run.id} owner={owner} repo={repo} colSpan={10} />
+                  <RunJobsRow runId={run.id} owner={owner} repo={repo} colSpan={10} createdAt={run.created_at} />
                 )}
               </React.Fragment>
             ))}
@@ -1391,9 +1391,9 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
 
 // ── expandable job+step row ───────────────────────────────────────────────────
 function RunJobsRow({
-  runId, owner, repo, colSpan,
+  runId, owner, repo, colSpan, createdAt,
 }: {
-  runId: number; owner: string; repo: string; colSpan: number;
+  runId: number; owner: string; repo: string; colSpan: number; createdAt?: string;
 }) {
   const { data: jobs, isLoading, error: jobsError } = useSWR<WorkflowJob[]>(
     `/api/github/run-details?owner=${owner}&repo=${repo}&run_id=${runId}`,
@@ -1415,6 +1415,11 @@ function RunJobsRow({
   // Total run duration = last completed_at − first started_at (same as ganttWindow.span)
   const totalDuration = ganttWindow?.span ?? null;
 
+  // True queue time = first job started_at − created_at (time from trigger to first job executing)
+  const trueQueueMs = (ganttWindow && createdAt)
+    ? ganttWindow.minT - new Date(createdAt).getTime()
+    : null;
+
   const conclusionColor: Record<string, string> = {
     success:   "bg-green-500",
     failure:   "bg-red-500",
@@ -1431,15 +1436,49 @@ function RunJobsRow({
     <p className="text-xs text-slate-500">No job data available.</p>
   ) : (
     <div className="space-y-4">
-      {/* ── header: total run duration ── */}
-      <div className="flex items-center gap-2">
-        <Clock className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-        <span className="text-xs font-semibold text-slate-200">
-          Run duration:&nbsp;
-          <span className="text-violet-300 tabular-nums">
-            {totalDuration != null ? formatDuration(totalDuration) : "—"}
-          </span>
-        </span>
+      {/* ── header: total run duration + queue + timestamps ── */}
+      <div className="flex items-start gap-2">
+        <Clock className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
+        <div className="space-y-1.5">
+          {/* duration row */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+            <span className="text-xs font-semibold text-slate-200">
+              Run duration:&nbsp;
+              <span className="text-violet-300 tabular-nums">
+                {totalDuration != null ? formatDuration(totalDuration) : "—"}
+              </span>
+              <span className="text-slate-500 font-normal ml-1 text-[11px]">(first job start → last job end)</span>
+            </span>
+            {trueQueueMs !== null && trueQueueMs > 0 && (
+              <span className="text-xs text-slate-400">
+                Queue wait:&nbsp;
+                <span className="text-amber-300 tabular-nums">{formatDuration(trueQueueMs)}</span>
+                <span className="text-slate-500 font-normal ml-1 text-[11px]">(triggered → first job start)</span>
+              </span>
+            )}
+          </div>
+          {/* timestamps row */}
+          <div className="flex flex-wrap gap-x-6 gap-y-0.5">
+            {createdAt && (
+              <span className="text-[11px] tabular-nums">
+                <span className="text-slate-600">Triggered:</span>{" "}
+                <span className="text-slate-400">{new Date(createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
+              </span>
+            )}
+            {ganttWindow && (
+              <span className="text-[11px] tabular-nums">
+                <span className="text-slate-600">First job:</span>{" "}
+                <span className="text-slate-400">{new Date(ganttWindow.minT).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
+              </span>
+            )}
+            {ganttWindow && (
+              <span className="text-[11px] tabular-nums">
+                <span className="text-slate-600">Completed:</span>{" "}
+                <span className="text-slate-400">{new Date(ganttWindow.minT + ganttWindow.span).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Gantt timeline ── */}
