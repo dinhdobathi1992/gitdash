@@ -89,28 +89,31 @@ function BillingWidget() {
 
       {error && (
         <div className="flex flex-col gap-2 text-sm">
-          {/* 410 = personal billing deprecated — only relevant when no org was entered */}
-          {error instanceof FetchError && error.status === 410 && !org ? (
+          {error instanceof FetchError && error.status === 410 ? (
             <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <div className="flex items-center gap-2 text-amber-400">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Personal billing API deprecated</span>
+                <span className="font-medium">
+                  {org ? `Org billing API deprecated` : `Personal billing API deprecated`}
+                </span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                GitHub removed the personal Actions billing REST endpoint.
-                View your usage directly on GitHub instead.
+                {org
+                  ? `GitHub has migrated "${org}" to its new billing system. The legacy Actions billing REST API is no longer available for this org.`
+                  : `GitHub removed the personal Actions billing REST endpoint. View your usage directly on GitHub instead.`}
               </p>
               <a
-                href="https://github.com/settings/billing/summary"
+                href={
+                  org
+                    ? `https://github.com/organizations/${org}/billing`
+                    : `https://github.com/settings/billing/summary`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
               >
                 Open GitHub billing <ExternalLink className="w-3 h-3" />
               </a>
-              <p className="text-xs text-slate-500">
-                Tip: enter an org login above to view org billing (still supported).
-              </p>
             </div>
           ) : (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">

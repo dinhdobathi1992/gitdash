@@ -17,6 +17,7 @@ export interface BillingData {
 export interface BillingError {
   error: string;
   deprecated?: boolean;
+  org?: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -59,12 +60,14 @@ export async function GET(req: NextRequest) {
             ? `Organization "${org}" not found. Check the org slug or try your personal billing (leave the field blank).`
             : status === 403
             ? `Access denied for "${org}". Your PAT needs the "read:org" scope to access org billing.`
-            : status === 410 || status === 422
-            ? `"${org}" appears to be a personal account, not an organization. Leave the field blank to load personal billing.`
+            : status === 410
+            ? `GitHub has deprecated the Actions billing API for org "${org}". The org has been migrated to GitHub's new billing system.`
+            : status === 422
+            ? `"${org}" is not a valid organization slug.`
             : `Failed to fetch billing for "${org}" (GitHub status: ${status ?? "unknown"}).`;
-        // Never forward 410 for org errors — the UI reserves 410 for the personal billing deprecation notice
-        const responseStatus = status === 410 || status === 422 ? 422 : (status ?? 500);
-        return NextResponse.json({ error: message }, { status: responseStatus });
+        // Use 410 for org billing deprecation so the UI can render the right banner
+        const responseStatus = status ?? 500;
+        return NextResponse.json({ error: message, deprecated: status === 410, org }, { status: responseStatus });
       }
     } else {
       const { data: me } = await octokit.rest.users.getAuthenticated();
