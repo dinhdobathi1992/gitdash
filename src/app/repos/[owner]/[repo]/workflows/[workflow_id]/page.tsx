@@ -1183,7 +1183,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
     function csvField(v: string | number | undefined | null): string {
       return `"${String(v ?? "").replace(/"/g, '""')}"`;
     }
-    const headers = ["Run#", "Attempt", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Duration_ms", "Queue_ms", "Est_Cost_USD", "Started", "SHA", "Commit Message"];
+    const headers = ["Run#", "Attempt", "Status", "Conclusion", "Branch", "Trigger", "Actor", "Elapsed_ms", "Queue_ms", "Est_Cost_USD", "Started", "SHA", "Commit Message"];
     const rows = sortedRuns.map(r => {
       const isActive = r.status != null && ACTIVE_RUN_STATUSES.has(r.status);
       // Estimate cost from duration using actor/branch/name as proxy for runner OS
@@ -1254,7 +1254,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
               <SortTh col="branch"   label="Branch"  current={sortCol} dir={sortDir} onClick={() => toggleSort("branch")} />
               <SortTh col="trigger"  label="Trigger" current={sortCol} dir={sortDir} onClick={() => toggleSort("trigger")} />
               <SortTh col="actor"    label="Actor"   current={sortCol} dir={sortDir} onClick={() => toggleSort("actor")} />
-              <SortTh col="duration" label="Duration" current={sortCol} dir={sortDir} onClick={() => toggleSort("duration")} />
+              <SortTh col="duration" label="Elapsed" current={sortCol} dir={sortDir} onClick={() => toggleSort("duration")} />
               <SortTh col="queue"    label="Queue"   current={sortCol} dir={sortDir} onClick={() => toggleSort("queue")} />
               <SortTh col="started"  label="Started" current={sortCol} dir={sortDir} onClick={() => toggleSort("started")} />
             </tr>
@@ -1352,9 +1352,12 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
                       <span className="text-slate-500 text-xs flex items-center gap-1"><User className="w-3 h-3" />—</span>
                     )}
                   </td>
-                  {/* duration */}
+                  {/* elapsed (trigger → completed; expand row for true execution time) */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-xs text-slate-300 flex items-center gap-1">
+                    <span
+                      className="text-xs text-slate-300 flex items-center gap-1"
+                      title="Total elapsed from trigger to completion (created_at → completed_at). Expand the row to see true execution time (first job start → last job end)."
+                    >
                       <Clock className="w-3 h-3 text-slate-500" />
                       {formatDuration(run.duration_ms)}
                     </span>
