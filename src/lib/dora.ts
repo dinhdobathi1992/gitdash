@@ -353,6 +353,10 @@ export interface RepoDoraSummary extends DoraMetrics {
   cycle_breakdown: RepoCycleBreakdown;
   pr_scatter: PrScatterPoint[];
   throughput_by_week: ThroughputWeek[];
+  /** How many merged PRs were included in this analysis window */
+  prs_analysed: number;
+  /** How many GitHub releases were found (0 = fell back to PR merges) */
+  releases_analysed: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -531,6 +535,8 @@ export function calculateRepoDora(
     cycle_breakdown,
     pr_scatter,
     throughput_by_week,
+    prs_analysed: mergedPrs.length,
+    releases_analysed: releases.length,
   };
 }
 

@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Clock, GitPullRequest, XCircle } from "lucide-react";
+import { AlertTriangle, Clock, Database, GitPullRequest, XCircle } from "lucide-react";
 import { MetricTooltip } from "@/components/MetricTooltip";
 
 const TOOLTIP_STYLE = {
@@ -332,6 +332,14 @@ export function PrLifecycleExtension({
 }) {
   return (
     <div className="space-y-4">
+      {/* Data source badge */}
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <Database className="w-2.5 h-2.5" />
+        <span>
+          {data.total_open} open PRs · {data.closed_prs_analysed} recently closed PRs for benchmarks
+        </span>
+      </div>
+
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">

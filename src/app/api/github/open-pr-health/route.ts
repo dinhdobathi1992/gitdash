@@ -28,6 +28,8 @@ export interface OpenPrInfo {
 export interface OpenPrHealthResponse {
   open_prs: OpenPrInfo[];
   total_open: number;
+  /** Number of recently-closed PRs used for percentile benchmarks */
+  closed_prs_analysed: number;
 
   /** P50/P90 time-to-first-review in hours (from recently merged PRs) */
   time_to_first_review_p50_hours: number;
@@ -262,6 +264,7 @@ export async function GET(req: NextRequest) {
       })),
       abandon_rate: abandonRate,
       concurrent_prs_by_author: concurrentPrsByAuthor,
+      closed_prs_analysed: closedPrs.length,
     };
 
     return NextResponse.json(response, {

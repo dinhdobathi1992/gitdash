@@ -1,6 +1,6 @@
 "use client";
 
-import { Rocket, Clock, AlertTriangle, Wrench } from "lucide-react";
+import { Rocket, Clock, AlertTriangle, Wrench, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LEVEL_COLORS, LEVEL_LABELS, BENCHMARKS } from "@/lib/dora";
 import type { RepoDoraSummary, DoraLevel } from "@/lib/dora";
@@ -181,16 +181,26 @@ function MetricCard({ metric, data }: { metric: MetricConfig; data: RepoDoraSumm
 
 // ── Public component ──────────────────────────────────────────────────────────
 export function DoraKpiCards({ data }: { data: RepoDoraSummary }) {
+  const sourceLabel = data.releases_analysed > 0
+    ? `${data.prs_analysed} merged PRs · ${data.releases_analysed} releases`
+    : `${data.prs_analysed} merged PRs · no releases (using PR merges for deploy freq)`;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-sm font-semibold text-white">DORA Metrics</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Repo health scorecard — delivery performance over last 60 merged PRs
+            Repo health scorecard — delivery performance
           </p>
         </div>
-        <OverallBadge level={data.overall_level} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-800/60 border border-slate-700/40 rounded-full px-2.5 py-1">
+            <Database className="w-2.5 h-2.5" />
+            {sourceLabel}
+          </span>
+          <OverallBadge level={data.overall_level} />
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {METRICS.map(m => (

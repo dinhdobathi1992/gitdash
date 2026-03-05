@@ -18,6 +18,7 @@ import {
 import type { RepoDoraSummary } from "@/lib/dora";
 import type { WorkflowOverview } from "@/lib/github";
 import { MetricTooltip } from "@/components/MetricTooltip";
+import { Database } from "lucide-react";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -42,18 +43,28 @@ function SectionCard({
   title,
   subtitle,
   tooltip,
+  source,
   children,
 }: {
   title: string;
   subtitle: string;
   tooltip?: string;
+  source?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-      <div className="flex items-center gap-0.5 mb-0.5">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-        {tooltip && <MetricTooltip text={tooltip} align="left" />}
+      <div className="flex items-start justify-between gap-2 mb-0.5">
+        <div className="flex items-center gap-0.5">
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          {tooltip && <MetricTooltip text={tooltip} align="left" />}
+        </div>
+        {source && (
+          <span className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-800/60 border border-slate-700/40 rounded-full px-2 py-0.5 shrink-0">
+            <Database className="w-2.5 h-2.5" />
+            {source}
+          </span>
+        )}
       </div>
       <p className="text-xs text-slate-500 mb-4">{subtitle}</p>
       {children}
@@ -420,6 +431,7 @@ export function DoraDrillDown({
         title="PR Cycle Time Breakdown"
         subtitle="Average time in each phase of the PR lifecycle — explains lead time"
         tooltip="Splits Lead Time into 4 phases: Time to Open (code written but not yet a PR), Pickup Time (PR waiting for first review), Review Time (under review), and Merge Time (approved but not yet merged). Each bar segment is proportional to its share of total lead time."
+        source={`top 20 of ${dora.prs_analysed} merged PRs`}
       >
         <PrCycleBreakdown breakdown={dora.cycle_breakdown} />
       </SectionCard>
@@ -429,6 +441,7 @@ export function DoraDrillDown({
         title="PR Size vs. Merge Velocity"
         subtitle="Lines changed (X) vs hours to merge (Y) — smaller PRs ship faster"
         tooltip="Each dot is a merged PR. The X-axis shows lines changed (additions + deletions), the Y-axis shows hours from PR open to merge. The trend line confirms that smaller PRs merge faster — use this to encourage right-sized changes."
+        source={`${dora.pr_scatter.length} merged PRs`}
       >
         <PrSizeScatter points={dora.pr_scatter} />
       </SectionCard>
@@ -438,6 +451,7 @@ export function DoraDrillDown({
         title="PR Throughput"
         subtitle="Merged PRs per week over the last 12 weeks — explains deployment frequency"
         tooltip="Number of PRs merged to the default branch each calendar week. A steady or rising trend indicates a healthy delivery cadence. Sudden drops may signal blocked work, vacations, or process bottlenecks."
+        source={`${dora.prs_analysed} merged PRs · weekly buckets`}
       >
         <PrThroughput weeks={dora.throughput_by_week} />
       </SectionCard>
@@ -447,6 +461,7 @@ export function DoraDrillDown({
         title="Workflow Stability"
         subtitle="Default branch pass rate over 30 days — correlates with change failure rate"
         tooltip="Percentage of CI workflow runs on the default branch that completed successfully, plotted daily over 30 days. Dashed reference lines mark Elite (95%) and High (80%) DORA thresholds. A persistently red main branch directly raises your Change Failure Rate."
+        source={`${overview.length} workflows · last 20 runs each`}
       >
         <WorkflowStability overview={overview} />
       </SectionCard>
