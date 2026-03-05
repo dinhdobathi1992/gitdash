@@ -1,165 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
-import { fetcher, FetchError } from "@/lib/swr";
 import { useAuth } from "@/components/AuthProvider";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import { Breadcrumb } from "@/components/Sidebar";
-import type { BillingData } from "@/app/api/github/billing/route";
 import type { FeatureFlags } from "@/lib/feature-flags";
 import {
-  CheckCircle, AlertCircle, ExternalLink, Clock, CreditCard,
-  Monitor, Apple, Server, LogOut, User, Building2, Key, Eye, EyeOff,
+  CheckCircle, AlertCircle, Clock, ExternalLink, LogOut, Key, Eye, EyeOff,
   ToggleLeft, ToggleRight, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ── Mini progress bar ─────────────────────────────────────────────────────────
-function MinutesBar({ used, included }: { used: number; included: number }) {
-  const pct = included > 0 ? Math.min(100, Math.round((used / included) * 100)) : 0;
-  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-violet-500";
-  return (
-    <div className="mt-1">
-      <div className="flex justify-between text-xs text-slate-400 mb-1">
-        <span>{used.toLocaleString()} min used</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
-      </div>
-      <p className="text-xs text-slate-500 mt-1">{included.toLocaleString()} min included</p>
-    </div>
-  );
-}
-
-// ── Billing widget ────────────────────────────────────────────────────────────
-function BillingWidget() {
-  const [orgInput, setOrgInput] = useState("");
-  const [org, setOrg] = useState("");
-
-  const key = `/api/github/billing${org ? `?org=${org}` : ""}`;
-  const { data, error, isLoading } = useSWR<BillingData>(key, fetcher<BillingData>, {
-    revalidateOnFocus: false,
-  });
-
-  const breakdown = data?.minutes_used_breakdown ?? {};
-  const runners: {
-    label: string; key: keyof typeof breakdown; icon: React.ElementType; color: string;
-  }[] = [
-    { label: "Ubuntu",  key: "UBUNTU",  icon: Server,  color: "text-green-400" },
-    { label: "macOS",   key: "MACOS",   icon: Apple,   color: "text-blue-400"  },
-    { label: "Windows", key: "WINDOWS", icon: Monitor,  color: "text-amber-400" },
-  ];
-
-  return (
-    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-          <CreditCard className="w-4 h-4 text-blue-400" />
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold text-white">Actions Billing</h2>
-          <p className="text-xs text-slate-400">Monthly GitHub Actions minutes usage</p>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <input
-          value={orgInput}
-          onChange={(e) => setOrgInput(e.target.value)}
-          placeholder="Org login (leave blank for personal)"
-          className="flex-1 px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-        />
-        <button
-          onClick={() => setOrg(orgInput.trim())}
-          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg text-sm transition-colors"
-        >
-          Load
-        </button>
-      </div>
-
-      {isLoading && (
-        <div className="space-y-2">
-          <div className="h-4 w-40 rounded skeleton" />
-          <div className="h-2 w-full rounded skeleton" />
-          <div className="h-3 w-24 rounded skeleton" />
-        </div>
-      )}
-
-      {error && (
-        <div className="flex flex-col gap-2 text-sm">
-          {error instanceof FetchError && error.status === 410 ? (
-            <div className="flex flex-col gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <div className="flex items-center gap-2 text-amber-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">
-                  {org ? `Org billing API deprecated` : `Personal billing API deprecated`}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {org
-                  ? `GitHub has migrated "${org}" to its new billing system. The legacy Actions billing REST API is no longer available for this org.`
-                  : `GitHub removed the personal Actions billing REST endpoint. View your usage directly on GitHub instead.`}
-              </p>
-              <a
-                href={
-                  org
-                    ? `https://github.com/organizations/${org}/billing`
-                    : `https://github.com/settings/billing/summary`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-              >
-                Open GitHub billing <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error.message ?? "Failed to load billing data"}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {data && !isLoading && (
-        <>
-          <div>
-            <p className="text-xs text-slate-400 mb-1">
-              {data.kind === "org"
-                ? <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {data.login}</span>
-                : <span className="flex items-center gap-1"><User className="w-3 h-3" /> {data.login}</span>}
-            </p>
-            <MinutesBar used={data.total_minutes_used} included={data.included_minutes} />
-            {data.total_paid_minutes_used > 0 && (
-              <p className="text-xs text-amber-400 mt-1">
-                +{data.total_paid_minutes_used.toLocaleString()} paid minutes this month
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {runners.map(({ label, key: k, icon: Icon, color }) => (
-              <div key={k} className="bg-slate-900/40 border border-slate-700/40 rounded-lg px-3 py-2.5">
-                <div className={cn("flex items-center gap-1.5 text-xs mb-1", color)}>
-                  <Icon className="w-3.5 h-3.5" /> {label}
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-base font-semibold text-white tabular-nums">
-                    {(breakdown[k] ?? 0).toLocaleString()}
-                  </span>
-                  <span className="text-xs text-slate-500">min</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 // ── PAT management widget (standalone mode only) ──────────────────────────────
 function PatWidget({ login }: { login: string }) {
@@ -466,9 +316,6 @@ export default function SettingsPage() {
 
       {/* Feature flags */}
       <FeaturesWidget />
-
-      {/* Billing */}
-      <BillingWidget />
 
       {/* Auth info */}
       <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5 space-y-3">
