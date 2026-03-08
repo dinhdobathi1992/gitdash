@@ -23,7 +23,7 @@ config:
 
   # Public-facing URL — used for the OAuth callback URL in organization mode.
   # Must match your ingress host (including scheme).
-  appUrl: "https://gitdash.example.com"
+  appUrl: "https://gitdash.cactus.eks.aws.theiconic.com.au"
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 secret:
@@ -57,17 +57,18 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    cert-manager.io/cluster-issuer: "ingress-issuer"
 
   hosts:
-    - host: gitdash.example.com
+    - host: gitdash.cactus.eks.aws.theiconic.com.au
       paths:
         - path: /
           pathType: Prefix
 
-  tls: []
-  # - secretName: gitdash-tls
-  #   hosts:
-  #     - gitdash.example.com
+  tls:
+    - secretName: gitdash-tls
+      hosts:
+        - gitdash.cactus.eks.aws.theiconic.com.au
 
 # ── Resources ─────────────────────────────────────────────────────────────────
 resources:
