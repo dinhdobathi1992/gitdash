@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.1] — 2026-03-09
+
+### Overview
+Critical fix for reverse-proxy deployments: redirects now use the public-facing origin instead of the container's internal address. Middleware was also not running due to wrong filename/export.
+
+---
+
+### Fixed
+
+#### Redirects go to container address behind reverse proxy (#3)
+- All `NextResponse.redirect(new URL("/path", req.url))` calls resolved to `https://0.0.0.0:3000` behind NGINX ingress because `req.url` uses the container's `HOSTNAME`
+- New `src/lib/url.ts` exports `publicUrl()` which reconstructs the external origin from `x-forwarded-proto` + `x-forwarded-host` headers (set by NGINX/ALB), with fallback to `NEXT_PUBLIC_APP_URL`, then `req.url`
+- All redirect calls in middleware and auth route handlers now use `publicUrl()`
+
+#### Middleware was never active
+- `src/proxy.ts` exported `proxy()` — Next.js requires `src/middleware.ts` exporting `middleware()`
+- Renamed file and export so the auth middleware actually runs
+
+#### Helm chart uses wrong ingress class
+- Replaced ALB ingress annotations with NGINX ingress annotations
+- Set `className: "internal-ingress-nginx"` (matches cluster's installed controller)
+- Removed `certificateArn` value and ALB-specific template logic from `ingress.yaml`
+
+### Changed
+- Bumped version from 3.1.0 to 3.1.1
+
+---
+
 ## [3.1.0] — 2026-03-08
 
 ### Overview

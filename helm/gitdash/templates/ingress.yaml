@@ -6,13 +6,10 @@ metadata:
   namespace: {{ include "gitdash.namespace" . }}
   labels:
     {{- include "gitdash.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
   annotations:
-    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-    {{- end }}
-    {{- if .Values.ingress.certificateArn }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn | quote }}
-    {{- end }}
+  {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className | quote }}

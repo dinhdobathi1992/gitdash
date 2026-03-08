@@ -50,36 +50,13 @@ ingress:
   enabled: true
 
   # ingressClassName is set on spec.ingressClassName (preferred in k8s ≥1.18)
-  # Leave empty to rely on the annotation below instead.
-  className: ""
+  className: "internal-ingress-nginx"
 
   annotations:
-    # AWS ALB (requires AWS Load Balancer Controller)
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-
-    # HTTPS redirect
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-
-    # Health check
-    alb.ingress.kubernetes.io/healthcheck-path: /api/auth/me
-    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
-    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
-    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
-
-    # ALB idle timeout
-    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
-
-    # Cost-allocation tags
-    alb.ingress.kubernetes.io/tags: "app=gitdash,env=production"
-
-  # ACM certificate ARN — set this to enable TLS on the ALB.
-  # Example: arn:aws:acm:ap-southeast-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  # Leave empty to omit the annotation (ALB will listen on HTTP only).
-  certificateArn: ""
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
 
   hosts:
     - host: gitdash.example.com
@@ -87,8 +64,6 @@ ingress:
         - path: /
           pathType: Prefix
 
-  # Standard k8s TLS block (not used by ALB — ALB TLS is via certificateArn above).
-  # Uncomment if using nginx-ingress or another controller that handles TLS here.
   tls: []
   # - secretName: gitdash-tls
   #   hosts:

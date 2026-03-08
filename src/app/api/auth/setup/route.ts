@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { isStandaloneMode } from "@/lib/mode";
 import { getOctokit } from "@/lib/github";
 import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
+import { publicUrl } from "@/lib/url";
 
 // HIGH-002: 5 attempts per minute per IP on the PAT setup endpoint
 const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
@@ -77,8 +78,8 @@ export async function DELETE(req: NextRequest) {
     session.pat = undefined;
     session.user = undefined;
     await session.save();
-    return NextResponse.redirect(new URL("/setup", req.url));
+    return NextResponse.redirect(publicUrl("/setup", req));
   } catch {
-    return NextResponse.redirect(new URL("/setup", req.url));
+    return NextResponse.redirect(publicUrl("/setup", req));
   }
 }

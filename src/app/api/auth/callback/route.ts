@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
+import { publicUrl } from "@/lib/url";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get("error");
 
   if (error || !code) {
-    return NextResponse.redirect(new URL("/login?error=access_denied", req.url));
+    return NextResponse.redirect(publicUrl("/login?error=access_denied", req));
   }
 
   // Validate CSRF state token
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
       ts: new Date().toISOString(),
     });
-    return NextResponse.redirect(new URL("/login?error=state_mismatch", req.url));
+    return NextResponse.redirect(publicUrl("/login?error=state_mismatch", req));
   }
 
   // HIGH-004: Reject state tokens older than 5 minutes
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     session.oauthState = undefined;
     session.oauthStateExpiry = undefined;
     await session.save();
-    return NextResponse.redirect(new URL("/login?error=state_expired", req.url));
+    return NextResponse.redirect(publicUrl("/login?error=state_expired", req));
   }
 
   // Clear the one-time state token immediately (already good ✅)
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL("/login?error=config", req.url));
+    return NextResponse.redirect(publicUrl("/login?error=config", req));
   }
 
   try {
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
 
     if (!tokenData.access_token) {
-      return NextResponse.redirect(new URL("/login?error=token_exchange", req.url));
+      return NextResponse.redirect(publicUrl("/login?error=token_exchange", req));
     }
 
     // Fetch user identity
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
     };
     await session.save();
 
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.redirect(publicUrl("/", req));
   } catch {
-    return NextResponse.redirect(new URL("/login?error=server", req.url));
+    return NextResponse.redirect(publicUrl("/login?error=server", req));
   }
 }

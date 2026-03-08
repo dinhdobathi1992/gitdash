@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isStandaloneMode } from "@/lib/mode";
+import { publicUrl } from "@/lib/url";
 import { randomBytes } from "crypto";
 import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
 
@@ -10,7 +11,7 @@ const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 export async function GET(req: NextRequest) {
   // Standalone mode has no OAuth login — redirect to setup
   if (isStandaloneMode()) {
-    return NextResponse.redirect(new URL("/setup", req.url));
+    return NextResponse.redirect(publicUrl("/setup", req));
   }
 
   // Rate limit OAuth initiation
