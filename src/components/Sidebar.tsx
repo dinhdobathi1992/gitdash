@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useSyncExternalStore } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
@@ -31,18 +31,18 @@ export function useOrgs() {
 // ── Watchlist ─────────────────────────────────────────────────────────────────
 
 const WATCHLIST_KEY = "gitdash:watchlist";
-const emptySubscribe = () => () => {};
+const EMPTY_PINNED: string[] = [];
 
 function WatchlistSection({ onClose }: { onClose?: () => void }) {
-  const pinned = useSyncExternalStore(
-    emptySubscribe,
-    () => {
-      try {
-        return JSON.parse(localStorage.getItem(WATCHLIST_KEY) ?? "[]") as string[];
-      } catch { return []; }
-    },
-    () => [] as string[],
-  );
+  const [pinned, setPinned] = useState<string[]>(EMPTY_PINNED);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(WATCHLIST_KEY) ?? "[]") as string[];
+      if (stored.length > 0) setPinned(stored);
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="mt-5">
