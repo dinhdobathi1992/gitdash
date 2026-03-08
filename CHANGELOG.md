@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.2] — 2026-03-09
+
+### Overview
+Fix readiness/liveness probe failures caused by middleware redirecting unauthenticated kubelet health checks after the #3 middleware activation fix.
+
+---
+
+### Fixed
+
+#### Readiness/liveness probes fail behind middleware (#4)
+- Kubelet probe requests to `/api/auth/me` were redirected by the now-active middleware (no session cookie → 302 to `/setup` or `/login`)
+- Created dedicated `/api/health` endpoint returning `{"status":"ok"}` with no auth required
+- Added `/api/health` to middleware's `ALWAYS_PUBLIC` list so it bypasses auth checks
+- Updated Helm chart probe paths from `/api/auth/me` to `/api/health`
+- Reduced `initialDelaySeconds` (readiness: 10→5, liveness: 30→10) since the health endpoint is trivial
+
+### Changed
+- Bumped app version from 3.1.1 to 3.1.2
+- Bumped Helm chart version to 0.2.0 / appVersion to 3.1.2
+
+---
+
 ## [3.1.1] — 2026-03-09
 
 ### Overview

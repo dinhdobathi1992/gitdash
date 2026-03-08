@@ -5,7 +5,7 @@ import { isStandaloneMode } from "@/lib/mode";
 import { publicUrl } from "@/lib/url";
 
 // Paths that never require auth
-const ALWAYS_PUBLIC = ["/_next", "/favicon", "/docs", "/api/webhooks"];
+const ALWAYS_PUBLIC = ["/_next", "/favicon", "/docs", "/api/webhooks", "/api/health"];
 
 // Mode-specific public paths
 const STANDALONE_PUBLIC = ["/setup", "/api/auth/setup"];
