@@ -33,7 +33,7 @@
 
 Get a quick overview of what GitDash can do:
 
-https://github.com/dinhdobathi1992/gitdash/raw/main/walkthrough-output/GitDash__GitHub_Actions.mp4
+https://github.com/user-attachments/assets/e9228cb1-3287-456c-b4f7-e2e351f98beb
 
 ---
 
@@ -41,7 +41,7 @@ https://github.com/dinhdobathi1992/gitdash/raw/main/walkthrough-output/GitDash__
 
 Watch a full walkthrough of GitDash in action — navigating repos, exploring DORA metrics, workflow analytics, team insights, cost tracking, and more:
 
-https://github.com/dinhdobathi1992/gitdash/raw/main/walkthrough-output/gitdash-walkthrough.webm
+https://github.com/user-attachments/assets/8cf2625a-3a88-4494-a703-07cb5181c11a
 
 ---
 
