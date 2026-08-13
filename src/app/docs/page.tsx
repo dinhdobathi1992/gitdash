@@ -341,6 +341,31 @@ function Configuration() {
               <span key="r6" className="text-slate-400 text-xs">Optional</span>,
               "Public URL of the deployment. Used to build OAuth callback URLs and enforce HTTPS redirects.",
             ],
+            [
+              <Code key="v7">GITHUB_WEBHOOK_SECRET</Code>,
+              <span key="r7" className="text-slate-400 text-xs">Optional</span>,
+              <>Secret used to verify the HMAC signature on <Code>/api/webhooks/github</Code>. If unset, the webhook endpoint rejects all requests.</>,
+            ],
+            [
+              <Code key="v8">GITHUB_TOKEN</Code>,
+              <span key="r8" className="text-slate-400 text-xs">Optional</span>,
+              "Fallback GitHub token used server-side when no session token is available.",
+            ],
+            [
+              <Code key="v9">NEXT_PUBLIC_DEMO_MODE</Code>,
+              <span key="r9" className="text-slate-400 text-xs">Optional</span>,
+              <>Set to <Code>true</Code> to serve sanitized demo data with no token. Demo mode can also be enabled per-request with <Code>?demo=1</Code>.</>,
+            ],
+            [
+              <Code key="v10">RESEND_API_KEY</Code>,
+              <span key="r10" className="text-slate-400 text-xs">Optional</span>,
+              <>Enables Resend email delivery for alert rules (preferred provider). Pair with <Code>RESEND_FROM</Code> to set the sender address.</>,
+            ],
+            [
+              <Code key="v11">SMTP_HOST</Code>,
+              <span key="r11" className="text-slate-400 text-xs">Optional</span>,
+              <>Generic SMTP email delivery for alerts when Resend is not used. With <Code>SMTP_USER</Code>, <Code>SMTP_PASS</Code>, <Code>SMTP_FROM</Code> (or <Code>SENDGRID_API_KEY</Code>).</>,
+            ],
           ]}
         />
       </DocCard>
@@ -691,7 +716,7 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
     {
       id: "feat-workflow",
       name: "Workflow Detail",
-      path: "/repos/[owner]/[repo]/workflows/[id]",
+      path: "/repos/[owner]/[repo]/workflows/[workflow_id]",
       screenshot: "01-overview.png",
       desc: "5-tab deep-dive into a single workflow. Auto-refreshes every 30 seconds while runs are active. Includes CI-based DORA metrics, cost estimation per run, queue wait analysis, anomaly detection, and actionable optimization recommendations.",
       chips: ["Optimization Intelligence", "Cost estimation", "Queue analysis", "Anomaly detection"],
@@ -840,7 +865,7 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
           headers={["Context", "Data source", "Location"]}
           rows={[
             ["Repository level", "Merged PRs + GitHub Releases — true delivery pipeline metrics", "/repos/[owner]/[repo] — DORA KPI cards + drill-down"],
-            ["Workflow level", "CI workflow run outcomes — proxy metrics for the build pipeline", "/repos/[owner]/[repo]/workflows/[id] — Overview tab"],
+            ["Workflow level", "CI workflow run outcomes — proxy metrics for the build pipeline", "/repos/[owner]/[repo]/workflows/[workflow_id] — Overview tab"],
           ]}
         />
       </DocCard>
@@ -953,7 +978,7 @@ function FeatureWorkflowDetail() {
   return (
     <section className="space-y-6">
       <FeaturePageHeader
-        icon={Activity} name="Workflow Detail" path="/repos/[owner]/[repo]/workflows/[id]"
+        icon={Activity} name="Workflow Detail" path="/repos/[owner]/[repo]/workflows/[workflow_id]"
         chips={["5 tabs", "DORA metrics", "Cost estimate", "Queue analysis", "Anomaly detection", "Optimization tips", "Auto-refresh"]}
       />
       <ProseP>
@@ -1149,7 +1174,7 @@ function FeatureReports() {
         chips={["Daily trend", "Quarterly summary", "DB sync"]}
       />
       <ProseP>
-        DB-backed historical reporting using the SQLite (or Neon PostgreSQL) database. The daily area
+        DB-backed historical reporting using the Neon PostgreSQL database. The daily area
         chart shows pass/fail run counts over time. The quarterly breakdown table aggregates by quarter.
         A manual sync button pulls the latest runs from GitHub into the database on demand.
       </ProseP>
@@ -1651,7 +1676,7 @@ function APIReference() {
       <SectionHeading id="api-reference" icon={Code2} badge="REST">API Reference</SectionHeading>
 
       <Callout type="info">
-        All API routes require an authenticated session. Unauthenticated requests receive a <Code>401 Unauthorized</Code> response and are redirected to the login page.
+        Most API routes require an authenticated session — unauthenticated requests receive a <Code>401 Unauthorized</Code> response. The exceptions are the public endpoints <Code>/api/health</Code> (liveness/readiness probes), <Code>/api/demo</Code> (sanitized fixture data for demo mode), and <Code>/api/webhooks/github</Code> (authenticated by HMAC signature, not a session cookie).
       </Callout>
 
       {[
@@ -1767,6 +1792,75 @@ function APIReference() {
           ],
         },
         {
+          method: "GET",
+          path: "/api/github/repo-summary",
+          description: "Lightweight per-repo summary — default branch, latest run status, workflow count, and health signal. Called lazily as repository rows enter the viewport.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/run-details",
+          description: "Job and step breakdown for a single workflow run: per-job status, timing, and step-level detail.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+            { name: "run_id", type: "number", optional: false, desc: "Workflow run ID." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/open-pr-health",
+          description: "Open pull-request health for a repository: age, review rounds, draft state, and awaiting-review flags per PR.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/org-overview",
+          description: "Aggregated org-level metrics across all active repositories — totals, active-repo count, and per-repo summaries. Expensive multi-request call (cached 15 min).",
+          params: [
+            { name: "org", type: "string", optional: false, desc: "Organization slug." },
+            { name: "limit", type: "number", optional: true, desc: "Max repositories to analyse." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/org-repos",
+          description: "List all repositories in an organization.",
+          params: [
+            { name: "org", type: "string", optional: false, desc: "Organization slug." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/orgs",
+          description: "List organizations the authenticated user belongs to.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/github/billing",
+          description: "GitHub Actions billing for the authenticated user or an org: minutes used, paid minutes, included minutes, and per-OS breakdown.",
+          params: [
+            { name: "org", type: "string", optional: true, desc: "Organization slug; omit for the authenticated user." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/billing/cost-analysis",
+          description: "Detailed GitHub Actions cost breakdown via the Enhanced Billing API — per-product/SKU usage and spend for a given month. Some org/account combinations require fine-grained PAT permissions.",
+          params: [
+            { name: "org", type: "string", optional: false, desc: "Organization slug." },
+            { name: "year", type: "number", optional: true, desc: "Billing year (defaults to current)." },
+            { name: "month", type: "number", optional: true, desc: "Billing month 1–12 (defaults to current)." },
+          ],
+        },
+        {
           method: "POST",
           path: "/api/db/sync",
           description: "Trigger incremental sync of GitHub workflow runs to the database. Checks alert rules after sync completes.",
@@ -1774,8 +1868,141 @@ function APIReference() {
             { name: "org", type: "string", optional: true, desc: "Limit sync to a specific org." },
           ],
         },
+        {
+          method: "GET",
+          path: "/api/db/runs",
+          description: "Historical workflow runs from the Neon database (not the GitHub API). Requires DATABASE_URL; returns 0 results if the DB has no data for the repo yet.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+            { name: "limit", type: "number", optional: true, desc: "Max rows to return." },
+            { name: "offset", type: "number", optional: true, desc: "Pagination offset." },
+            { name: "conclusion", type: "string", optional: true, desc: "Filter by run conclusion (e.g. failure)." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/db/trends",
+          description: "Aggregated historical trend data from the Neon database — daily rollups for charts, quarterly summaries for year-over-year, or org-wide daily trends.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner (or org login for org trends)." },
+            { name: "repo", type: "string", optional: true, desc: "Repository name (omit for org trends)." },
+            { name: "type", type: "string", optional: true, desc: "daily (default), quarterly, or org." },
+            { name: "days", type: "number", optional: true, desc: "Window for daily rollups." },
+            { name: "quarters", type: "number", optional: true, desc: "Number of quarters for quarterly summaries." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/alerts",
+          description: "List alert rules, optionally filtered by scope. Set events=1 to also return the 50 most recent alert events.",
+          params: [
+            { name: "scope", type: "string", optional: true, desc: "Filter to a scope, e.g. repo:owner/name." },
+            { name: "events", type: "string", optional: true, desc: "Set to 1 to include recent alert events." },
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/alerts",
+          description: "Create an alert rule.",
+          params: [
+            { name: "scope", type: "string", optional: false, desc: "(body) Rule scope, e.g. repo:owner/name." },
+            { name: "metric", type: "string", optional: false, desc: "(body) Metric to watch." },
+            { name: "threshold", type: "number", optional: false, desc: "(body) Threshold that triggers the alert." },
+            { name: "window_hours", type: "number", optional: true, desc: "(body) Evaluation window (default 24)." },
+            { name: "channel", type: "string", optional: true, desc: "(body) Delivery channel (default browser)." },
+            { name: "destination", type: "string", optional: true, desc: "(body) Email address for email delivery." },
+          ],
+        },
+        {
+          method: "PATCH",
+          path: "/api/alerts",
+          description: "Update an existing alert rule — enable/disable or change threshold, window, or destination.",
+          params: [
+            { name: "id", type: "number", optional: false, desc: "(body) Alert rule ID." },
+          ],
+        },
+        {
+          method: "DELETE",
+          path: "/api/alerts",
+          description: "Delete an alert rule.",
+          params: [
+            { name: "id", type: "number", optional: false, desc: "Alert rule ID." },
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/alerts/test",
+          description: "Send a test alert for a rule without a real threshold breach (uses a synthetic value of 1).",
+          params: [
+            { name: "rule_id", type: "number", optional: false, desc: "(body) Alert rule ID to test." },
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/webhooks/github",
+          description: "Receive GitHub workflow_run webhook events and upsert runs into the database. Authenticated by HMAC-SHA256 signature against GITHUB_WEBHOOK_SECRET — no session required. Rejects all requests if the secret is unset (fail-safe).",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/health",
+          description: "Liveness/readiness probe. Returns {\"status\":\"ok\"} with no authentication. Used by Kubernetes and load balancers.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/demo",
+          description: "Sanitized fixture data for demo mode. No authentication required — the payload contains no real credentials.",
+          params: [
+            { name: "resource", type: "string", optional: false, desc: "repos, runs, or summary." },
+            { name: "repo", type: "string", optional: true, desc: "Repository name for run/summary fixtures." },
+            { name: "count", type: "number", optional: true, desc: "Number of synthetic runs to generate." },
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/auth/setup",
+          description: "Standalone mode: validate the submitted PAT and store it in an encrypted session cookie. Rate-limited.",
+          params: [
+            { name: "pat", type: "string", optional: false, desc: "(body) GitHub Personal Access Token." },
+          ],
+        },
+        {
+          method: "DELETE",
+          path: "/api/auth/setup",
+          description: "Standalone mode: clear the stored PAT (sign out).",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/auth/login",
+          description: "Organization mode: begin the GitHub OAuth flow (redirects to GitHub). Rate-limited.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/auth/callback",
+          description: "Organization mode: OAuth redirect target — verifies state, exchanges the code, and creates the session.",
+          params: [
+            { name: "code", type: "string", optional: false, desc: "OAuth authorization code (set by GitHub)." },
+            { name: "state", type: "string", optional: false, desc: "CSRF state token (set by GitHub)." },
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/auth/logout",
+          description: "Destroy the session cookie and sign the user out.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/auth/me",
+          description: "Return the current session identity (login, mode), or 401 if unauthenticated.",
+          params: [],
+        },
       ].map((endpoint) => (
-        <DocCard key={endpoint.path}>
+        <DocCard key={`${endpoint.method} ${endpoint.path}`}>
           <div className="flex items-center gap-3 mb-3">
             <span className={cn(
               "text-xs font-mono font-bold px-2.5 py-1 rounded-lg",
@@ -1941,9 +2168,30 @@ npm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
+      version: "3.1.3",
+      date: "2026-03-13",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "3.x release line — responsive mobile navigation, redesigned settings, global footer, demo mode, and test infrastructure (Vitest)",
+          "DB-backed reporting and alert rules with browser and email delivery (Resend / SendGrid / SMTP)",
+          "Cost analytics via the GitHub Enhanced Billing API",
+          "Reverse-proxy / Zscaler support — redirects use the public-facing origin from x-forwarded headers; dedicated /api/health endpoint for Kubernetes probes",
+        ],
+        fixed: [
+          "Middleware activation and reverse-proxy redirect fixes (issues #3, #4); ALWAYS_PUBLIC check now runs before the HTTPS redirect so probes and static assets are never redirected",
+        ],
+        improved: [
+          "API Reference rebuilt to cover all REST endpoints; docs corrected (Neon Postgres only — no SQLite; middleware path is src/middleware.ts)",
+          "See CHANGELOG.md for the full 3.0.0 → 3.1.3 history",
+        ],
+      },
+    },
+    {
       version: "2.10.1",
       date: "2026-03-03",
-      badge: "latest",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -1958,7 +2206,7 @@ function ReleaseNotes() {
         ],
         fixed: [],
         improved: [
-          "Full feature audit — API Reference updated with all 14 endpoints, descriptions corrected to match live code",
+          "Full feature audit — API Reference and feature pages refreshed to match live code",
           "DocSearch section labels now distinguish Features / Reference / Support groups",
         ],
       },
@@ -2172,7 +2420,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.10.1"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.1.3"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2417,7 +2665,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "2.10.1"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.1.3"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

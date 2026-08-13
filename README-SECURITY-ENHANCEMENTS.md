@@ -119,7 +119,7 @@ New section at the end of README with **complete audit instructions** for:
 - Expected: ZERO matches ✓
 
 #### 5. Middleware Authentication
-- File: `src/proxy.ts`
+- File: `src/middleware.ts`
 - Commands to check: session validation, encrypted cookie
 - What to verify (redirect on missing PAT)
 
@@ -268,7 +268,7 @@ New section at the end of README with **complete audit instructions** for:
 2. `src/app/api/auth/setup/route.ts`
 3. `src/lib/session.ts`
 4. `src/lib/github.ts`
-5. `src/proxy.ts`
+5. `src/middleware.ts`
 6. `src/app/api/auth/logout/route.ts`
 7. `Dockerfile`
 8. `package.json`

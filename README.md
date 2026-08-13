@@ -245,7 +245,7 @@ Browser  ──▶  /api/*  ──▶  Server reads token from encrypted session
 
 | Path | Purpose |
 | --- | --- |
-| `src/proxy.ts` | Auth gating + production HTTPS redirect |
+| `src/middleware.ts` | Auth gating + production HTTPS redirect (Next.js middleware) |
 | `src/lib/session.ts` | Encrypted session cookie configuration |
 | `src/lib/mode.ts` | Auth mode selection (`standalone` vs `organization`) |
 | `src/app/api/github/*` | GitHub data endpoints |
@@ -303,6 +303,13 @@ Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workf
 | `DATABASE_URL` | Optional | Enables historical DB sync, trends, and alerts |
 | `GITHUB_WEBHOOK_SECRET` | Optional | Signature verification for `/api/webhooks/github` |
 | `GITHUB_TOKEN` | Optional | Fallback when no session token is available |
+| `NEXT_PUBLIC_DEMO_MODE` | Optional | `true` serves sanitized demo data with no token (also enabled per-request via `?demo=1`) |
+| `RESEND_API_KEY` | Optional | Enables Resend email delivery for alert rules (preferred email provider) |
+| `RESEND_FROM` | Optional | From address for Resend emails (default `alerts@gitdash.app`) |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional | Generic SMTP email delivery for alerts when Resend is not used |
+| `SENDGRID_API_KEY` | Optional | Alternative to `SMTP_PASS` for SendGrid-based email delivery |
+
+> `NEXT_PUBLIC_APP_VERSION` is set automatically at build time from `package.json` — you do not set it manually.
 
 ---
 
@@ -314,7 +321,7 @@ Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workf
 | --- | --- |
 | `/` | Repository dashboard |
 | `/repos/[owner]/[repo]` | Repository overview + links to audit, security, team |
-| `/repos/[owner]/[repo]/workflows/[id]` | Workflow analytics tabs |
+| `/repos/[owner]/[repo]/workflows/[workflow_id]` | Workflow analytics tabs |
 | `/team` | Team insights |
 | `/cost-analytics` | Cost analytics |
 | `/reports` | Historical reports |
@@ -356,7 +363,7 @@ gitdash/
 │   ├── app/                  # Pages + route handlers
 │   ├── components/           # UI and shared client components
 │   ├── lib/                  # Core logic (GitHub, DB, sessions, validation)
-│   └── proxy.ts              # Auth/redirect proxy layer
+│   └── middleware.ts         # Auth gating + HTTPS redirect (Next.js middleware)
 ├── walkthrough-output/       # Intro video + demo walkthrough
 ├── public/screenshots/       # Application screenshots
 ├── docs/                     # Plans & design docs
@@ -420,7 +427,7 @@ The docs cover:
 
 > **Tip:** The docs page includes full-text search, tabbed examples, and interactive code blocks.
 
-For the DORA Metrics integration plan and roadmap, see [`docs/DORA-REPO-METRICS-PLAN.md`](docs/DORA-REPO-METRICS-PLAN.md).
+For the original DORA Metrics integration plan (now implemented, kept for reference), see [`docs/archive/DORA-REPO-METRICS-PLAN.md`](docs/archive/DORA-REPO-METRICS-PLAN.md).
 
 ---
 

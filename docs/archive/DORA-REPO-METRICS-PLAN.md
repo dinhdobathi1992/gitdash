@@ -1,5 +1,12 @@
 # Repository Overview: DORA Metrics Integration Plan
 
+> **⚠️ ARCHIVED — IMPLEMENTED.** This plan has shipped. It is kept for historical
+> reference only. The work landed under different names than proposed here:
+> the API route is `src/app/api/github/repo-dora/route.ts`, the logic lives in
+> `src/lib/github-dora.ts` (+ benchmarks in `src/lib/dora.ts`), and the UI shipped
+> as `src/components/DoraKpiCards.tsx` / `DoraDrillDown.tsx` (not the `DoraScorecard.tsx`
+> named below). Do not treat file/component names in this document as current.
+
 ## 1. Goal
 Enhance the GitDash Repository Overview page (`/repos/[owner]/[repo]`) by introducing a dedicated **DORA Performance** section. This section will shift focus from purely CI/CD workflow metrics to overall engineering velocity by analyzing Pull Request lifecycle and throughput.
 

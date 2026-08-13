@@ -6,6 +6,30 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.3] — 2026-03-13
+
+### Overview
+Reverse-proxy / Zscaler robustness: allow public paths (health probes, static assets) to bypass the HTTPS redirect, and enable outbound TLS through Zscaler inspection during development.
+
+---
+
+### Added
+
+#### Run behind Zscaler
+- Set `experimental.turbopackUseSystemTlsCerts: true` in `next.config.ts` so outbound requests (e.g. Google Fonts during dev) trust the system certificate store when Zscaler TLS inspection is active.
+
+### Fixed
+
+#### `ALWAYS_PUBLIC` check now runs before the HTTPS redirect
+- Reordered `src/middleware.ts` so the `ALWAYS_PUBLIC` allowlist (`/_next`, `/favicon`, `/docs`, `/api/webhooks`, `/api/health`) is evaluated **before** the production HTTP→HTTPS redirect.
+- Previously, kubelet probes and static assets — which carry no `x-forwarded-proto` header — could be redirected, breaking health checks and asset loading behind a reverse proxy.
+
+### Changed
+- Bumped app version from 3.1.2 to 3.1.3
+- Bumped Helm chart version to 0.2.1 / appVersion to 3.1.3
+
+---
+
 ## [3.1.2] — 2026-03-09
 
 ### Overview
