@@ -9,10 +9,12 @@ import {
   ChevronDown, LogOut, Key, DollarSign, BarChart3, Bell, BookOpen, Users, X,
   Pin,
 } from "lucide-react";
+import { Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { fetcher } from "@/lib/swr";
 import { GitHubOrg } from "@/lib/github";
+import type { RateLimitStatus } from "@/app/api/github/rate-limit/route";
 
 const NAV = [
   { href: "/",               label: "Repositories",   icon: LayoutDashboard },
@@ -26,6 +28,60 @@ const NAV = [
 
 export function useOrgs() {
   return useSWR<GitHubOrg[]>("/api/github/orgs", fetcher<GitHubOrg[]>);
+}
+
+// ── Rate limit widget ─────────────────────────────────────────────────────────
+// GET /rate_limit never counts against the quota, so polling it is free.
+// Surfaces the app's biggest operational risk (GitHub API exhaustion) instead
+// of it being invisible until requests start failing.
+
+function RateLimitWidget() {
+  const { data } = useSWR<RateLimitStatus>("/api/github/rate-limit", fetcher<RateLimitStatus>, {
+    refreshInterval: 60_000,
+  });
+
+  if (!data) return null;
+
+  const { core } = data;
+  const pct = core.limit > 0 ? core.remaining / core.limit : 1;
+  // Absolute wall-clock time, not a live countdown — avoids calling Date.now()
+  // during render, and the widget already re-renders on every 60s SWR poll.
+  const resetAt = new Date(core.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const tone =
+    pct < 0.05 ? "text-red-400" :
+    pct < 0.2 ? "text-amber-400" :
+    "text-slate-500";
+  const barTone =
+    pct < 0.05 ? "bg-red-500" :
+    pct < 0.2 ? "bg-amber-500" :
+    "bg-violet-500";
+
+  return (
+    <div
+      className="px-3 py-2 rounded-lg bg-slate-800/40 mb-2"
+      title={`GitHub API rate limit resets at ${resetAt}`}
+    >
+      <div className={cn("flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider mb-1.5", tone)}>
+        <Activity className="w-3 h-3 shrink-0" />
+        <span>GitHub API</span>
+        <span className="ml-auto font-mono normal-case tracking-normal">
+          {core.remaining.toLocaleString()}/{core.limit.toLocaleString()}
+        </span>
+      </div>
+      <div className="h-1 rounded-full bg-slate-700/60 overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all", barTone)}
+          style={{ width: `${Math.max(2, pct * 100)}%` }}
+        />
+      </div>
+      {pct < 0.2 && (
+        <p className={cn("text-[10px] mt-1", tone)}>
+          Resets at {resetAt} — some views may fail until then.
+        </p>
+      )}
+    </div>
+  );
 }
 
 // ── Watchlist ─────────────────────────────────────────────────────────────────
@@ -204,6 +260,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void } = {}) {
       {/* Account — pinned to bottom with border, no floating gap */}
       {user && (
         <div className="border-t border-slate-800 pt-3 mt-3">
+          <RateLimitWidget />
           <button
             onClick={() => setMenuOpen((o) => !o)}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800/60 transition-colors text-left"

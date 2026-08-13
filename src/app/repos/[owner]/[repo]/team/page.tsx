@@ -9,12 +9,17 @@ import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import { TeamLeaderboard } from "@/components/TeamLeaderboard";
 import { ReviewerLoadMatrix } from "@/components/ReviewerLoadMatrix";
 import { BusFactorHeatmap, BusFactorSkeleton } from "@/components/BusFactorHeatmap";
+import RunnerUtilization from "@/components/RunnerUtilization";
+import ReviewBottleneck from "@/components/ReviewBottleneck";
+import PartialDataBadge from "@/components/PartialDataBadge";
 import type { TeamStatsResponse, ContributorStat } from "@/app/api/github/team-stats/route";
 import type { RepoContributorsResponse } from "@/app/api/github/repo-contributors/route";
 import type { BusFactorResponse } from "@/app/api/github/bus-factor/route";
+import type { RunnerStatsResponse } from "@/app/api/github/runner-stats/route";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import {
   AlertCircle,
+  AlertTriangle,
   Users,
   CheckCircle,
   XCircle,
@@ -28,6 +33,7 @@ import {
   BarChart3,
   Grid3X3,
   FolderTree,
+  Server,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -329,6 +335,8 @@ export default function TeamAnalyticsPage() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
   const [showBusFactor, setShowBusFactor] = useState(false);
+  const [showRunners, setShowRunners] = useState(false);
+  const [showBottleneck, setShowBottleneck] = useState(false);
 
   const { data, error, isLoading } = useSWR<TeamStatsResponse>(
     `/api/github/team-stats?owner=${owner}&repo=${repo}&per_page=100`,
@@ -344,6 +352,12 @@ export default function TeamAnalyticsPage() {
   const { data: busData, isLoading: busLoading } = useSWR<BusFactorResponse>(
     flags.busFactor ? `/api/github/bus-factor?owner=${owner}&repo=${repo}` : null,
     fetcher<BusFactorResponse>,
+  );
+
+  // Runner utilization — skipped when feature disabled
+  const { data: runnerData, isLoading: runnerLoading } = useSWR<RunnerStatsResponse>(
+    flags.runnerUtilization ? `/api/github/runner-stats?owner=${owner}&repo=${repo}` : null,
+    fetcher<RunnerStatsResponse>,
   );
 
   return (
@@ -434,6 +448,9 @@ export default function TeamAnalyticsPage() {
           {/* ── Phase 2: PR Leaderboard ──────────────────────────────────────── */}
           {contribData && contribData.contributors.length > 0 && (
             <div className="space-y-4">
+              {contribData.partial && (
+                <PartialDataBadge fetched={contribData.fetched_prs} total={contribData.total_prs_attempted} unit="PRs" />
+              )}
               {/* Bus factor badge */}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
@@ -512,6 +529,34 @@ export default function TeamAnalyticsPage() {
                   )}
                 </div>
               )}
+
+              {/* Review Bottleneck toggle */}
+              {flags.reviewBottleneck ? (
+                <div>
+                  <button
+                    onClick={() => setShowBottleneck((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
+                  >
+                    <ChevronRight
+                      className={cn("w-3.5 h-3.5 transition-transform", showBottleneck && "rotate-90")}
+                    />
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {showBottleneck ? "Hide" : "Show"} Review Bottleneck
+                  </button>
+                  {showBottleneck && (
+                    <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+                      <h3 className="text-sm font-semibold text-white mb-0.5">Review Bottleneck</h3>
+                      <p className="text-xs text-slate-500 mb-4">Overloaded reviewers and single-point-of-failure review dependencies</p>
+                      <ReviewBottleneck contributors={contribData.contributors} matrix={contribData.reviewer_matrix} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
+                  <span>Review Bottleneck is disabled —</span>
+                  <a href="/settings" className="text-violet-400 hover:underline">Enable in Settings → Feature Flags</a>
+                </div>
+              )}
             </div>
           )}
 
@@ -556,6 +601,44 @@ export default function TeamAnalyticsPage() {
             ) : (
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                 <span>Bus Factor Analysis is disabled —</span>
+                <a href="/settings" className="text-violet-400 hover:underline">Enable in Settings → Feature Flags</a>
+              </div>
+            )}
+          </div>
+
+          {/* ── Runner Utilization ──────────────────────────────────────────── */}
+          <div>
+            {flags.runnerUtilization ? (
+              <>
+                <button
+                  onClick={() => setShowRunners((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
+                >
+                  <ChevronRight
+                    className={cn("w-3.5 h-3.5 transition-transform", showRunners && "rotate-90")}
+                  />
+                  <Server className="w-3.5 h-3.5" />
+                  {showRunners ? "Hide" : "Show"} Runner Utilization
+                </button>
+                {showRunners && (
+                  <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+                    <h3 className="text-sm font-semibold text-white mb-0.5">Runner Utilization</h3>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Job counts, durations, and failure rates per runner across recent completed runs
+                    </p>
+                    {runnerLoading && <BusFactorSkeleton />}
+                    {runnerData && <RunnerUtilization data={runnerData} />}
+                    {!runnerLoading && !runnerData && (
+                      <p className="text-xs text-slate-600 italic py-4 text-center">
+                        Failed to load runner statistics.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
+                <span>Runner Utilization is disabled —</span>
                 <a href="/settings" className="text-violet-400 hover:underline">Enable in Settings → Feature Flags</a>
               </div>
             )}

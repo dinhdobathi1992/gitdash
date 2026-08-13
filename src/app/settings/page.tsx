@@ -133,6 +133,8 @@ const FLAG_DEFS: FlagDef[] = [
   { key: "busFactor", label: "Bus Factor Analysis", description: "Per-module contributor count and Herfindahl-Hirschman Index — requires fetching full commit history.", affects: "Repository Team" },
   { key: "securityScan", label: "Security Scan", description: "Static analysis of workflow YAML files for security anti-patterns.", affects: "Repository Security" },
   { key: "costAnalytics", label: "Cost Analytics", description: "GitHub Actions billing breakdown by runner type and SKU.", affects: "Cost Analytics" },
+  { key: "runnerUtilization", label: "Runner Utilization", description: "Per-runner job counts, durations, and failure rates across recent workflow runs.", affects: "Repository Team" },
+  { key: "reviewBottleneck", label: "Review Bottleneck", description: "Flags overloaded reviewers and stale review requests from PR review data.", affects: "Repository Team" },
 ];
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
