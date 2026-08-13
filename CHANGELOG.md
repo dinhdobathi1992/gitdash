@@ -6,6 +6,30 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.1] — 2026-08-13
+
+### Overview
+Second of four leadership-focused releases. The **Burnout & Workload Risk Radar** — a team-wide people-risk view, distinct from v3.2.0's Review Bottleneck (which covers reviewer overload specifically). This one surfaces three signals nothing else in the app shows: sustained after-hours/weekend work, "went quiet" activity cliffs, and concurrent-PR overload.
+
+### Added
+
+#### Workload Risk Radar
+- New `GET /api/github/team-workload-risk?owner=X&repo=Y` — one repo-wide commit fetch (not per-contributor) grouped locally by author, plus one open-PR fetch, producing per-person flags: after-hours pattern (≥30% of commits outside 9–18 UTC), weekend work (≥25% of commits on Sat/Sun), concurrent-PR overload (≥4 open PRs at once), and activity cliff (≥3 commits in the prior 4 weeks, zero in the most recent 2).
+- New Team Analytics section, gated behind a new `workloadRisk` feature flag.
+- Framed deliberately as a conversation-starter, not a verdict — the UI and docs both say so explicitly. Heuristic thresholds on a small sample can be wrong (timezone differences, a contractor's concentrated PR pattern, etc.); this is a "worth a check-in" signal for a manager, not a performance judgment.
+- No new database table — computed live from the GitHub API on each request (15-min cache), same rollback-safety approach as v4.0.0.
+
+### Rollback
+- **Instant, no redeploy:** toggle "Workload Risk Radar" off in Settings → Feature Flags.
+- **Instant, no rebuild:** promote the v4.0.0 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — no migration to undo.
+
+### Changed (infra)
+- Bumped app version from 4.0.0 to 4.0.1
+- Bumped Helm chart version from 0.4.0 to 0.4.1
+
+---
+
 ## [4.0.0] — 2026-08-13
 
 ### Overview

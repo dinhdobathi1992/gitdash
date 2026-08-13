@@ -1789,6 +1789,15 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/github/team-workload-risk",
+          description: "Team-wide people-risk signals for a repo: after-hours/weekend commit patterns, activity cliffs, and concurrent open-PR overload, per contributor. A conversation-starter signal, not a verdict.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/github/security-scan",
           description: "Static analysis of workflow YAML files for security anti-patterns. Returns findings grouped by severity.",
           params: [
@@ -2204,9 +2213,22 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.0.0",
+      version: "4.0.1",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Workload Risk Radar — team-wide people-risk signals: sustained after-hours/weekend work, activity cliffs (\"went quiet\"), and concurrent-PR overload. New Team Analytics section, framed as a conversation-starter rather than a verdict",
+        ],
+        fixed: [],
+        improved: [],
+      },
+    },
+    {
+      version: "4.0.0",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -2498,7 +2520,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.0"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.1"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2743,7 +2765,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.1"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

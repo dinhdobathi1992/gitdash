@@ -11,11 +11,13 @@ import { ReviewerLoadMatrix } from "@/components/ReviewerLoadMatrix";
 import { BusFactorHeatmap, BusFactorSkeleton } from "@/components/BusFactorHeatmap";
 import RunnerUtilization from "@/components/RunnerUtilization";
 import ReviewBottleneck from "@/components/ReviewBottleneck";
+import WorkloadRiskRadar from "@/components/WorkloadRiskRadar";
 import PartialDataBadge from "@/components/PartialDataBadge";
 import type { TeamStatsResponse, ContributorStat } from "@/app/api/github/team-stats/route";
 import type { RepoContributorsResponse } from "@/app/api/github/repo-contributors/route";
 import type { BusFactorResponse } from "@/app/api/github/bus-factor/route";
 import type { RunnerStatsResponse } from "@/app/api/github/runner-stats/route";
+import type { TeamWorkloadRiskResponse } from "@/app/api/github/team-workload-risk/route";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import {
   AlertCircle,
@@ -34,6 +36,7 @@ import {
   Grid3X3,
   FolderTree,
   Server,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -337,6 +340,7 @@ export default function TeamAnalyticsPage() {
   const [showBusFactor, setShowBusFactor] = useState(false);
   const [showRunners, setShowRunners] = useState(false);
   const [showBottleneck, setShowBottleneck] = useState(false);
+  const [showWorkloadRisk, setShowWorkloadRisk] = useState(false);
 
   const { data, error, isLoading } = useSWR<TeamStatsResponse>(
     `/api/github/team-stats?owner=${owner}&repo=${repo}&per_page=100`,
@@ -358,6 +362,12 @@ export default function TeamAnalyticsPage() {
   const { data: runnerData, isLoading: runnerLoading } = useSWR<RunnerStatsResponse>(
     flags.runnerUtilization ? `/api/github/runner-stats?owner=${owner}&repo=${repo}` : null,
     fetcher<RunnerStatsResponse>,
+  );
+
+  // Workload risk radar — skipped when feature disabled
+  const { data: workloadData, isLoading: workloadLoading } = useSWR<TeamWorkloadRiskResponse>(
+    flags.workloadRisk ? `/api/github/team-workload-risk?owner=${owner}&repo=${repo}` : null,
+    fetcher<TeamWorkloadRiskResponse>,
   );
 
   return (
@@ -554,6 +564,43 @@ export default function TeamAnalyticsPage() {
               ) : (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                   <span>Review Bottleneck is disabled —</span>
+                  <a href="/settings" className="text-violet-400 hover:underline">Enable in Settings → Feature Flags</a>
+                </div>
+              )}
+
+              {/* Workload Risk Radar toggle */}
+              {flags.workloadRisk ? (
+                <div>
+                  <button
+                    onClick={() => setShowWorkloadRisk((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
+                  >
+                    <ChevronRight
+                      className={cn("w-3.5 h-3.5 transition-transform", showWorkloadRisk && "rotate-90")}
+                    />
+                    <Moon className="w-3.5 h-3.5" />
+                    {showWorkloadRisk ? "Hide" : "Show"} Workload Risk Radar
+                  </button>
+                  {showWorkloadRisk && (
+                    <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+                      <h3 className="text-sm font-semibold text-white mb-0.5">Workload Risk Radar</h3>
+                      <p className="text-xs text-slate-500 mb-4">
+                        Sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload —
+                        a signal to check in, not a verdict.
+                      </p>
+                      {workloadLoading && <BusFactorSkeleton />}
+                      {workloadData && <WorkloadRiskRadar data={workloadData} />}
+                      {!workloadLoading && !workloadData && (
+                        <p className="text-xs text-slate-600 italic py-4 text-center">
+                          Failed to load workload risk data.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
+                  <span>Workload Risk Radar is disabled —</span>
                   <a href="/settings" className="text-violet-400 hover:underline">Enable in Settings → Feature Flags</a>
                 </div>
               )}

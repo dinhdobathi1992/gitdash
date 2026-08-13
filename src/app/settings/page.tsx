@@ -136,6 +136,7 @@ const FLAG_DEFS: FlagDef[] = [
   { key: "runnerUtilization", label: "Runner Utilization", description: "Per-runner job counts, durations, and failure rates across recent workflow runs.", affects: "Repository Team" },
   { key: "reviewBottleneck", label: "Review Bottleneck", description: "Flags overloaded reviewers and stale review requests from PR review data.", affects: "Repository Team" },
   { key: "healthScorecard", label: "Team Health Scorecard", description: "Org-wide ranked view combining DORA tier and bus-factor risk per repo, worst-first.", affects: "Organization Overview" },
+  { key: "workloadRisk", label: "Workload Risk Radar", description: "Flags sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload per person.", affects: "Repository Team" },
 ];
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
