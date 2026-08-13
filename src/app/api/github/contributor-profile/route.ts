@@ -82,6 +82,24 @@ export interface ContributorProfileResponse {
   // Repos contributed to
   repos_contributed: string[];
 
+  /**
+   * Recent half vs. prior half of the 90-day window — powers the 1:1 Prep
+   * Sheet's "this period vs last period" comparison. Computed from data
+   * already fetched above (PRs/reviews split by timestamp); no extra
+   * GitHub API calls.
+   */
+  period_comparison: {
+    window_days: number; // each half's length
+    prs_opened_recent: number;
+    prs_opened_prior: number;
+    prs_merged_recent: number;
+    prs_merged_prior: number;
+    reviews_given_recent: number;
+    reviews_given_prior: number;
+    avg_hours_to_merge_recent: number;
+    avg_hours_to_merge_prior: number;
+  };
+
   /** True if some per-repo PR/commit/review fetches were rate-limited or failed */
   partial: boolean;
   fetched_requests: number;
@@ -287,6 +305,29 @@ export async function GET(req: NextRequest) {
 
     // ── Compute aggregated metrics ────────────────────────────────────────────
 
+    // Split the 90-day window in half for period-over-period comparison
+    // (1:1 Prep Sheet, v4.0.2) — uses the PRs/reviews already fetched above.
+    const halfWindowMs = 45 * 24 * 60 * 60 * 1000;
+    const periodCutoff = now.getTime() - halfWindowMs;
+    const recentPrsWindow = allPrs.filter((pr) => new Date(pr.created_at).getTime() >= periodCutoff);
+    const priorPrsWindow = allPrs.filter((pr) => new Date(pr.created_at).getTime() < periodCutoff);
+    const recentMergedWindow = recentPrsWindow.filter((pr) => pr.state === "merged");
+    const priorMergedWindow = priorPrsWindow.filter((pr) => pr.state === "merged");
+    const recentReviewsWindow = allReviews.filter((r) => new Date(r.submitted_at).getTime() >= periodCutoff);
+    const priorReviewsWindow = allReviews.filter((r) => new Date(r.submitted_at).getTime() < periodCutoff);
+    const avgOf = (vals: number[]) => vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10 : 0;
+    const periodComparison: ContributorProfileResponse["period_comparison"] = {
+      window_days: 45,
+      prs_opened_recent: recentPrsWindow.length,
+      prs_opened_prior: priorPrsWindow.length,
+      prs_merged_recent: recentMergedWindow.length,
+      prs_merged_prior: priorMergedWindow.length,
+      reviews_given_recent: recentReviewsWindow.length,
+      reviews_given_prior: priorReviewsWindow.length,
+      avg_hours_to_merge_recent: avgOf(recentMergedWindow.map((pr) => pr.hours_to_merge).filter((h): h is number => h !== null)),
+      avg_hours_to_merge_prior: avgOf(priorMergedWindow.map((pr) => pr.hours_to_merge).filter((h): h is number => h !== null)),
+    };
+
     const mergedPrs = allPrs.filter((pr) => pr.state === "merged");
     const closedWithoutMerge = allPrs.filter((pr) => pr.state === "closed");
 
@@ -410,6 +451,7 @@ export async function GET(req: NextRequest) {
 
       languages,
       repos_contributed: Array.from(reposContributed),
+      period_comparison: periodComparison,
 
       partial: reposPrFailed + reposCommitsFailed + reviewFetchRejected > 0,
       fetched_requests:

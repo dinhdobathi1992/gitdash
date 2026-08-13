@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -12,7 +13,7 @@ import PartialDataBadge from "@/components/PartialDataBadge";
 import type { ContributorProfileResponse } from "@/app/api/github/contributor-profile/route";
 import {
   AlertCircle, ExternalLink, MapPin, Building2, ChevronRight,
-  GitPullRequest, GitCommit, Code, Clock, Moon, Calendar,
+  GitPullRequest, GitCommit, Code, Clock, Moon, Calendar, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -350,6 +351,12 @@ export default function ContributorProfilePage() {
                 </span>
               </div>
             </div>
+            <Link
+              href={`/contributor/${data.login}/brief?owner=${owner}`}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> 1:1 Prep Sheet
+            </Link>
           </div>
 
           {/* KPI Cards */}
