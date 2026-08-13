@@ -5,7 +5,11 @@ import { isStandaloneMode } from "@/lib/mode";
 import { publicUrl } from "@/lib/url";
 
 // Paths that never require auth
-const ALWAYS_PUBLIC = ["/_next", "/favicon", "/docs", "/api/webhooks", "/api/health"];
+// /api/cron is protected by its own CRON_SECRET bearer-token check (see
+// src/app/api/cron/sync/route.ts) — it must bypass the session-cookie gate
+// here, since Vercel Cron's request carries no session cookie and would
+// otherwise be redirected to /login before the route's own auth even runs.
+const ALWAYS_PUBLIC = ["/_next", "/favicon", "/docs", "/api/webhooks", "/api/health", "/api/cron"];
 
 // Mode-specific public paths
 const STANDALONE_PUBLIC = ["/setup", "/api/auth/setup"];
