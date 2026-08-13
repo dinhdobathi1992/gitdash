@@ -116,6 +116,41 @@ function getWeekStart(date: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * `owner` is a repo owner, which may be an organization OR a personal
+ * account — GitHub has no single endpoint for "repos owned by X" that
+ * works for both. GET /orgs/{org}/repos 404s for a personal account, so
+ * try that first (the common case: contributor profiles are usually
+ * reached from org-owned repos) and fall back to GET /users/{username}/repos
+ * on 404, rather than requiring a separate account-type lookup up front.
+ */
+async function listOwnerRepos(
+  octokit: ReturnType<typeof getOctokit>,
+  owner: string,
+): Promise<Awaited<ReturnType<typeof octokit.rest.repos.listForOrg>>["data"]> {
+  try {
+    const { data } = await octokit.rest.repos.listForOrg({
+      org: owner,
+      per_page: 100,
+      sort: "updated",
+      direction: "desc",
+      type: "all",
+    });
+    return data;
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    if (status !== 404) throw e;
+    const { data } = await octokit.rest.repos.listForUser({
+      username: owner,
+      per_page: 100,
+      sort: "updated",
+      direction: "desc",
+      type: "all",
+    });
+    return data;
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -140,22 +175,16 @@ export async function GET(req: NextRequest) {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     const since = ninetyDaysAgo.toISOString();
 
-    // ── Parallel: user profile + org repos + search PRs authored + search PRs reviewed
-    const [userRes, orgReposRes] = await Promise.all([
+    // ── Parallel: user profile + owner's repos + search PRs authored + search PRs reviewed
+    const [userRes, ownerRepos] = await Promise.all([
       octokit.rest.users.getByUsername({ username: login }),
-      octokit.rest.repos.listForOrg({
-        org: owner,
-        per_page: 100,
-        sort: "updated",
-        direction: "desc",
-        type: "all",
-      }),
+      listOwnerRepos(octokit, owner),
     ]);
 
     const user = userRes.data;
-    const orgRepos = orgReposRes.data.slice(0, 30); // Cap to 30 repos
+    const ownerRepoList = ownerRepos.slice(0, 30); // Cap to 30 repos
 
-    // ── Fetch PRs authored by login across org repos (batched) ──────────────
+    // ── Fetch PRs authored by login across the owner's repos (batched) ──────
     const allPrs: ContributorPrSummary[] = [];
     const allReviews: ContributorReviewSummary[] = [];
     const commitCounts: Record<string, number> = {};
@@ -171,7 +200,7 @@ export async function GET(req: NextRequest) {
     let reviewFetchAttempted = 0;
 
     await pLimitSettled(
-      orgRepos.map((repo) => async () => {
+      ownerRepoList.map((repo) => async () => {
           const repoFullName = `${owner}/${repo.name}`;
 
           // Fetch PRs by this author
@@ -455,8 +484,8 @@ export async function GET(req: NextRequest) {
 
       partial: reposPrFailed + reposCommitsFailed + reviewFetchRejected > 0,
       fetched_requests:
-        orgRepos.length * 2 - reposPrFailed - reposCommitsFailed + reviewFetchAttempted - reviewFetchRejected,
-      total_requests_attempted: orgRepos.length * 2 + reviewFetchAttempted,
+        ownerRepoList.length * 2 - reposPrFailed - reposCommitsFailed + reviewFetchAttempted - reviewFetchRejected,
+      total_requests_attempted: ownerRepoList.length * 2 + reviewFetchAttempted,
     };
 
     return NextResponse.json(response, {
