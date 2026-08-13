@@ -109,22 +109,28 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: ESLint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm run test
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
         env:
           MODE: standalone
           SESSION_SECRET: "00000000000000000000000000000000"

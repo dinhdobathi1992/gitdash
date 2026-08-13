@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import fs from "fs";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg = require("./package.json") as { version: string };
 
@@ -12,10 +13,14 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
   },
   turbopack: {
-    // pnpm-workspace member: packages resolve through symlinks into the
-    // workspace store at ../node_modules/.pnpm, so Turbopack's root must be
-    // the workspace root or module resolution fails during build.
-    root: path.resolve(__dirname, ".."),
+    // When developing inside the Devops pnpm workspace, packages resolve
+    // through symlinks into the workspace store at ../node_modules/.pnpm, so
+    // Turbopack's root must be the workspace root or module resolution fails.
+    // In a standalone clone (Docker, CI) the parent is NOT a workspace — use
+    // the project directory itself.
+    root: fs.existsSync(path.resolve(__dirname, "..", "pnpm-workspace.yaml"))
+      ? path.resolve(__dirname, "..")
+      : path.resolve(__dirname),
   },
   experimental: {
     // Zscaler TLS inspection requires system certificates for outbound requests

@@ -68,7 +68,7 @@ export function getOctokit(token?: string): Octokit {
     if (options.method !== "GET") return request(options);
 
     // Fully-resolved URL (path params substituted, query string appended).
-    const resolvedUrl = octokit.request.endpoint(options as never).url;
+    const resolvedUrl: string = octokit.request.endpoint(options as never).url;
     const key = `${tokenKey}:${resolvedUrl}`;
     const prev = etagStore.get(key);
     if (prev) {
@@ -85,12 +85,14 @@ export function getOctokit(token?: string): Octokit {
       return response;
     } catch (error) {
       if (prev && (error as { status?: number }).status === 304) {
+        // Synthesized response replaying the cached payload; double-cast
+        // because plugin-retry augments OctokitResponse with extra fields.
         return {
           status: 200,
           url: resolvedUrl,
           headers: { etag: prev.etag, link: prev.link },
           data: prev.data,
-        } as Awaited<ReturnType<typeof request>>;
+        } as unknown as Awaited<ReturnType<typeof request>>;
       }
       throw error;
     }

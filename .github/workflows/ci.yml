@@ -18,19 +18,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: ESLint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm run test
 
   # ── 2. Build ───────────────────────────────────────────────────────────────
   build:
@@ -43,16 +49,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
         env:
           # Dummy values — no real secrets needed for a build check
           MODE: standalone
@@ -61,7 +70,7 @@ jobs:
 
   # ── 3. Dependency audit ────────────────────────────────────────────────────
   audit:
-    name: npm Audit
+    name: Dependency Audit
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -69,17 +78,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Audit production dependencies
         # Fail on high or critical CVEs in production deps
-        run: npm audit --production --audit-level=high
+        run: pnpm audit --prod --audit-level=high
 
   # ── 4. Snyk security scan ─────────────────────────────────────────────────
   snyk:
@@ -94,13 +106,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@v1.0.0
@@ -135,13 +150,16 @@ jobs:
           # Focus on security-related queries
           queries: security-and-quality
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v4

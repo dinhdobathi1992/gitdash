@@ -158,14 +158,14 @@ https://github.com/user-attachments/assets/8cf2625a-3a88-4494-a703-07cb5181c11a
 ### Prerequisites
 
 - Node.js 20+
-- npm
+- pnpm (`corepack enable pnpm` — the version is pinned via `packageManager` in `package.json`)
 
 ### 1. Clone and install
 
 ```bash
 git clone https://github.com/dinhdobathi1992/gitdash.git
 cd gitdash
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 ### 2. Configure environment
@@ -191,7 +191,7 @@ openssl rand -hex 32
 ### 3. Start the dev server
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). In `standalone` mode you'll be redirected to `/setup`; in `organization` mode to `/login`.
@@ -392,7 +392,7 @@ For full details see [`README-SECURITY-ENHANCEMENTS.md`](README-SECURITY-ENHANCE
 
 | Workflow | Purpose |
 | --- | --- |
-| `ci.yml` | Lint, type-check, build, npm audit, Snyk, CodeQL |
+| `ci.yml` | Lint, type-check, tests, build, dependency audit, Snyk, CodeQL |
 | `docker.yml` | Multi-arch Docker build and push |
 | `release.yml` | Semver release/tag flow |
 | `vercel.yml` | Production deploy with Vercel CLI |
@@ -402,12 +402,12 @@ For full details see [`README-SECURITY-ENHANCEMENTS.md`](README-SECURITY-ENHANCE
 ## 🧑‍💻 Developer Commands
 
 ```bash
-npm run dev       # local development server
-npm run build     # production build
-npm run start     # run production build
-npm run lint      # eslint
-npm run test      # run tests
-npx tsc --noEmit  # type-check without emitting
+pnpm run dev            # local development server
+pnpm run build          # production build
+pnpm run start          # run production build
+pnpm run lint           # eslint
+pnpm run test           # run tests
+pnpm exec tsc --noEmit  # type-check without emitting
 ```
 
 ---

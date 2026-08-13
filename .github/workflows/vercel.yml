@@ -17,15 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install Vercel CLI
+        # npm for the global CLI: pnpm global installs need PNPM_HOME/pnpm setup,
+        # which hosted runners don't have. Project deps still install via pnpm.
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment

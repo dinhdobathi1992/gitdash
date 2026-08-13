@@ -2,12 +2,19 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --frozen-lockfile
+# corepack provisions the pnpm version pinned in package.json's packageManager field
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable pnpm
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # ── Stage 2: builder ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable pnpm
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -24,7 +31,7 @@ ENV MODE=standalone
 # Using ARG avoids the Docker SecretsUsedInArgOrEnv warning for ENV.
 ARG SESSION_SECRET=00000000000000000000000000000000
 
-RUN SESSION_SECRET=${SESSION_SECRET} npm run build
+RUN SESSION_SECRET=${SESSION_SECRET} pnpm run build
 
 # ── Stage 3: runner ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

@@ -143,7 +143,7 @@ function GettingStarted() {
         <ul className="space-y-2 text-sm text-slate-300">
           {[
             "Node.js 20+",
-            "npm (or Docker for containerized deployments)",
+            "pnpm (or Docker for containerized deployments)",
             "A GitHub Personal Access Token — for standalone mode",
             "A GitHub OAuth App — for organization mode (team sharing)",
           ].map((item) => (
@@ -167,8 +167,8 @@ cp .env.local.example .env.local
 MODE=standalone
 SESSION_SECRET=$(openssl rand -hex 32)
 
-npm install
-npm run dev`}
+pnpm install
+pnpm run dev`}
         </CodeBlock>
         <ProseP>
           Open <Code>http://localhost:3000</Code> — you will be redirected to <Code>/setup</Code> to enter your PAT.
@@ -193,7 +193,7 @@ SESSION_SECRET=$(openssl rand -hex 32)`}
           </Step>
           <Step title="Start the server" step={3}>
             <CodeBlock language="bash" filename="terminal">
-              {`npm install && npm run dev`}
+              {`pnpm install && pnpm run dev`}
             </CodeBlock>
           </Step>
         </Steps>
@@ -2057,7 +2057,7 @@ function FAQ() {
     },
     {
       q: "SESSION_SECRET must be at least 32 characters — but I'm running locally.",
-      a: <>This check only applies when <Code>NODE_ENV=production</Code>. In development (<Code>npm run dev</Code>) any value is accepted.</>,
+      a: <>This check only applies when <Code>NODE_ENV=production</Code>. In development (<Code>pnpm run dev</Code>) any value is accepted.</>,
     },
     {
       q: "How do I update to a new version?",
@@ -2101,7 +2101,7 @@ function Contributing() {
             <CodeBlock language="bash" filename="terminal">
               {`git clone https://github.com/dinhdobathi1992/gitdash.git
 cd gitdash
-npm install`}
+pnpm install`}
             </CodeBlock>
           </Step>
           <Step title="Configure environment" step={2}>
@@ -2113,14 +2113,14 @@ SESSION_SECRET=any_32_char_string_for_local_dev
           </Step>
           <Step title="Start dev server" step={3}>
             <CodeBlock language="bash" filename="terminal">
-              {`npm run dev
+              {`pnpm run dev
 # → http://localhost:3000`}
             </CodeBlock>
           </Step>
           <Step title="Run type checks" step={4}>
             <CodeBlock language="bash" filename="terminal">
-              {`npx tsc --noEmit
-npm run lint`}
+              {`pnpm exec tsc --noEmit
+pnpm run lint`}
             </CodeBlock>
           </Step>
         </Steps>
