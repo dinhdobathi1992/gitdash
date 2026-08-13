@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Activity, FileText, ShieldAlert, User, DollarSign,
   TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders,
+  HeartPulse, AlertTriangle, Mail, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Callout } from "@/components/docs/Callout";
@@ -57,6 +58,10 @@ const NAV: NavSection[] = [
       { id: "feat-alerts", label: "Alerts", icon: Bell, sub: true },
       { id: "feat-settings", label: "Settings", icon: Sliders, sub: true },
       { id: "feat-org", label: "Org Overview", icon: Building2, sub: true },
+      { id: "feat-health-scorecard", label: "Team Health Scorecard", icon: HeartPulse, sub: true },
+      { id: "feat-workload-risk", label: "Workload Risk Radar", icon: AlertTriangle, sub: true },
+      { id: "feat-one-on-one", label: "1:1 Prep Sheet", icon: MessageCircle, sub: true },
+      { id: "feat-leadership-digest", label: "Leadership Digest", icon: Mail, sub: true },
     ],
   },
   {
@@ -632,10 +637,21 @@ Webhook: POST /api/webhooks/github
 
 // ── Feature page shared header ────────────────────────────────────────────────
 
+// Small pill marking a feature (or an addition to an existing one) by the
+// version it shipped in. Keep this next to any doc content added going
+// forward — it's how "what's new" stays discoverable outside the changelog.
+function VersionBadge({ v }: { v: string }) {
+  return (
+    <span className="text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/25 uppercase">
+      New in v{v}
+    </span>
+  );
+}
+
 function FeaturePageHeader({
-  icon: Icon, name, path, chips,
+  icon: Icon, name, path, chips, since,
 }: {
-  icon: React.ElementType; name: string; path: string; chips: string[];
+  icon: React.ElementType; name: string; path: string; chips: string[]; since?: string;
 }) {
   return (
     <div className="mb-8 pb-4 border-b border-slate-800">
@@ -647,6 +663,7 @@ function FeaturePageHeader({
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-bold text-white">{name}</h2>
             <Code>{path}</Code>
+            {since && <VersionBadge v={since} />}
           </div>
         </div>
       </div>
@@ -701,7 +718,10 @@ function ScreenshotSlot({ file, alt }: { file: string; alt: string }) {
 // ── Feature Overview index ────────────────────────────────────────────────────
 
 function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
-  const pages = [
+  const pages: Array<{
+    id: string; name: string; path: string; screenshot: string; desc: string;
+    chips: string[]; since?: string;
+  }> = [
     {
       id: "feat-repositories",
       name: "Repositories",
@@ -752,7 +772,7 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
     },
     {
       id: "feat-team",
-      name: "Team Insights (In Development)",
+      name: "Team Insights",
       path: "/team",
       screenshot: "12-team-insights.png",
       desc: "Global team performance view — select any repository to see a sortable contributor leaderboard (PRs merged, reviews given, avg lead time, avg PR size, review response time, first-pass approval rate, self-merges, comments) and a reviewer load heatmap.",
@@ -760,11 +780,11 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
     },
     {
       id: "feat-contributor",
-      name: "Contributor Profile (Coming Soon)",
+      name: "Contributor Profile",
       path: "/contributor/[login]",
       screenshot: "13-contributor.png",
-      desc: "The ultimate \"Player card\" for any developer. Shows Elite KPI cards (PRs merged, avg lead time, reviews given, CI pass rate), 52-week activity heatmap, weekly commit bar chart, PR lifecycle funnel, commit hour distribution to monitor burnout, languages touched, and a recent PRs table.",
-      chips: ["52-week heatmap", "Elite KPI cards", "Burnout monitoring", "Lifecycle funnel"],
+      desc: "The ultimate \"Player card\" for any developer. Shows Elite KPI cards (PRs merged, avg lead time, reviews given, CI pass rate), 52-week activity heatmap, weekly commit bar chart, PR lifecycle funnel, commit hour distribution to monitor burnout, languages touched, a recent PRs table, and a period-over-period comparison that powers the 1:1 Prep Sheet.",
+      chips: ["52-week heatmap", "Elite KPI cards", "Burnout monitoring", "Lifecycle funnel", "Period comparison"],
     },
     {
       id: "feat-cost",
@@ -806,6 +826,42 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
       desc: "Organisation-level reliability heatmap and a sortable repository table with health scores, run history bars, and quick links to each repo's workflow dashboard.",
       chips: ["Org heatmap", "Repo table", "Health scores"],
     },
+    {
+      id: "feat-health-scorecard",
+      name: "Team Health Scorecard",
+      path: "/org/[orgName]/health",
+      screenshot: "18-health-scorecard.png",
+      desc: "Org-wide ranked view of every repo — Healthy / Watch / At Risk — combining a DORA tier score and bus-factor knowledge-concentration risk into one composite score, worst repo first, with a throughput trend indicator.",
+      chips: ["Composite DORA + bus-factor score", "Worst-first ranking", "Throughput trend"],
+      since: "4.0.0",
+    },
+    {
+      id: "feat-workload-risk",
+      name: "Workload Risk Radar",
+      path: "/repos/[owner]/[repo]/team",
+      screenshot: "19-workload-risk.png",
+      desc: "Team-wide burnout and overload signals surfaced on the Repo Team Stats page: sustained after-hours or weekend work, contributors who've gone quiet, and people juggling too many concurrent open PRs. Framed as conversation-starters, not verdicts.",
+      chips: ["After-hours / weekend detection", "Activity-cliff alerts", "Concurrent-PR overload"],
+      since: "4.0.1",
+    },
+    {
+      id: "feat-one-on-one",
+      name: "1:1 Prep Sheet",
+      path: "/contributor/[login]/brief",
+      screenshot: "20-one-on-one.png",
+      desc: "One-click manager brief for any contributor — reachable from the \"1:1 Prep Sheet\" button on their Contributor Profile. Period-over-period PR, review, and cycle-time comparison plus auto-generated talking points. Print-friendly, zero extra GitHub API calls.",
+      chips: ["Period-over-period comparison", "Auto-generated talking points", "Print-friendly"],
+      since: "4.0.2",
+    },
+    {
+      id: "feat-leadership-digest",
+      name: "Leadership Digest",
+      path: "/alerts",
+      screenshot: "21-leadership-digest.png",
+      desc: "Narrative org-wide health summary emailed automatically every Monday. Configured as a special alert rule (metric = leadership_digest) on the Alerts page — pick an org and an email address, no threshold or window to tune. Reuses the Team Health Scorecard's computation.",
+      chips: ["Weekly email", "Narrative summary", "No threshold to configure"],
+      since: "4.0.3",
+    },
   ];
 
   return (
@@ -831,6 +887,7 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
                     {p.name}
                   </span>
                   <Code>{p.path}</Code>
+                  {p.since && <VersionBadge v={p.since} />}
                 </div>
                 <p className="text-xs text-slate-500 line-clamp-2">{p.desc}</p>
                 <div className="flex flex-wrap gap-1">
@@ -1145,6 +1202,19 @@ function FeatureContributor() {
           ]}
         />
       </DocCard>
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>1:1 Prep Sheet</SubHeading>
+          <VersionBadge v="4.0.2" />
+        </div>
+        <ProseP>
+          Every profile now includes a <strong>period_comparison</strong> field — the same 90-day window
+          split into two 45-day halves, so you can see whether a contributor&apos;s output is trending up
+          or down. Click the <strong>1:1 Prep Sheet</strong> button at the top of the profile to turn that
+          comparison into a manager brief with auto-generated talking points (see{" "}
+          <Code>1:1 Prep Sheet</Code> in the sidebar).
+        </ProseP>
+      </DocCard>
     </section>
   );
 }
@@ -1226,6 +1296,20 @@ function FeatureAlerts() {
           ]}
         />
       </DocCard>
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>Leadership Digest</SubHeading>
+          <VersionBadge v="4.0.3" />
+        </div>
+        <ProseP>
+          A fifth rule type, distinct from the threshold-based metrics above. Pick{" "}
+          <Code>metric = leadership_digest</Code> when creating a rule: the form switches to just an
+          org name and an email address — no threshold or window, because it isn&apos;t event-triggered.
+          Instead it sends a narrative org-wide health summary (reusing the Team Health Scorecard&apos;s
+          computation) automatically every Monday. See{" "}
+          <Code>Leadership Digest</Code> in the sidebar for details.
+        </ProseP>
+      </DocCard>
     </section>
   );
 }
@@ -1261,6 +1345,150 @@ function FeatureOrg() {
         run history bars, open PR counts, and quick links to each repo&apos;s workflow dashboard.
       </ProseP>
       <ScreenshotSlot file="17-org-overview.png" alt="Org Overview page" />
+    </section>
+  );
+}
+
+function FeatureHealthScorecard() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={HeartPulse} name="Team Health Scorecard" path="/org/[orgName]/health"
+        chips={["Composite DORA + bus-factor score", "Worst-first ranking", "Throughput trend"]}
+        since="4.0.0"
+      />
+      <ProseP>
+        An org-wide, ranked view built for a leader who owns many repos and needs to know which ones
+        need attention first. Every repo in the org gets one composite score combining delivery
+        performance and knowledge-concentration risk, sorted worst-first.
+      </ProseP>
+      <ScreenshotSlot file="18-health-scorecard.png" alt="Team Health Scorecard page" />
+      <DocCard>
+        <SubHeading>How the score is computed</SubHeading>
+        <ProseP>
+          <Code>score = round(doraScore × 0.6 + busFactorScore × 0.4)</Code> — delivery performance
+          (DORA tier) is weighted higher than knowledge concentration, but a repo with only one active
+          contributor still drags the composite down meaningfully.
+        </ProseP>
+        <DocTable
+          headers={["Band", "Score", "Meaning"]}
+          rows={[
+            ["Healthy", "≥ 80", "Strong delivery metrics and no single-owner risk"],
+            ["Watch", "50 – 79", "One dimension is slipping — worth a look, not urgent"],
+            ["At Risk", "< 50", "Delivery or bus-factor problems compounding — prioritize"],
+          ]}
+        />
+      </DocCard>
+      <DocCard>
+        <SubHeading>Trend indicator</SubHeading>
+        <ProseP>
+          Compares the recent half of the repo&apos;s weekly throughput history against the prior half
+          to show whether each repo is trending up, flat, or down — so a currently-healthy repo that&apos;s
+          sliding still gets flagged.
+        </ProseP>
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureWorkloadRisk() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={AlertTriangle} name="Workload Risk Radar" path="/repos/[owner]/[repo]/team"
+        chips={["After-hours / weekend detection", "Activity-cliff alerts", "Concurrent-PR overload"]}
+        since="4.0.1"
+      />
+      <ProseP>
+        A people-risk radar embedded in the Repo Team Stats page (Team Analytics section). It surfaces
+        burnout and overload signals as conversation-starters for a 1:1 — not as a performance verdict.
+      </ProseP>
+      <ScreenshotSlot file="19-workload-risk.png" alt="Workload Risk Radar" />
+      <DocCard>
+        <SubHeading>Signals</SubHeading>
+        <DocTable
+          headers={["Signal", "Trigger", "Why it matters"]}
+          rows={[
+            ["After-hours work", "> 30% of commits outside working hours", "Sustained after-hours activity is a leading burnout indicator"],
+            ["Weekend work", "> 25% of commits on Sat/Sun", "Same signal, weekend axis"],
+            ["Activity cliff", "Contributor went quiet in the last 14 days vs. their 42-day baseline", "Could be planned time off — or disengagement worth checking in on"],
+            ["Concurrent-PR overload", "> 4 open PRs at once", "Context-switching load that slows everyone down, not just the author"],
+          ]}
+        />
+        <ProseP>
+          A contributor needs at least a minimum sample of recent activity before any signal fires —
+          this avoids false positives for people who are simply new or between projects.
+        </ProseP>
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureOneOnOne() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={MessageCircle} name="1:1 Prep Sheet" path="/contributor/[login]/brief"
+        chips={["Period-over-period comparison", "Auto-generated talking points", "Print-friendly"]}
+        since="4.0.2"
+      />
+      <ProseP>
+        A one-click manager brief for any contributor. Open their Contributor Profile and click the{" "}
+        <strong>1:1 Prep Sheet</strong> button in the top-right corner of the header — or go directly
+        to <Code>/contributor/[login]/brief?owner=[owner]</Code>.
+      </ProseP>
+      <ScreenshotSlot file="20-one-on-one.png" alt="1:1 Prep Sheet page" />
+      <DocCard>
+        <SubHeading>What&apos;s on it</SubHeading>
+        <DocTable
+          headers={["Section", "What it shows"]}
+          rows={[
+            ["Period comparison", "PRs merged, reviews given, and avg cycle time — most-recent 45 days vs. the prior 45"],
+            ["Talking points", "Rules-engine-generated conversation prompts (not verdicts) based on the comparison and workload signals"],
+          ]}
+        />
+        <ProseP>
+          The brief reuses the same SWR cache key as the full contributor profile, so opening it
+          right after viewing a profile costs <strong>zero</strong> extra GitHub API calls. It&apos;s
+          also print-friendly for bringing a paper copy into the room.
+        </ProseP>
+      </DocCard>
+    </section>
+  );
+}
+
+function FeatureLeadershipDigest() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Mail} name="Leadership Digest" path="/alerts"
+        chips={["Weekly email", "Narrative summary", "No threshold to configure"]}
+        since="4.0.3"
+      />
+      <ProseP>
+        A narrative, org-wide health summary delivered by email every Monday — for a leader who wants
+        the Team Health Scorecard&apos;s findings pushed to their inbox instead of having to check the
+        dashboard.
+      </ProseP>
+      <ScreenshotSlot file="21-leadership-digest.png" alt="Leadership Digest setup" />
+      <DocCard>
+        <SubHeading>Setting it up</SubHeading>
+        <Steps>
+          <Step title="Open Alerts">Go to the Alerts page and click New Rule.</Step>
+          <Step title="Pick the metric">Select <Code>leadership_digest</Code> — the form collapses to just two fields: org name and delivery email. Threshold and window are ignored (there&apos;s no cadence to configure; it always sends Monday).</Step>
+          <Step title="Save">The rule shows &ldquo;Sent every Monday&rdquo; in place of a threshold on the Alerts list.</Step>
+        </Steps>
+      </DocCard>
+      <Callout type="info">
+        Implementation note: this reuses the existing <Code>alert_rules</Code> table as a config store
+        rather than adding a new table, and reuses the Team Health Scorecard&apos;s computation rather than
+        recomputing anything. It&apos;s explicitly excluded from the normal per-repo threshold evaluation
+        that runs on every sync — the daily cron just checks whether today is Monday.
+      </Callout>
+      <Callout type="warning">
+        Delivery requires an email provider to be configured in the deployment
+        (<Code>RESEND_API_KEY</Code> or SMTP settings) — see Configuration.
+      </Callout>
     </section>
   );
 }
@@ -2242,9 +2470,25 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.0.5",
+      version: "4.0.6",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "The four v4.0.0–v4.0.3 features (Team Health Scorecard, Workload Risk Radar, 1:1 Prep Sheet, Leadership Digest) were only mentioned in changelog prose — no dedicated Features doc page, no sidebar entry, so they were effectively undiscoverable outside this release-notes tab. Each now has a full feature page with a \"New in vX.Y\" badge",
+          "Feature Overview index still labeled Team Insights \"(In Development)\" and Contributor Profile \"(Coming Soon)\" even though both have been fully built for several releases",
+        ],
+        improved: [
+          "New VersionBadge convention: any doc content added for a new feature (or a meaningful addition to an existing one) now carries a \"New in vX.Y\" pill, so what's new stays visible outside the changelog",
+        ],
+      },
+    },
+    {
+      version: "4.0.5",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [],
@@ -2604,7 +2848,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.5"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.6"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2745,6 +2989,10 @@ export default function DocsPage() {
     "feat-alerts": <FeatureAlerts />,
     "feat-settings": <FeatureSettings />,
     "feat-org":           <FeatureOrg />,
+    "feat-health-scorecard": <FeatureHealthScorecard />,
+    "feat-workload-risk":    <FeatureWorkloadRisk />,
+    "feat-one-on-one":       <FeatureOneOnOne />,
+    "feat-leadership-digest": <FeatureLeadershipDigest />,
     "metrics-reference":    <MetricsReference onNavigate={setActive} />,
     "metrics-dora":         <MetricsDora />,
     "metrics-pr-cycle":     <MetricsPrCycle />,
@@ -2849,7 +3097,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.5"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.6"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
