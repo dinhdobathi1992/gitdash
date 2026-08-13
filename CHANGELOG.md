@@ -6,6 +6,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.6] — 2026-08-13
+
+### Overview
+Docs-only fix: the four v4.0.0–v4.0.3 features (Team Health Scorecard, Workload Risk Radar, 1:1 Prep Sheet, Leadership Digest) shipped with release-notes entries and API Reference rows, but no dedicated page in the in-app Features docs and no sidebar entry — reported by a user who couldn't find where the 1:1 feature lived after enabling all feature flags.
+
+### Fixed
+
+#### New features were undiscoverable in the docs
+- **Root cause:** each v4.0.x release added a `ReleaseNotes()` entry and `API Reference` rows, but never added a corresponding `feat-*` entry to `NAV`, the `Features()` index, or a dedicated feature-detail component. The only place these features were mentioned was changelog prose.
+- Added four dedicated feature pages: `feat-health-scorecard`, `feat-workload-risk`, `feat-one-on-one`, `feat-leadership-digest` — each with a sidebar entry, an index card, and a full detail page.
+- Fixed stale labels: Feature Overview listed "Team Insights (In Development)" and "Contributor Profile (Coming Soon)" even though both have been fully built since well before v4.0.0.
+- Added a `VersionBadge` ("New in vX.Y") convention, applied to the four new pages and retrofitted onto the Contributor Profile and Alerts pages where they were extended (v4.0.2's `period_comparison` field, v4.0.3's `leadership_digest` rule type). Going forward, new doc content for a feature should carry this badge.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.5 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — docs-only, no code path, database, or env var changes.
+
+### Changed (infra)
+- Bumped app version from 4.0.5 to 4.0.6
+- Bumped Helm chart version from 0.4.5 to 0.4.6
+
+---
+
 ## [4.0.5] — 2026-08-13
 
 ### Overview
