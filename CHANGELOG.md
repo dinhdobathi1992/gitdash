@@ -6,6 +6,30 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.11] — 2026-08-13
+
+### Overview
+Visual redesign of the Team Analytics page (`/repos/[owner]/[repo]/team`), implemented from a second design imported via Claude Design ("Scorecard board redesign" project, `Section Headers.dc.html`).
+
+### Changed
+
+#### Team Analytics collapsible sections
+- Replaced the plain chevron-and-text toggle rows (PR Leaderboard, Reviewer Load Matrix, Review Bottleneck, Workload Risk Radar, Knowledge & Bus Factor Map, Runner Utilization) with a polished card-style section header: a tone-colored icon badge, title, a live data-driven count badge (contributor count, matrix dimensions, module count, runner count), a one-line description, and a "Show/Hide" pill button.
+- Restyled the "PRs analysed" / "Bus factor" status pills at the top of the page to match.
+- Leaderboard, Reviewer Matrix, and Bus Factor Map now default open (highest at-a-glance value); Bottleneck, Workload Risk, and Runners keep their existing collapsed defaults — data fetching is unconditional either way, so this only changes what's visible on first paint, not what's fetched.
+- Kept every existing content component (`TeamLeaderboard`, `ReviewerLoadMatrix`, `ReviewBottleneck`, `WorkloadRiskRadar`, `BusFactorHeatmap`, `RunnerUtilization`) unchanged — this is purely the header/collapse chrome around them, same as the icon-language adaptation used for the Team Health Scorecard redesign in v4.0.8 (lucide icons instead of the design's abstract glyph).
+- No API or data changes.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.10 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one file, no data or API change.
+
+### Changed (infra)
+- Bumped app version from 4.0.10 to 4.0.11
+- Bumped Helm chart version from 0.4.10 to 0.4.11
+
+---
+
 ## [4.0.10] — 2026-08-13
 
 ### Overview

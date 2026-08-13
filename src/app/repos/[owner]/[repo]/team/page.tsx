@@ -31,7 +31,6 @@ import {
   Shield,
   ArrowLeft,
   ChevronRight,
-  GitPullRequest,
   BarChart3,
   Grid3X3,
   FolderTree,
@@ -263,6 +262,62 @@ function ContributorCard({
   );
 }
 
+// ── Collapsible section header ───────────────────────────────────────────────
+// Design reference: claude.ai/design "Scorecard board redesign" project,
+// "Section Headers.dc.html" — adapted to the app's existing icon language
+// (lucide icons in place of the design's abstract bar glyph) and Tailwind tokens.
+
+type Tone = "violet" | "cyan" | "amber" | "green" | "red";
+
+const SECTION_TONES: Record<Tone, { text: string; bg: string; border: string; stripe: string }> = {
+  violet: { text: "text-violet-300", bg: "bg-violet-500/[0.14]", border: "border-violet-500/30", stripe: "bg-gradient-to-b from-violet-400 to-violet-600" },
+  cyan: { text: "text-cyan-300", bg: "bg-cyan-500/[0.14]", border: "border-cyan-500/30", stripe: "bg-gradient-to-b from-cyan-400 to-cyan-600" },
+  amber: { text: "text-amber-300", bg: "bg-amber-500/[0.14]", border: "border-amber-500/30", stripe: "bg-gradient-to-b from-amber-400 to-amber-600" },
+  green: { text: "text-emerald-300", bg: "bg-emerald-500/[0.14]", border: "border-emerald-500/30", stripe: "bg-gradient-to-b from-emerald-400 to-emerald-600" },
+  red: { text: "text-red-300", bg: "bg-red-500/[0.14]", border: "border-red-500/30", stripe: "bg-gradient-to-b from-red-400 to-red-600" },
+};
+
+function Section({
+  icon: Icon, tone, title, badge, subtitle, open, onToggle, children,
+}: {
+  icon: React.ElementType; tone: Tone; title: string; badge?: string; subtitle: string;
+  open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  const t = SECTION_TONES[tone];
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/50 to-slate-950/70 shadow-[0_40px_80px_-55px_rgba(0,0,0,1)] overflow-hidden">
+      <button
+        onClick={onToggle}
+        className={cn(
+          "w-full relative flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-800/40",
+          open && "border-b border-slate-800",
+        )}
+      >
+        <span className={cn("absolute inset-y-0 left-0 w-[2px]", t.stripe)} />
+        <span className={cn("shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center", t.bg, t.border)}>
+          <Icon className={cn("w-4 h-4", t.text)} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-[15px] font-semibold text-white">{title}</span>
+            {badge && (
+              <span className={cn("font-mono text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap", t.bg, t.border, t.text)}>
+                {badge}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+        </div>
+        <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 text-xs text-slate-300">
+          {open ? "Hide" : "Show"}
+          <ChevronRight className={cn("w-3 h-3 transition-transform", open && "rotate-90")} />
+        </span>
+      </button>
+      {open && <div className="p-5">{children}</div>}
+    </div>
+  );
+}
+
 // ── Summary row ───────────────────────────────────────────────────────────────
 
 function SummaryBar({ data }: { data: TeamStatsResponse }) {
@@ -335,11 +390,11 @@ function SummaryBar({ data }: { data: TeamStatsResponse }) {
 export default function TeamAnalyticsPage() {
   const { owner, repo } = useParams<{ owner: string; repo: string }>();
   const { flags } = useFeatureFlags();
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showMatrix, setShowMatrix] = useState(false);
-  const [showBusFactor, setShowBusFactor] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(true);
+  const [showMatrix, setShowMatrix] = useState(true);
+  const [showBusFactor, setShowBusFactor] = useState(true);
   const [showRunners, setShowRunners] = useState(false);
-  const [showBottleneck, setShowBottleneck] = useState(false);
+  const [showBottleneck, setShowBottleneck] = useState(true);
   const [showWorkloadRisk, setShowWorkloadRisk] = useState(false);
 
   const { data, error, isLoading } = useSWR<TeamStatsResponse>(
@@ -455,112 +510,73 @@ export default function TeamAnalyticsPage() {
         <>
           <SummaryBar data={data} />
 
-          {/* ── Phase 2: PR Leaderboard ──────────────────────────────────────── */}
+          {/* ── PR Leaderboard, Reviewer Matrix, Bottleneck, Workload Risk ───── */}
           {contribData && contribData.contributors.length > 0 && (
             <div className="space-y-4">
               {contribData.partial && (
                 <PartialDataBadge fetched={contribData.fetched_prs} total={contribData.total_prs_attempted} unit="PRs" />
               )}
-              {/* Bus factor badge */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                  <GitPullRequest className="w-3.5 h-3.5 text-violet-400" />
-                  <span className="text-xs text-slate-400">
-                    <span className="text-white font-medium">{contribData.total_prs_analysed}</span> PRs analysed
-                  </span>
-                </div>
-                <div className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border",
+              {/* Status pills */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/30 bg-violet-500/[0.08] text-[13px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                  <span className="font-mono font-semibold text-white">{contribData.total_prs_analysed}</span>
+                  <span className="text-violet-200/70">PRs analysed</span>
+                </span>
+                <span className={cn(
+                  "inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-[13px]",
                   contribData.bus_factor <= 1
-                    ? "bg-red-500/10 border-red-500/20"
+                    ? "border-red-500/30 bg-red-500/[0.08]"
                     : contribData.bus_factor <= 2
-                      ? "bg-amber-500/10 border-amber-500/20"
-                      : "bg-green-500/10 border-green-500/20"
+                      ? "border-amber-500/30 bg-amber-500/[0.08]"
+                      : "border-emerald-500/30 bg-emerald-500/[0.08]",
                 )}>
-                  <Shield className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs text-slate-400">
-                    Bus factor:{" "}
-                    <span className={cn(
-                      "font-medium",
-                      contribData.bus_factor <= 1
-                        ? "text-red-400"
-                        : contribData.bus_factor <= 2
-                          ? "text-amber-400"
-                          : "text-green-400"
-                    )}>
-                      {contribData.bus_factor}
-                    </span>
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    contribData.bus_factor <= 1 ? "bg-red-400" : contribData.bus_factor <= 2 ? "bg-amber-400" : "bg-emerald-400",
+                  )} />
+                  <span className={cn(
+                    contribData.bus_factor <= 1 ? "text-red-200/80" : contribData.bus_factor <= 2 ? "text-amber-200/80" : "text-emerald-200/80",
+                  )}>
+                    Bus factor
                   </span>
-                </div>
+                  <span className={cn(
+                    "font-mono font-semibold",
+                    contribData.bus_factor <= 1 ? "text-red-300" : contribData.bus_factor <= 2 ? "text-amber-300" : "text-emerald-300",
+                  )}>
+                    {contribData.bus_factor}
+                  </span>
+                </span>
               </div>
 
-              {/* Leaderboard toggle */}
-              <div>
-                <button
-                  onClick={() => setShowLeaderboard((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                >
-                  <ChevronRight
-                    className={cn("w-3.5 h-3.5 transition-transform", showLeaderboard && "rotate-90")}
-                  />
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  {showLeaderboard ? "Hide" : "Show"} PR Leaderboard ({contribData.contributors.length} contributors)
-                </button>
-                {showLeaderboard && (
-                  <div className="mt-3">
-                    <TeamLeaderboard
-                      contributors={contribData.contributors}
-                      owner={owner}
-                      repo={repo}
-                    />
-                  </div>
-                )}
-              </div>
+              <Section
+                icon={BarChart3} tone="violet" title="PR Leaderboard"
+                badge={`${contribData.contributors.length} contributor${contribData.contributors.length === 1 ? "" : "s"}`}
+                subtitle="Merge volume, review load and lead time per contributor"
+                open={showLeaderboard} onToggle={() => setShowLeaderboard((v) => !v)}
+              >
+                <TeamLeaderboard contributors={contribData.contributors} owner={owner} repo={repo} />
+              </Section>
 
-              {/* Reviewer matrix toggle */}
               {contribData.reviewer_matrix.length > 0 && (
-                <div>
-                  <button
-                    onClick={() => setShowMatrix((v) => !v)}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                  >
-                    <ChevronRight
-                      className={cn("w-3.5 h-3.5 transition-transform", showMatrix && "rotate-90")}
-                    />
-                    <Grid3X3 className="w-3.5 h-3.5" />
-                    {showMatrix ? "Hide" : "Show"} Reviewer Load Matrix
-                  </button>
-                  {showMatrix && (
-                    <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                      <h3 className="text-sm font-semibold text-white mb-0.5">Reviewer Load Matrix</h3>
-                      <p className="text-xs text-slate-500 mb-4">Who reviews whose PRs — rows are PR authors, columns are reviewers</p>
-                      <ReviewerLoadMatrix matrix={contribData.reviewer_matrix} />
-                    </div>
-                  )}
-                </div>
+                <Section
+                  icon={Grid3X3} tone="cyan" title="Reviewer Load Matrix"
+                  badge={`${new Set(contribData.reviewer_matrix.map((c) => c.author)).size} × ${new Set(contribData.reviewer_matrix.map((c) => c.reviewer)).size}`}
+                  subtitle="Who reviews whose PRs — rows are PR authors, columns are reviewers"
+                  open={showMatrix} onToggle={() => setShowMatrix((v) => !v)}
+                >
+                  <ReviewerLoadMatrix matrix={contribData.reviewer_matrix} />
+                </Section>
               )}
 
-              {/* Review Bottleneck toggle */}
               {flags.reviewBottleneck ? (
-                <div>
-                  <button
-                    onClick={() => setShowBottleneck((v) => !v)}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                  >
-                    <ChevronRight
-                      className={cn("w-3.5 h-3.5 transition-transform", showBottleneck && "rotate-90")}
-                    />
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    {showBottleneck ? "Hide" : "Show"} Review Bottleneck
-                  </button>
-                  {showBottleneck && (
-                    <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                      <h3 className="text-sm font-semibold text-white mb-0.5">Review Bottleneck</h3>
-                      <p className="text-xs text-slate-500 mb-4">Overloaded reviewers and single-point-of-failure review dependencies</p>
-                      <ReviewBottleneck contributors={contribData.contributors} matrix={contribData.reviewer_matrix} />
-                    </div>
-                  )}
-                </div>
+                <Section
+                  icon={AlertTriangle} tone="amber" title="Review Bottleneck"
+                  subtitle="Overloaded reviewers and single-point-of-failure review dependencies"
+                  open={showBottleneck} onToggle={() => setShowBottleneck((v) => !v)}
+                >
+                  <ReviewBottleneck contributors={contribData.contributors} matrix={contribData.reviewer_matrix} />
+                </Section>
               ) : (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                   <span>Review Bottleneck is disabled —</span>
@@ -568,36 +584,20 @@ export default function TeamAnalyticsPage() {
                 </div>
               )}
 
-              {/* Workload Risk Radar toggle */}
               {flags.workloadRisk ? (
-                <div>
-                  <button
-                    onClick={() => setShowWorkloadRisk((v) => !v)}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                  >
-                    <ChevronRight
-                      className={cn("w-3.5 h-3.5 transition-transform", showWorkloadRisk && "rotate-90")}
-                    />
-                    <Moon className="w-3.5 h-3.5" />
-                    {showWorkloadRisk ? "Hide" : "Show"} Workload Risk Radar
-                  </button>
-                  {showWorkloadRisk && (
-                    <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                      <h3 className="text-sm font-semibold text-white mb-0.5">Workload Risk Radar</h3>
-                      <p className="text-xs text-slate-500 mb-4">
-                        Sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload —
-                        a signal to check in, not a verdict.
-                      </p>
-                      {workloadLoading && <BusFactorSkeleton />}
-                      {workloadData && <WorkloadRiskRadar data={workloadData} />}
-                      {!workloadLoading && !workloadData && (
-                        <p className="text-xs text-slate-600 italic py-4 text-center">
-                          Failed to load workload risk data.
-                        </p>
-                      )}
-                    </div>
+                <Section
+                  icon={Moon} tone="green" title="Workload Risk Radar"
+                  subtitle="Sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload — a signal to check in, not a verdict"
+                  open={showWorkloadRisk} onToggle={() => setShowWorkloadRisk((v) => !v)}
+                >
+                  {workloadLoading && <BusFactorSkeleton />}
+                  {workloadData && <WorkloadRiskRadar data={workloadData} />}
+                  {!workloadLoading && !workloadData && (
+                    <p className="text-xs text-slate-600 italic py-4 text-center">
+                      Failed to load workload risk data.
+                    </p>
                   )}
-                </div>
+                </Section>
               ) : (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                   <span>Workload Risk Radar is disabled —</span>
@@ -615,36 +615,23 @@ export default function TeamAnalyticsPage() {
             </div>
           )}
 
-          {/* ── Phase 4: Bus Factor Heatmap ─────────────────────────────────── */}
+          {/* ── Bus Factor Heatmap ───────────────────────────────────────────── */}
           <div>
             {flags.busFactor ? (
-              <>
-                <button
-                  onClick={() => setShowBusFactor((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                >
-                  <ChevronRight
-                    className={cn("w-3.5 h-3.5 transition-transform", showBusFactor && "rotate-90")}
-                  />
-                  <FolderTree className="w-3.5 h-3.5" />
-                  {showBusFactor ? "Hide" : "Show"} Knowledge & Bus Factor Map
-                </button>
-                {showBusFactor && (
-                  <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                    <h3 className="text-sm font-semibold text-white mb-0.5">Knowledge & Bus Factor Map</h3>
-                    <p className="text-xs text-slate-500 mb-4">
-                      Per-module contributor concentration — modules with bus factor = 1 are knowledge silos
-                    </p>
-                    {busLoading && <BusFactorSkeleton />}
-                    {busData && <BusFactorHeatmap data={busData} />}
-                    {!busLoading && !busData && (
-                      <p className="text-xs text-slate-600 italic py-4 text-center">
-                        Failed to load bus factor data.
-                      </p>
-                    )}
-                  </div>
+              <Section
+                icon={FolderTree} tone="red" title="Knowledge & Bus Factor Map"
+                badge={busData ? `${busData.modules.length} module${busData.modules.length === 1 ? "" : "s"}` : undefined}
+                subtitle="Per-module contributor concentration — modules with bus factor = 1 are knowledge silos"
+                open={showBusFactor} onToggle={() => setShowBusFactor((v) => !v)}
+              >
+                {busLoading && <BusFactorSkeleton />}
+                {busData && <BusFactorHeatmap data={busData} />}
+                {!busLoading && !busData && (
+                  <p className="text-xs text-slate-600 italic py-4 text-center">
+                    Failed to load bus factor data.
+                  </p>
                 )}
-              </>
+              </Section>
             ) : (
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                 <span>Bus Factor Analysis is disabled —</span>
@@ -656,33 +643,20 @@ export default function TeamAnalyticsPage() {
           {/* ── Runner Utilization ──────────────────────────────────────────── */}
           <div>
             {flags.runnerUtilization ? (
-              <>
-                <button
-                  onClick={() => setShowRunners((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-                >
-                  <ChevronRight
-                    className={cn("w-3.5 h-3.5 transition-transform", showRunners && "rotate-90")}
-                  />
-                  <Server className="w-3.5 h-3.5" />
-                  {showRunners ? "Hide" : "Show"} Runner Utilization
-                </button>
-                {showRunners && (
-                  <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                    <h3 className="text-sm font-semibold text-white mb-0.5">Runner Utilization</h3>
-                    <p className="text-xs text-slate-500 mb-4">
-                      Job counts, durations, and failure rates per runner across recent completed runs
-                    </p>
-                    {runnerLoading && <BusFactorSkeleton />}
-                    {runnerData && <RunnerUtilization data={runnerData} />}
-                    {!runnerLoading && !runnerData && (
-                      <p className="text-xs text-slate-600 italic py-4 text-center">
-                        Failed to load runner statistics.
-                      </p>
-                    )}
-                  </div>
+              <Section
+                icon={Server} tone="violet" title="Runner Utilization"
+                badge={runnerData ? `${runnerData.unique_runners} runner${runnerData.unique_runners === 1 ? "" : "s"}` : undefined}
+                subtitle="Job counts, durations, and failure rates per runner across recent completed runs"
+                open={showRunners} onToggle={() => setShowRunners((v) => !v)}
+              >
+                {runnerLoading && <BusFactorSkeleton />}
+                {runnerData && <RunnerUtilization data={runnerData} />}
+                {!runnerLoading && !runnerData && (
+                  <p className="text-xs text-slate-600 italic py-4 text-center">
+                    Failed to load runner statistics.
+                  </p>
                 )}
-              </>
+              </Section>
             ) : (
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
                 <span>Runner Utilization is disabled —</span>

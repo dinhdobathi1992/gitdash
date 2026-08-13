@@ -2470,9 +2470,22 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.0.10",
+      version: "4.0.11",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [],
+        improved: [
+          "Team Analytics page redesign, implemented from a second Claude Design import (\"Section Headers\"): PR Leaderboard, Reviewer Load Matrix, Review Bottleneck, Workload Risk Radar, Bus Factor Map, and Runner Utilization now use a polished card-style collapsible header with a live data count badge, instead of a plain chevron-and-text toggle. Content components unchanged — same API, same data",
+        ],
+      },
+    },
+    {
+      version: "4.0.10",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [],
@@ -2900,7 +2913,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.10"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.11"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3149,7 +3162,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.10"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.11"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
