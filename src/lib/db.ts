@@ -272,7 +272,11 @@ export async function ensureSchema(): Promise<void> {
     if (appliedSet.has(migration.version)) continue;
 
     for (const sql of migration.up) {
-      await db.unsafe(sql);
+      // db.query() executes a raw SQL string. Do NOT use db.unsafe() here —
+      // in the @neondatabase/serverless HTTP driver it returns a non-thenable
+      // UnsafeRawSql fragment (for interpolation), so `await db.unsafe(...)`
+      // silently executes nothing while the migration is still recorded.
+      await db.query(sql);
     }
 
     await db`
