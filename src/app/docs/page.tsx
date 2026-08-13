@@ -1780,6 +1780,15 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/github/org-health-scorecard",
+          description: "Leadership rollup across every repo in an org: a composite health score (60% DORA tier + 40% bus-factor risk), risk band, and throughput trend, sorted worst-first.",
+          params: [
+            { name: "org", type: "string", optional: false, desc: "Organization slug." },
+            { name: "limit", type: "number", optional: true, desc: "Repos to analyse (default 10, max 20 — this is an expensive fan-out)." },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/github/security-scan",
           description: "Static analysis of workflow YAML files for security anti-patterns. Returns findings grouped by severity.",
           params: [
@@ -2195,9 +2204,24 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "3.2.0",
+      version: "4.0.0",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Team Health Scorecard — org-wide ranked view (Healthy / Watch / At Risk) combining DORA tier and bus-factor risk per repo, worst-first, with a throughput trend. New page at /org/[orgName]/health",
+        ],
+        fixed: [],
+        improved: [
+          "Bus-factor calculation extracted into a reusable lib function (src/lib/bus-factor.ts) so the scorecard can compute it per-repo without an internal HTTP round trip; the existing /api/github/bus-factor route is unchanged in behavior",
+        ],
+      },
+    },
+    {
+      version: "3.2.0",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -2474,7 +2498,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.2.0"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2719,7 +2743,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.2.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

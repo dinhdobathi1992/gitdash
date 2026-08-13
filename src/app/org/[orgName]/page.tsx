@@ -24,6 +24,7 @@ import {
   Lock,
   Unlock,
   GitCommit,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -63,14 +64,22 @@ export default function OrgDashboardPage({
             Organization CI/CD overview
           </p>
         </div>
-        <a
-          href={`https://github.com/${encodeURIComponent(orgName)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto inline-flex items-center gap-1 text-xs text-slate-400 hover:text-violet-400 transition-colors"
-        >
-          View on GitHub <ExternalLink className="w-3 h-3" />
-        </a>
+        <div className="ml-auto flex items-center gap-3">
+          <Link
+            href={`/org/${encodeURIComponent(orgName)}/health`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" /> Team Health Scorecard
+          </Link>
+          <a
+            href={`https://github.com/${encodeURIComponent(orgName)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-violet-400 transition-colors"
+          >
+            View on GitHub <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
       </div>
 
       {/* Loading state */}

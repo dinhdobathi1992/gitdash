@@ -9,6 +9,7 @@ export type FeatureFlags = {
   costAnalytics: boolean;
   runnerUtilization: boolean;
   reviewBottleneck: boolean;
+  healthScorecard: boolean;
 };
 
 export const DEFAULT_FLAGS: FeatureFlags = {
@@ -22,6 +23,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   costAnalytics: true,
   runnerUtilization: true,
   reviewBottleneck: true,
+  healthScorecard: true,
 };
 
 export const STORAGE_KEY = "gitdash:feature-flags";

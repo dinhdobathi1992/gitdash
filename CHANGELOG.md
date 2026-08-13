@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.0] — 2026-08-13
+
+### Overview
+First of four leadership-focused releases (v4.0.0 → v4.0.3), each shipping as its own isolated, independently-rollback-able version — see "Rollback" below. This one: the **Team Health Scorecard**, an org-wide ranked view that answers "which of my teams needs attention" without opening repos one at a time.
+
+### Added
+
+#### Team Health Scorecard
+- New `GET /api/github/org-health-scorecard?org=X&limit=N` — for every repo in an org, computes a composite health score (60% DORA tier + 40% bus-factor risk, 0–100) and a throughput trend (recent vs. prior half of the DORA window), sorted worst-first.
+- New `/org/[orgName]/health` page — ranked list with risk bands (Healthy / Watch / At Risk), DORA tier, bus-factor and critical-module counts, and trend arrows. Linked from the existing Org Overview page.
+- Deliberately **no new database table** — the trend signal is derived from data the DORA calculation already fetches (recent vs. prior weeks of merged-PR throughput), so this works identically whether or not `DATABASE_URL` is configured, and there's no schema change to roll back if the feature is reverted.
+- Gated behind a new `healthScorecard` feature flag (Settings → Feature Flags), following the same pattern as every other optional analytics section.
+
+### Changed
+- `src/lib/bus-factor.ts` (new): the bus-factor calculation was extracted out of `src/app/api/github/bus-factor/route.ts` into a reusable function, so the scorecard can compute it per-repo via a direct function call instead of an internal HTTP round trip. The route itself is now a thin cached wrapper — its response shape and behavior are unchanged.
+
+### Rollback
+This release is intentionally isolated to make reverting it low-risk:
+- **Instant, no redeploy:** toggle "Team Health Scorecard" off in Settings → Feature Flags. Hides the new page and stops the client from calling the new endpoint.
+- **Instant, no rebuild:** promote the prior Vercel deployment (`vercel rollback`, or "Promote to Production" on the v3.2.0 deployment in the Vercel dashboard).
+- **Full revert:** `git revert` this release's commit(s) — no database migration was added, so there is nothing to roll back at the schema level.
+
+### Changed (infra)
+- Bumped app version from 3.2.0 to 4.0.0
+- Bumped Helm chart version to 0.4.0 / appVersion to 4.0.0
+
+---
+
 ## [3.2.0] — 2026-08-13
 
 ### Overview
