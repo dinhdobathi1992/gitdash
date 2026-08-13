@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
           // Referrer policy
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // Disable browser features we don't use
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           // MED-003: HSTS — only in production (browsers ignore it over HTTP)
           ...(isDev ? [] : [{
             key: "Strict-Transport-Security",

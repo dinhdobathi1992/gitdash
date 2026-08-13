@@ -6,6 +6,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.9] — 2026-08-13
+
+### Overview
+Drive-by fix reported alongside v4.0.8 testing: the browser console logged `Error with Permissions-Policy header: Unrecognized feature: 'interest-cohort'` on every page load.
+
+### Fixed
+
+#### Stale Permissions-Policy directive
+- **Root cause:** the security-headers config in `next.config.ts` disabled `interest-cohort` (Google's FLoC/Topics cohort-tracking feature) via the `Permissions-Policy` header. FLoC was discontinued and modern browsers no longer recognize `interest-cohort` as a valid Permissions-Policy feature, so every request logged a harmless-but-noisy console warning.
+- Removed the directive. `camera`, `microphone`, and `geolocation` remain disabled — no functional change, this is not the cause of any loading issue.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.8 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one header value in `next.config.ts`.
+
+### Changed (infra)
+- Bumped app version from 4.0.8 to 4.0.9
+- Bumped Helm chart version from 0.4.8 to 0.4.9
+
+---
+
 ## [4.0.8] — 2026-08-13
 
 ### Overview
