@@ -30,6 +30,7 @@ const METRIC_META: Record<string, { label: string; unit: string; description: st
   duration_p95:   { label: "Duration P95",       unit: "min",  description: "Alert when p95 run duration exceeds threshold",           icon: Clock, category: "CI" },
   queue_wait_p95: { label: "Queue Wait P95",     unit: "min",  description: "Alert when p95 queue wait exceeds threshold",             icon: TrendingUp, category: "CI" },
   success_streak: { label: "Success Streak",     unit: "runs", description: "Alert when consecutive failures exceed threshold",        icon: Zap, category: "CI" },
+  anomaly_count:  { label: "Statistical Anomalies", unit: "runs", description: "Alert when >threshold runs deviate >2 stddev from the rolling baseline", icon: AlertTriangle, category: "CI" },
   // ── People metrics ─────────────────────────────────────────────────────────
   pr_throughput_drop:    { label: "PR Throughput Drop",    unit: "%",    description: "Alert when merged PRs drop >threshold% vs prior window",                 icon: TrendingDown, category: "People" },
   review_response_p90:  { label: "Review Response P90",   unit: "hrs",  description: "Alert when P90 time-to-first-review exceeds threshold hours",              icon: Clock, category: "People" },
@@ -42,6 +43,7 @@ const CHANNEL_META: Record<string, { label: string; color: string }> = {
   browser: { label: "Browser",  color: "text-violet-400" },
   slack:   { label: "Slack",    color: "text-green-400" },
   email:   { label: "Email",    color: "text-blue-400" },
+  digest:  { label: "Daily Digest (email)", color: "text-amber-400" },
 };
 
 // ── Rule card ─────────────────────────────────────────────────────────────────
@@ -187,7 +189,7 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
     }
   }
 
-  const needsDestination = channel === "slack" || channel === "email";
+  const needsDestination = channel === "slack" || channel === "email" || channel === "digest";
 
   return (
     <form onSubmit={handleSubmit} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
@@ -263,7 +265,13 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             <option value="browser">Browser</option>
             <option value="slack">Slack</option>
             <option value="email">Email</option>
+            <option value="digest">Daily Digest (email)</option>
           </select>
+          {channel === "digest" && (
+            <p className="text-[11px] text-slate-500 mt-1">
+              Bundled into one email per day instead of a real-time notification per event.
+            </p>
+          )}
         </div>
 
         {needsDestination && (

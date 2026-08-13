@@ -4,12 +4,23 @@
  * Uses a rolling baseline (mean ± 2×stddev) to flag runs whose duration
  * or queue wait is significantly outside the normal range.
  *
- * All functions are pure and stateless — designed for client-side use.
+ * All functions are pure and stateless — usable client-side and server-side.
  */
 
-import type { WorkflowRun } from "./github";
-
 // ── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Minimal shape anomaly detection actually reads. Both the client-side
+ * `WorkflowRun` (from the GitHub API) and the server-side `DbWorkflowRun`
+ * (from Neon) satisfy this structurally, so the same detector runs in
+ * both contexts without an adapter.
+ */
+export interface AnomalyInputRun {
+  id: number;
+  run_number: number | null;
+  duration_ms?: number | null;
+  queue_wait_ms?: number | null;
+}
 
 export type AnomalyMetric = "duration" | "queue_wait";
 
@@ -82,11 +93,11 @@ function stddev(arr: number[], avg: number): number {
  * Runs are expected in newest-first order (as returned by the GitHub API).
  */
 function detectForMetric(
-  runs: WorkflowRun[],
+  runs: AnomalyInputRun[],
   metric: AnomalyMetric,
   threshold: number = Z_THRESHOLD,
 ): AnomalyResult[] {
-  const getValue = (r: WorkflowRun): number | undefined =>
+  const getValue = (r: AnomalyInputRun): number | null | undefined =>
     metric === "duration" ? r.duration_ms : r.queue_wait_ms;
 
   // Work oldest→newest so we can build up the baseline window.
@@ -96,13 +107,13 @@ function detectForMetric(
   for (let i = 0; i < chronological.length; i++) {
     const run = chronological[i];
     const value = getValue(run);
-    if (value === undefined || value <= 0) continue;
+    if (value == null || value <= 0) continue;
 
     // Baseline: up to BASELINE_WINDOW preceding runs with valid values.
     const precedingValues: number[] = [];
     for (let j = i - 1; j >= 0 && precedingValues.length < BASELINE_WINDOW; j--) {
       const v = getValue(chronological[j]);
-      if (v !== undefined && v > 0) precedingValues.push(v);
+      if (v != null && v > 0) precedingValues.push(v);
     }
 
     if (precedingValues.length < MIN_SAMPLES) continue;
@@ -120,7 +131,7 @@ function detectForMetric(
     if (isHigh || isLow) {
       results.push({
         runId: run.id,
-        runNumber: run.run_number,
+        runNumber: run.run_number ?? 0,
         metric,
         value_ms: value,
         mean_ms: Math.round(m),
@@ -140,7 +151,7 @@ function detectForMetric(
  * Returns a map of runId → anomalies for easy lookup.
  */
 export function detectAnomalies(
-  runs: WorkflowRun[],
+  runs: AnomalyInputRun[],
   threshold: number = Z_THRESHOLD,
 ): Map<number, RunAnomalies> {
   const durationAnomalies = detectForMetric(runs, "duration", threshold);
@@ -172,17 +183,17 @@ export function detectAnomalies(
  * Uses the most recent BASELINE_WINDOW runs with valid values.
  */
 export function computeBaseline(
-  runs: WorkflowRun[],
+  runs: AnomalyInputRun[],
   metric: AnomalyMetric,
   threshold: number = Z_THRESHOLD,
 ): BaselineStats | null {
-  const getValue = (r: WorkflowRun): number | undefined =>
+  const getValue = (r: AnomalyInputRun): number | null | undefined =>
     metric === "duration" ? r.duration_ms : r.queue_wait_ms;
 
   const values: number[] = [];
   for (const r of runs) {
     const v = getValue(r);
-    if (v !== undefined && v > 0) {
+    if (v != null && v > 0) {
       values.push(v);
       if (values.length >= BASELINE_WINDOW) break;
     }

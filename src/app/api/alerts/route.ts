@@ -60,11 +60,12 @@ export async function POST(req: NextRequest) {
 
   const VALID_METRICS = [
     "failure_rate", "duration_p95", "queue_wait_p95", "success_streak",
+    "anomaly_count",
     // People-based metrics (Phase 5)
     "pr_throughput_drop", "review_response_p90", "afterhours_commit_pct",
     "pr_abandon_rate", "unreviewed_pr_age",
   ];
-  const VALID_CHANNELS = ["browser", "slack", "email"];
+  const VALID_CHANNELS = ["browser", "slack", "email", "digest"];
   if (!VALID_METRICS.includes(metric)) {
     return NextResponse.json({ error: `metric must be one of: ${VALID_METRICS.join(", ")}` }, { status: 400 });
   }

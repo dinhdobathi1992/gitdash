@@ -7,6 +7,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { buildPayload, dispatchAlert, METRIC_LABELS as _METRIC_LABELS } from "./notifier";
+import { detectAnomalies } from "./anomaly";
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,12 @@ export interface DbAlertEvent {
   sample_size: number | null;
   computed_at: string | null;
   delivery_status: string | null;
+  // v4 addition
+  digest_sent_at: string | null;
+}
+
+export interface PendingDigestEvent extends DbAlertEvent {
+  destination: string | null;
 }
 
 export interface DbPrFact {
@@ -248,6 +255,17 @@ const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
       `ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS owner_note TEXT`,
     ],
   },
+  {
+    version: 4,
+    name: "alert_digest",
+    up: [
+      // Marks when an event was folded into a digest email — NULL means it's
+      // still pending. Supports the "digest" delivery channel (daily summary
+      // instead of a real-time notification per event).
+      `ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS digest_sent_at TIMESTAMPTZ`,
+      `CREATE INDEX IF NOT EXISTS idx_ae_digest_pending ON alert_events(digest_sent_at) WHERE digest_sent_at IS NULL`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -389,6 +407,19 @@ export async function updateSyncCursor(repo: string, lastRunId: number): Promise
       last_run_id    = EXCLUDED.last_run_id,
       last_synced_at = NOW()
   `;
+}
+
+/**
+ * All repos that have ever been synced (i.e. someone clicked "Sync from
+ * GitHub" or the repo was upserted via webhook at least once). This is the
+ * durable list of "tracked" repos — the scheduled cron job re-syncs exactly
+ * this set, so a repo opts into background sync by being synced once.
+ */
+export async function listSyncedRepos(): Promise<{ repo: string; last_synced_at: string | null }[]> {
+  await ensureSchema();
+  return await getDb()`
+    SELECT repo, last_synced_at FROM sync_cursors ORDER BY repo
+  ` as { repo: string; last_synced_at: string | null }[];
 }
 
 // ── Historical queries ────────────────────────────────────────────────────────
@@ -598,6 +629,31 @@ export async function fireAlertEvent(
   `;
 }
 
+// ── Digest delivery ───────────────────────────────────────────────────────────
+
+/**
+ * Events fired by "digest"-channel rules that haven't been folded into a
+ * digest email yet. Delivery for these rules is deferred at fire-time
+ * (see notifier.ts dispatchAlert) — this is what the daily cron sends.
+ */
+export async function getPendingDigestEvents(): Promise<PendingDigestEvent[]> {
+  await ensureSchema();
+  return await getDb()`
+    SELECT ae.*, ar.destination
+    FROM alert_events ae
+    JOIN alert_rules ar ON ar.id = ae.rule_id
+    WHERE ar.channel = 'digest'
+      AND ae.digest_sent_at IS NULL
+    ORDER BY ae.fired_at DESC
+  ` as PendingDigestEvent[];
+}
+
+export async function markDigestSent(eventIds: number[]): Promise<void> {
+  if (!eventIds.length) return;
+  await ensureSchema();
+  await getDb()`UPDATE alert_events SET digest_sent_at = NOW() WHERE id = ANY(${eventIds})`;
+}
+
 export async function updateAlertEventDeliveryStatus(
   eventId: number,
   status: "pending" | "sent" | "failed" | "retrying",
@@ -801,6 +857,25 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
       ` as { max_age_days: number | null; total: number }[];
       sampleSize = rows[0]?.total ?? 0;
       value = rows[0]?.max_age_days ?? null;
+
+    } else if (rule.metric === "anomaly_count") {
+      // Statistical outliers (duration/queue-wait > 2 stddev from rolling
+      // baseline) among completed runs in the window — reuses the same
+      // detector the workflow detail page uses client-side (src/lib/anomaly.ts).
+      const rows = await getDb()`
+        SELECT id, run_number, duration_ms, queue_wait_ms
+        FROM workflow_runs
+        WHERE repo = ${repoKey}
+          AND status = 'completed'
+          AND created_at >= NOW() - (${rule.window_hours} || ' hours')::INTERVAL
+        ORDER BY created_at DESC
+        LIMIT 200
+      ` as { id: number; run_number: number | null; duration_ms: number | null; queue_wait_ms: number | null }[];
+      if (rows.length > 0) {
+        sampleSize = rows.length;
+        const anomalies = detectAnomalies(rows);
+        value = Array.from(anomalies.values()).filter((a) => a.hasAnomaly).length;
+      }
     }
 
     if (value === null) continue;

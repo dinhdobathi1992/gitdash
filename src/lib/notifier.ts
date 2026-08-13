@@ -36,6 +36,7 @@ export const METRIC_LABELS: Record<string, { label: string; unit: string }> = {
   afterhours_commit_pct:  { label: "After-Hours Commits",   unit: "%" },
   pr_abandon_rate:        { label: "PR Abandon Rate",       unit: "%" },
   unreviewed_pr_age:      { label: "Unreviewed PR Age",     unit: " days" },
+  anomaly_count:          { label: "Statistical Anomalies", unit: " runs" },
 };
 
 export function buildPayload(
@@ -230,7 +231,62 @@ export async function dispatchAlert(payload: AlertPayload): Promise<DeliveryResu
   switch (payload.rule.channel) {
     case "slack":   return deliverSlack(payload);
     case "email":   return deliverEmail(payload);
+    // Digest rules don't deliver at fire-time — the event is recorded and
+    // picked up by the daily digest send (see sendPendingDigests below).
+    case "digest":  return { ok: true };
     case "browser":
     default:        return deliverBrowser(payload);
   }
+}
+
+// ── Digest delivery ────────────────────────────────────────────────────────────
+
+export interface DigestItem {
+  repo: string;
+  metric: string;
+  value: number | null;
+  fired_at: string;
+}
+
+/**
+ * Sends one summary email per destination for all pending digest-channel
+ * events. Reuses the same Resend/SMTP provider selection as deliverEmail.
+ */
+export async function deliverDigestEmail(
+  to: string,
+  items: DigestItem[],
+): Promise<DeliveryResult> {
+  if (!items.length) return { ok: true };
+
+  const subject = `[GitDash] Daily digest — ${items.length} alert${items.length === 1 ? "" : "s"}`;
+  const rows = items
+    .map((i) => {
+      const meta = METRIC_LABELS[i.metric] ?? { label: i.metric, unit: "" };
+      return `<tr><td>${i.repo}</td><td>${meta.label}</td><td>${i.value ?? "—"}${meta.unit}</td><td>${new Date(i.fired_at).toLocaleString()}</td></tr>`;
+    })
+    .join("\n");
+  const html = `
+    <h2>GitDash Daily Digest</h2>
+    <p>${items.length} alert${items.length === 1 ? "" : "s"} fired in the last 24 hours.</p>
+    <table cellpadding="6" style="border-collapse:collapse;width:100%">
+      <thead><tr style="text-align:left;border-bottom:1px solid #ccc"><th>Repo</th><th>Metric</th><th>Value</th><th>Fired at</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <hr/>
+    <p style="color:#888;font-size:12px">Sent by GitDash alert system. To change digest frequency or disable, update the rule in the Alerts page.</p>
+  `;
+  const text =
+    `GitDash Daily Digest — ${items.length} alerts\n\n` +
+    items.map((i) => {
+      const meta = METRIC_LABELS[i.metric] ?? { label: i.metric, unit: "" };
+      return `${i.repo}: ${meta.label} = ${i.value ?? "—"}${meta.unit} at ${i.fired_at}`;
+    }).join("\n");
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) return deliverViaResend(to, subject, html, text, resendKey);
+
+  const smtpHost = process.env.SMTP_HOST;
+  if (smtpHost) return deliverViaSendgridCompat(to, subject, text, html);
+
+  return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
 }
