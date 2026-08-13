@@ -6,6 +6,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.10] — 2026-08-13
+
+### Overview
+UX follow-up after a scare: a GitHub-side 403 (secondary rate-limiting from repeated testing, not a code issue) made the Team Health Scorecard's loading skeleton sit motionless long enough to look frozen. The skeleton itself gave no signal that anything was actually happening.
+
+### Changed
+
+#### Scorecard loading state
+- Added a spinner + status line ("Collecting data across up to N repositories — a DORA + bus-factor check runs per repo, usually a few seconds…") above the skeleton tiles, so a slow or retrying fetch visibly reads as "working," not "stuck."
+- No behavior change to the fetch itself — this is purely the loading-state UI.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.9 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one component, no data or API change.
+
+### Changed (infra)
+- Bumped app version from 4.0.9 to 4.0.10
+- Bumped Helm chart version from 0.4.9 to 0.4.10
+
+---
+
 ## [4.0.9] — 2026-08-13
 
 ### Overview

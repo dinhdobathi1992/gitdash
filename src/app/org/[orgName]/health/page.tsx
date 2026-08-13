@@ -10,7 +10,7 @@ import { LEVEL_COLORS, LEVEL_LABELS } from "@/lib/dora";
 import type { OrgHealthScorecardResponse, RepoScorecardEntry } from "@/app/api/github/org-health-scorecard/route";
 import {
   Building2, ShieldCheck, TrendingUp, TrendingDown, Minus,
-  ExternalLink, AlertTriangle, ChevronRight, Info,
+  ExternalLink, AlertTriangle, ChevronRight, Info, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -232,9 +232,15 @@ function RepoRow({ entry }: { entry: RepoScorecardEntry }) {
   );
 }
 
-function ScorecardSkeleton() {
+function ScorecardSkeleton({ limit }: { limit: number }) {
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] text-sm text-violet-200">
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+        <span>
+          Collecting data across up to {limit} repositories — a DORA + bus-factor check runs per repo, usually a few seconds…
+        </span>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-[92px] rounded-2xl skeleton" />
@@ -327,7 +333,7 @@ export default function OrgHealthScorecardPage({
         </div>
       ) : (
         <>
-          {isLoading && <ScorecardSkeleton />}
+          {isLoading && <ScorecardSkeleton limit={limit} />}
 
           {error && (
             <div className="px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/10 text-sm text-red-300">
