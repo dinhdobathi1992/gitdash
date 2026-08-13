@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import { Breadcrumb } from "@/components/Sidebar";
@@ -35,6 +36,7 @@ export default function OrgDashboardPage({
   params: Promise<{ orgName: string }>;
 }) {
   const { orgName } = use(params);
+  const router = useRouter();
 
   const { data, error, isLoading } = useSWR<OrgOverviewResponse>(
     `/api/github/org-overview?org=${encodeURIComponent(orgName)}`,
@@ -272,7 +274,7 @@ export default function OrgDashboardPage({
                         key={r.repo.id}
                         className="group border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer"
                         onClick={() => {
-                          window.location.href = `/repos/${r.repo.owner}/${r.repo.name}`;
+                          router.push(`/repos/${r.repo.owner}/${r.repo.name}`);
                         }}
                       >
                         {/* Repository */}

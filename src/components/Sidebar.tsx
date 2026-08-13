@@ -37,11 +37,14 @@ function WatchlistSection({ onClose }: { onClose?: () => void }) {
   const [pinned, setPinned] = useState<string[]>(EMPTY_PINNED);
 
   useEffect(() => {
+    // Hydration-safe localStorage read: render the SSR-safe default first,
+    // then set once after mount. A one-time guarded setState cannot cascade.
+    // (useSyncExternalStore was tried and reverted — see commit 17191b3.)
     try {
       const stored = JSON.parse(localStorage.getItem(WATCHLIST_KEY) ?? "[]") as string[];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored.length > 0) setPinned(stored);
     } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
