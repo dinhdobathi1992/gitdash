@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.3] — 2026-08-13
+
+### Overview
+Fourth and final leadership-focused release. The **Weekly Leadership Digest** — a plain-English narrative summary emailed to leadership every Monday: what's healthy, what's trending, and what needs attention across an org, without anyone having to log in and look.
+
+### Added
+
+#### Weekly Leadership Digest
+- New alert metric `leadership_digest` and a dedicated form in the Alerts page: pick an org and an email address, and every Monday (UTC) you get a narrative summary — reuses the exact org-health-scorecard computation from v4.0.0 (`src/lib/org-health-scorecard.ts`, now extracted into a shared lib) and turns the ranked result into sentences instead of a UI list.
+- **No new database table.** `leadership_digest` rules are stored in the existing `alert_rules` table (same schema, same UI, same CRUD) — the cron explicitly excludes them from the normal per-repo alert evaluation path (they'd otherwise fire once per repo per day instead of once per week) and evaluates them directly on its own weekly cadence.
+- **No "last sent" state to track.** The cron runs daily; a simple day-of-week check (`getUTCDay() === 1`, Monday) is enough to fire the digest once a week — no extra column, no extra table.
+- Narrative generation (`src/lib/leadership-narrative.ts`) is rule-based and testable, same style as the app's alert thresholds and the 1:1 Prep Sheet's talking points: highlights (healthy repos, upward trends), concerns (at-risk repos, critical bus-factor modules, downward trends), never more than what fits in a scannable email.
+- 5 new unit tests for the narrative generator (`tests/leadership-narrative.test.ts`).
+
+### Changed
+- `src/lib/org-health-scorecard.ts` (new): the composite-score computation was extracted out of `/api/github/org-health-scorecard`'s route handler so the digest could call it directly. The route itself is unchanged in behavior — same thin cached wrapper pattern as v4.0.0's bus-factor extraction.
+
+### Rollback
+- **Instant, no redeploy:** delete or disable the `leadership_digest` rule(s) in the Alerts page — no more emails go out, nothing else in the app is affected.
+- **Instant, no rebuild:** promote the v4.0.2 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — no migration to undo (the feature reused the existing `alert_rules` schema).
+
+### Changed (infra)
+- Bumped app version from 4.0.2 to 4.0.3
+- Bumped Helm chart version from 0.4.2 to 0.4.3
+
+---
+
 ## [4.0.2] — 2026-08-13
 
 ### Overview

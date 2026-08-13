@@ -9,7 +9,7 @@ import { RepoPicker } from "@/components/RepoPicker";
 import {
   Bell, Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle,
   CheckCircle2, Clock, TrendingUp, TrendingDown, Zap, Info,
-  Moon, GitPullRequestClosed, AlertTriangle,
+  Moon, GitPullRequestClosed, AlertTriangle, Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -37,6 +37,8 @@ const METRIC_META: Record<string, { label: string; unit: string; description: st
   afterhours_commit_pct:{ label: "After-Hours Commits",   unit: "%",    description: "Alert when after-hours commit % exceeds threshold (burnout risk)",         icon: Moon, category: "People" },
   pr_abandon_rate:      { label: "PR Abandon Rate",       unit: "%",    description: "Alert when closed-without-merge PRs exceed threshold% of opened",         icon: GitPullRequestClosed, category: "People" },
   unreviewed_pr_age:    { label: "Unreviewed PR Age",     unit: "days", description: "Alert when any open PR has no review after threshold business days",       icon: AlertTriangle, category: "People" },
+  // ── Leadership ──────────────────────────────────────────────────────────────
+  leadership_digest:    { label: "Weekly Leadership Digest", unit: "", description: "Every Monday, an org-wide narrative summary — health scorecard, trends, and what needs attention",  icon: Mail, category: "Leadership" },
 };
 
 const CHANNEL_META: Record<string, { label: string; color: string }> = {
@@ -85,8 +87,14 @@ function RuleCard({
         </div>
         <p className="text-xs text-slate-400 mt-0.5">{meta.description}</p>
         <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-          <span>Threshold: <span className="text-slate-300 font-mono">{rule.threshold}{meta.unit}</span></span>
-          <span>Window: <span className="text-slate-300">{rule.window_hours}h</span></span>
+          {rule.metric === "leadership_digest" ? (
+            <span>Sent every Monday</span>
+          ) : (
+            <>
+              <span>Threshold: <span className="text-slate-300 font-mono">{rule.threshold}{meta.unit}</span></span>
+              <span>Window: <span className="text-slate-300">{rule.window_hours}h</span></span>
+            </>
+          )}
           {rule.destination && (
             <span className="truncate max-w-[200px]" title={rule.destination}>→ {rule.destination}</span>
           )}
@@ -190,6 +198,7 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
   }
 
   const needsDestination = channel === "slack" || channel === "email" || channel === "digest";
+  const isLeadershipDigest = metric === "leadership_digest";
 
   return (
     <form onSubmit={handleSubmit} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
@@ -199,20 +208,44 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Repository (scope)</label>
-          <RepoPicker
-            value={scope}
-            onChange={setScope}
-            placeholder="Pick a repository…"
-            className="w-full"
-          />
+          <label className="block text-xs text-slate-400 mb-1">
+            {isLeadershipDigest ? "Organization" : "Repository (scope)"}
+          </label>
+          {isLeadershipDigest ? (
+            <input
+              required
+              placeholder="my-org"
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+            />
+          ) : (
+            <RepoPicker
+              value={scope}
+              onChange={setScope}
+              placeholder="Pick a repository…"
+              className="w-full"
+            />
+          )}
         </div>
 
         <div>
           <label className="block text-xs text-slate-400 mb-1">Metric</label>
           <select
             value={metric}
-            onChange={(e) => setMetric(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setMetric(next);
+              if (next === "leadership_digest") {
+                setChannel("email");
+                setThreshold("0");
+                setWindowHours("168");
+                setScope((s) => s.includes("/") ? "" : s); // repo-shaped scope doesn't apply here
+              } else if (metric === "leadership_digest") {
+                setChannel("browser");
+                setThreshold("20");
+              }
+            }}
             className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
           >
             <optgroup label="CI Metrics">
@@ -225,67 +258,86 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
                 <option key={key} value={key}>{m.label}</option>
               ))}
             </optgroup>
+            <optgroup label="Leadership">
+              {Object.entries(METRIC_META).filter(([, m]) => m.category === "Leadership").map(([key, m]) => (
+                <option key={key} value={key}>{m.label}</option>
+              ))}
+            </optgroup>
           </select>
-        </div>
-
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">
-            Threshold ({METRIC_META[metric]?.unit ?? ""})
-          </label>
-          <input
-            required
-            type="number"
-            min="0"
-            value={threshold}
-            onChange={(e) => setThreshold(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Window (hours)</label>
-          <input
-            required
-            type="number"
-            min="1"
-            max="168"
-            value={windowHours}
-            onChange={(e) => setWindowHours(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Channel</label>
-          <select
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
-          >
-            <option value="browser">Browser</option>
-            <option value="slack">Slack</option>
-            <option value="email">Email</option>
-            <option value="digest">Daily Digest (email)</option>
-          </select>
-          {channel === "digest" && (
-            <p className="text-[11px] text-slate-500 mt-1">
-              Bundled into one email per day instead of a real-time notification per event.
-            </p>
+          {isLeadershipDigest && (
+            <p className="text-[11px] text-slate-500 mt-1">{METRIC_META.leadership_digest.description}</p>
           )}
         </div>
 
-        {needsDestination && (
+        {!isLeadershipDigest && (
+          <>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Threshold ({METRIC_META[metric]?.unit ?? ""})
+              </label>
+              <input
+                required
+                type="number"
+                min="0"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Window (hours)</label>
+              <input
+                required
+                type="number"
+                min="1"
+                max="168"
+                value={windowHours}
+                onChange={(e) => setWindowHours(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Channel</label>
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
+              >
+                <option value="browser">Browser</option>
+                <option value="slack">Slack</option>
+                <option value="email">Email</option>
+                <option value="digest">Daily Digest (email)</option>
+              </select>
+              {channel === "digest" && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Bundled into one email per day instead of a real-time notification per event.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
+        {(needsDestination || isLeadershipDigest) && (
           <div>
             <label className="block text-xs text-slate-400 mb-1">
               {channel === "slack" ? "Slack Webhook URL" : "Email Address"}
             </label>
             <input
+              required={isLeadershipDigest}
               placeholder={channel === "slack" ? "https://hooks.slack.com/…" : "you@example.com"}
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
               className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
             />
           </div>
+        )}
+
+        {isLeadershipDigest && (
+          <p className="text-[11px] text-slate-500 md:col-span-2 flex items-center gap-1">
+            <Mail className="w-3 h-3" /> Sent every Monday, computed fresh each time — no threshold or window to configure.
+          </p>
         )}
       </div>
 

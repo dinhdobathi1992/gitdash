@@ -543,6 +543,22 @@ export async function getAllAlertRules(): Promise<DbAlertRule[]> {
   return await getDb()`SELECT * FROM alert_rules ORDER BY scope, id` as DbAlertRule[];
 }
 
+/**
+ * "leadership_digest" rules (v4.0.3) are a config store, not a normal
+ * threshold rule — the alert_rules table/UI is reused (no new migration),
+ * but these must never go through evaluateAlertRulesForRepo's per-repo-sync
+ * evaluation (that would fire the digest once per repo per day, not once
+ * per week). The cron calls this directly on its weekly cadence instead.
+ */
+export async function getLeadershipDigestRules(): Promise<DbAlertRule[]> {
+  await ensureSchema();
+  return await getDb()`
+    SELECT * FROM alert_rules
+    WHERE metric = 'leadership_digest' AND enabled = TRUE
+    ORDER BY scope, id
+  ` as DbAlertRule[];
+}
+
 export async function createAlertRule(
   rule: Omit<DbAlertRule, "id" | "created_at" | "muted_until" | "owner_note">
 ): Promise<DbAlertRule> {
@@ -679,10 +695,14 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
 
   const rules: DbAlertRule[] = [];
   for (const s of scopes) {
+    // leadership_digest rules are excluded here — they're a config store
+    // evaluated weekly by the cron directly (getLeadershipDigestRules),
+    // never per-repo-sync (see that function's doc comment for why).
     const r = await getDb()`
       SELECT * FROM alert_rules
       WHERE scope = ${s}
         AND enabled = TRUE
+        AND metric != 'leadership_digest'
         AND (muted_until IS NULL OR muted_until < NOW())
     ` as DbAlertRule[];
     rules.push(...r);

@@ -37,6 +37,7 @@ export const METRIC_LABELS: Record<string, { label: string; unit: string }> = {
   pr_abandon_rate:        { label: "PR Abandon Rate",       unit: "%" },
   unreviewed_pr_age:      { label: "Unreviewed PR Age",     unit: " days" },
   anomaly_count:          { label: "Statistical Anomalies", unit: " runs" },
+  leadership_digest:      { label: "Weekly Leadership Digest", unit: "" },
 };
 
 export function buildPayload(
@@ -287,6 +288,46 @@ export async function deliverDigestEmail(
 
   const smtpHost = process.env.SMTP_HOST;
   if (smtpHost) return deliverViaSendgridCompat(to, subject, text, html);
+
+  return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
+}
+
+// ── Weekly Leadership Digest (v4.0.3) ──────────────────────────────────────────
+
+export interface LeadershipDigestEmailInput {
+  subject: string;
+  summary_line: string;
+  highlights: string[];
+  concerns: string[];
+}
+
+export async function deliverLeadershipDigestEmail(
+  to: string,
+  narrative: LeadershipDigestEmailInput,
+): Promise<DeliveryResult> {
+  const listHtml = (items: string[]) =>
+    items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("\n")}</ul>` : "<p>None this week.</p>";
+
+  const html = `
+    <h2>GitDash Weekly Leadership Digest</h2>
+    <p>${narrative.summary_line}</p>
+    <h3>Highlights</h3>
+    ${listHtml(narrative.highlights)}
+    <h3>Needs attention</h3>
+    ${listHtml(narrative.concerns)}
+    <hr/>
+    <p style="color:#888;font-size:12px">Sent by GitDash. To stop receiving this, delete the Weekly Leadership Digest rule in the Alerts page.</p>
+  `;
+  const text =
+    `GitDash Weekly Leadership Digest\n\n${narrative.summary_line}\n\n` +
+    `Highlights:\n${narrative.highlights.length ? narrative.highlights.map((i) => `- ${i}`).join("\n") : "None this week."}\n\n` +
+    `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}`;
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) return deliverViaResend(to, narrative.subject, html, text, resendKey);
+
+  const smtpHost = process.env.SMTP_HOST;
+  if (smtpHost) return deliverViaSendgridCompat(to, narrative.subject, text, html);
 
   return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
 }

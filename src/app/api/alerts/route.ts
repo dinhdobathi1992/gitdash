@@ -64,6 +64,10 @@ export async function POST(req: NextRequest) {
     // People-based metrics (Phase 5)
     "pr_throughput_drop", "review_response_p90", "afterhours_commit_pct",
     "pr_abandon_rate", "unreviewed_pr_age",
+    // Leadership digest config (v4.0.3) — not a threshold rule, see
+    // getLeadershipDigestRules for why this is excluded from normal
+    // per-repo alert evaluation.
+    "leadership_digest",
   ];
   const VALID_CHANNELS = ["browser", "slack", "email", "digest"];
   if (!VALID_METRICS.includes(metric)) {
@@ -71,6 +75,12 @@ export async function POST(req: NextRequest) {
   }
   if (!VALID_CHANNELS.includes(channel)) {
     return NextResponse.json({ error: `channel must be one of: ${VALID_CHANNELS.join(", ")}` }, { status: 400 });
+  }
+  if (metric === "leadership_digest" && !scope.startsWith("org:")) {
+    return NextResponse.json({ error: "leadership_digest scope must be an org (e.g. org:myorg), not a single repo" }, { status: 400 });
+  }
+  if (metric === "leadership_digest" && !destination) {
+    return NextResponse.json({ error: "leadership_digest requires a destination email address" }, { status: 400 });
   }
 
   try {

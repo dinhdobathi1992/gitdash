@@ -19,11 +19,16 @@
  * this is the only scheduled entry point, and Vercel Hobby limits cron jobs
  * to once/day, so digest delivery piggybacks here rather than needing its
  * own cron.
+ *
+ * On Mondays (UTC) only, also sends the Weekly Leadership Digest (v4.0.3)
+ * to every "leadership_digest" alert rule. No persisted "last sent" state
+ * is needed — the day-of-week check alone is enough to fire once a week,
+ * since this cron itself only runs once a day.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getOctokit } from "@/lib/github";
-import { syncRepo, sendPendingDigests } from "@/lib/sync";
+import { syncRepo, sendPendingDigests, sendWeeklyLeadershipDigests } from "@/lib/sync";
 import { listSyncedRepos } from "@/lib/db";
 import { pLimitSettled } from "@/lib/concurrency";
 
@@ -71,11 +76,24 @@ export async function GET(req: NextRequest) {
     digest = { destinations_notified: 0, events_included: 0, failures: 0, error: String(e) };
   }
 
+  // Monday = 1 in getUTCDay() (Sunday = 0)
+  const isMonday = new Date().getUTCDay() === 1;
+  let leadershipDigest: Awaited<ReturnType<typeof sendWeeklyLeadershipDigests>> | { skipped: true } = { skipped: true };
+  if (isMonday) {
+    try {
+      leadershipDigest = await sendWeeklyLeadershipDigests(octokit, process.env.GITHUB_TOKEN);
+    } catch (e) {
+      console.error("[cron] Leadership digest error:", e);
+      leadershipDigest = { rules_processed: 0, sent: 0, failures: 1 };
+    }
+  }
+
   return NextResponse.json({
     repos_tracked: tracked.length,
     repos_synced: synced.length - failed.length,
     repos_failed: failed.length,
     results: synced,
     digest,
+    leadership_digest: leadershipDigest,
   });
 }

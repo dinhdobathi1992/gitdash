@@ -1949,9 +1949,9 @@ function APIReference() {
         {
           method: "POST",
           path: "/api/alerts",
-          description: "Create an alert rule.",
+          description: "Create an alert rule. metric=\"leadership_digest\" creates a Weekly Leadership Digest instead of a threshold rule — scope must be org:X, and threshold/window_hours are ignored (sent every Monday, no cadence to configure).",
           params: [
-            { name: "scope", type: "string", optional: false, desc: "(body) Rule scope, e.g. repo:owner/name." },
+            { name: "scope", type: "string", optional: false, desc: "(body) Rule scope, e.g. repo:owner/name or org:myorg." },
             { name: "metric", type: "string", optional: false, desc: "(body) Metric to watch." },
             { name: "threshold", type: "number", optional: false, desc: "(body) Threshold that triggers the alert." },
             { name: "window_hours", type: "number", optional: true, desc: "(body) Evaluation window (default 24)." },
@@ -2213,9 +2213,22 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.0.2",
+      version: "4.0.3",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Weekly Leadership Digest — narrative org-wide summary emailed every Monday. New leadership_digest alert metric in the Alerts page (pick an org + email, no threshold or window needed). Reuses the Team Health Scorecard's computation; no new database table, no \"last sent\" state — the daily cron just checks if today is Monday",
+        ],
+        fixed: [],
+        improved: [],
+      },
+    },
+    {
+      version: "4.0.2",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -2533,7 +2546,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.2"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.3"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2778,7 +2791,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.2"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.3"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

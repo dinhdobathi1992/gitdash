@@ -10,9 +10,12 @@ import {
   upsertRuns, getSyncCursor, updateSyncCursor, getDbRunCount,
   evaluateAlertRulesForRepo,
   getPendingDigestEvents, markDigestSent,
+  getLeadershipDigestRules,
   type RunUpsertRow,
 } from "@/lib/db";
-import { deliverDigestEmail } from "@/lib/notifier";
+import { deliverDigestEmail, deliverLeadershipDigestEmail } from "@/lib/notifier";
+import { computeScorecard } from "@/lib/org-health-scorecard";
+import { generateLeadershipNarrative } from "@/lib/leadership-narrative";
 
 const MAX_PAGES = 5;
 const PER_PAGE = 100;
@@ -153,4 +156,51 @@ export async function sendPendingDigests(): Promise<DigestSendResult> {
   if (sentEventIds.length) await markDigestSent(sentEventIds);
 
   return { destinations_notified: notified, events_included: sentEventIds.length, failures };
+}
+
+export interface LeadershipDigestSendResult {
+  rules_processed: number;
+  sent: number;
+  failures: number;
+}
+
+/**
+ * Sends the Weekly Leadership Digest to every enabled "leadership_digest"
+ * rule (one per org + destination email, created via the Alerts page).
+ * Reuses the same org-health-scorecard computation as v4.0.0
+ * (src/lib/org-health-scorecard.ts) — same fan-out cost as opening the
+ * scorecard page once per subscribed org.
+ *
+ * Called by the cron only on its weekly cadence (see the day-of-week guard
+ * in /api/cron/sync) — this function itself doesn't gate on cadence, so
+ * it's straightforward to test or trigger manually if needed.
+ */
+export async function sendWeeklyLeadershipDigests(
+  octokit: Octokit,
+  token: string,
+): Promise<LeadershipDigestSendResult> {
+  const rules = await getLeadershipDigestRules();
+  let sent = 0;
+  let failures = 0;
+
+  for (const rule of rules) {
+    if (!rule.destination) continue; // no email configured — nothing to send
+    const org = rule.scope.replace(/^org:/, "");
+
+    try {
+      const scorecard = await computeScorecard(token, octokit, org, 10);
+      const narrative = generateLeadershipNarrative(scorecard);
+      const result = await deliverLeadershipDigestEmail(rule.destination, narrative);
+      if (result.ok) sent++;
+      else {
+        failures++;
+        console.error(`[leadership-digest] Delivery failed for ${rule.destination}: ${result.error}`);
+      }
+    } catch (e) {
+      failures++;
+      console.error(`[leadership-digest] Failed to compute digest for org ${org}:`, e);
+    }
+  }
+
+  return { rules_processed: rules.length, sent, failures };
 }
