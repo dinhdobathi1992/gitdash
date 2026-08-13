@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const CACHE_TTL = 300; // 5 minutes
-const BATCH_SIZE = 5;
+const CONCURRENCY = 5;
 
 // ── Response types ────────────────────────────────────────────────────────────
 
@@ -50,6 +51,13 @@ export interface OpenPrHealthResponse {
 
   /** Concurrent open PRs per author */
   concurrent_prs_by_author: { login: string; count: number }[];
+
+  /** True if some per-PR review fetches were rate-limited or failed */
+  partial: boolean;
+  /** PRs (open + sampled merged) successfully fetched */
+  fetched_prs: number;
+  /** PRs attempted (open_prs.length + min(merged, 30)) */
+  total_prs_attempted: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -108,63 +116,62 @@ export async function GET(req: NextRequest) {
 
     // ── Open PR info with review status ───────────────────────────────────
     const openPrInfos: OpenPrInfo[] = [];
+    let rejectedCount = 0;
 
-    for (let i = 0; i < openPrs.length; i += BATCH_SIZE) {
-      const batch = openPrs.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (pr) => {
-          const { data: reviews } = await octokit.rest.pulls.listReviews({
-            owner,
-            repo,
-            pull_number: pr.number,
-            per_page: 100,
-          });
-          return { pr, reviews };
-        })
-      );
-
-      for (const result of results) {
-        if (result.status !== "fulfilled") continue;
-        const { pr, reviews } = result.value;
-        const ageHours = (now - new Date(pr.created_at).getTime()) / 3_600_000;
-
-        openPrInfos.push({
-          number: pr.number,
-          title: pr.title,
-          author: pr.user?.login ?? "unknown",
-          author_avatar: pr.user?.avatar_url ?? "",
-          created_at: pr.created_at,
-          age_hours: Math.round(ageHours * 10) / 10,
-          has_review: reviews.length > 0,
-          review_rounds: reviews.filter((r) => r.submitted_at).length,
-          draft: pr.draft ?? false,
-          html_url: pr.html_url,
+    const openSettled = await pLimitSettled(
+      openPrs.map((pr) => async () => {
+        const { data: reviews } = await octokit.rest.pulls.listReviews({
+          owner,
+          repo,
+          pull_number: pr.number,
+          per_page: 100,
         });
-      }
+        return { pr, reviews };
+      }),
+      { concurrency: CONCURRENCY },
+    );
+
+    for (const result of openSettled) {
+      if (result.status !== "fulfilled") { rejectedCount++; continue; }
+      const { pr, reviews } = result.value;
+      const ageHours = (now - new Date(pr.created_at).getTime()) / 3_600_000;
+
+      openPrInfos.push({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user?.login ?? "unknown",
+        author_avatar: pr.user?.avatar_url ?? "",
+        created_at: pr.created_at,
+        age_hours: Math.round(ageHours * 10) / 10,
+        has_review: reviews.length > 0,
+        review_rounds: reviews.filter((r) => r.submitted_at).length,
+        draft: pr.draft ?? false,
+        html_url: pr.html_url,
+      });
     }
 
     // ── Time-to-first-review from merged PRs ──────────────────────────────
-    const mergedPrs = closedPrs.filter((pr) => pr.merged_at != null);
+    const mergedPrs = closedPrs.filter((pr) => pr.merged_at != null).slice(0, 30);
     const timeToFirstReview: number[] = [];
     const timeApprovalToMerge: number[] = [];
     const reviewRoundCounts: number[] = [];
 
-    for (let i = 0; i < Math.min(mergedPrs.length, 30); i += BATCH_SIZE) {
-      const batch = mergedPrs.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (pr) => {
-          const { data: reviews } = await octokit.rest.pulls.listReviews({
-            owner,
-            repo,
-            pull_number: pr.number,
-            per_page: 100,
-          });
-          return { pr, reviews };
-        })
-      );
+    const mergedSettled = await pLimitSettled(
+      mergedPrs.map((pr) => async () => {
+        const { data: reviews } = await octokit.rest.pulls.listReviews({
+          owner,
+          repo,
+          pull_number: pr.number,
+          per_page: 100,
+        });
+        return { pr, reviews };
+      }),
+      { concurrency: CONCURRENCY },
+    );
 
-      for (const result of results) {
-        if (result.status !== "fulfilled") continue;
+    for (const result of mergedSettled) {
+      if (result.status !== "fulfilled") { rejectedCount++; continue; }
+      {
         const { pr, reviews } = result.value;
 
         const sorted = reviews
@@ -265,11 +272,14 @@ export async function GET(req: NextRequest) {
       abandon_rate: abandonRate,
       concurrent_prs_by_author: concurrentPrsByAuthor,
       closed_prs_analysed: closedPrs.length,
+      partial: rejectedCount > 0,
+      fetched_prs: openPrs.length + mergedPrs.length - rejectedCount,
+      total_prs_attempted: openPrs.length + mergedPrs.length,
     };
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
+        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
       },
     });
   } catch (e) {

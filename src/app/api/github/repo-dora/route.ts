@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const summary = await getRepoDoraSummary(token, ownerResult.data, repoResult.data);
     return NextResponse.json(summary, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
+        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
       },
     });
   } catch (e) {

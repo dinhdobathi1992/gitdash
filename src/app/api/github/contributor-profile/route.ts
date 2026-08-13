@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -80,6 +81,11 @@ export interface ContributorProfileResponse {
 
   // Repos contributed to
   repos_contributed: string[];
+
+  /** True if some per-repo PR/commit/review fetches were rate-limited or failed */
+  partial: boolean;
+  fetched_requests: number;
+  total_requests_attempted: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,8 +97,6 @@ function getWeekStart(date: Date): string {
   d.setUTCDate(d.getUTCDate() + diff);
   return d.toISOString().slice(0, 10);
 }
-
-const BATCH_SIZE = 5;
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -143,10 +147,13 @@ export async function GET(req: NextRequest) {
     const reposContributed = new Set<string>();
     let totalCommits = 0;
 
-    for (let i = 0; i < orgRepos.length; i += BATCH_SIZE) {
-      const batch = orgRepos.slice(i, i + BATCH_SIZE);
-      await Promise.allSettled(
-        batch.map(async (repo) => {
+    let reposPrFailed = 0;
+    let reposCommitsFailed = 0;
+    let reviewFetchRejected = 0;
+    let reviewFetchAttempted = 0;
+
+    await pLimitSettled(
+      orgRepos.map((repo) => async () => {
           const repoFullName = `${owner}/${repo.name}`;
 
           // Fetch PRs by this author
@@ -167,6 +174,8 @@ export async function GET(req: NextRequest) {
               per_page: 100,
             }),
           ]);
+          if (prsRes.status !== "fulfilled") reposPrFailed++;
+          if (commitsRes.status !== "fulfilled") reposCommitsFailed++;
 
           // Process PRs authored by login
           if (prsRes.status === "fulfilled") {
@@ -204,41 +213,40 @@ export async function GET(req: NextRequest) {
               (pr) => pr.user?.login !== login && pr.merged_at
             ).slice(0, 10);
 
-            for (let j = 0; j < otherPrs.length; j += BATCH_SIZE) {
-              const reviewBatch = otherPrs.slice(j, j + BATCH_SIZE);
-              const reviewResults = await Promise.allSettled(
-                reviewBatch.map(async (pr) => {
-                  const { data: reviews } = await octokit.rest.pulls.listReviews({
-                    owner,
-                    repo: repo.name,
-                    pull_number: pr.number,
-                    per_page: 100,
-                  });
-                  return { pr, reviews };
-                })
+            reviewFetchAttempted += otherPrs.length;
+            const reviewResults = await pLimitSettled(
+              otherPrs.map((pr) => async () => {
+                const { data: reviews } = await octokit.rest.pulls.listReviews({
+                  owner,
+                  repo: repo.name,
+                  pull_number: pr.number,
+                  per_page: 100,
+                });
+                return { pr, reviews };
+              }),
+              { concurrency: 5 },
+            );
+
+            for (const result of reviewResults) {
+              if (result.status !== "fulfilled") { reviewFetchRejected++; continue; }
+              const { pr, reviews } = result.value;
+              const userReviews = reviews.filter(
+                (r) => r.user?.login === login && r.submitted_at
               );
+              for (const review of userReviews) {
+                const turnaround = review.submitted_at
+                  ? (new Date(review.submitted_at).getTime() - new Date(pr.created_at).getTime()) / 3_600_000
+                  : null;
 
-              for (const result of reviewResults) {
-                if (result.status !== "fulfilled") continue;
-                const { pr, reviews } = result.value;
-                const userReviews = reviews.filter(
-                  (r) => r.user?.login === login && r.submitted_at
-                );
-                for (const review of userReviews) {
-                  const turnaround = review.submitted_at
-                    ? (new Date(review.submitted_at).getTime() - new Date(pr.created_at).getTime()) / 3_600_000
-                    : null;
+                allReviews.push({
+                  pr_number: pr.number,
+                  pr_title: pr.title,
+                  state: review.state,
+                  submitted_at: review.submitted_at!,
+                  turnaround_hours: turnaround ? Math.round(turnaround * 10) / 10 : null,
+                  repo_full_name: repoFullName,
+                });
 
-                  allReviews.push({
-                    pr_number: pr.number,
-                    pr_title: pr.title,
-                    state: review.state,
-                    submitted_at: review.submitted_at!,
-                    turnaround_hours: turnaround ? Math.round(turnaround * 10) / 10 : null,
-                    repo_full_name: repoFullName,
-                  });
-
-                }
               }
             }
           }
@@ -273,9 +281,9 @@ export async function GET(req: NextRequest) {
               }
             }
           }
-        })
-      );
-    }
+      }),
+      { concurrency: 5 },
+    );
 
     // ── Compute aggregated metrics ────────────────────────────────────────────
 
@@ -402,11 +410,16 @@ export async function GET(req: NextRequest) {
 
       languages,
       repos_contributed: Array.from(reposContributed),
+
+      partial: reposPrFailed + reposCommitsFailed + reviewFetchRejected > 0,
+      fetched_requests:
+        orgRepos.length * 2 - reposPrFailed - reposCommitsFailed + reviewFetchAttempted - reviewFetchRejected,
+      total_requests_attempted: orgRepos.length * 2 + reviewFetchAttempted,
     };
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
+        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
       },
     });
   } catch (e) {

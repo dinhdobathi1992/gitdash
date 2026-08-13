@@ -37,6 +37,12 @@ export interface BusFactorResponse {
   critical_modules: number;
   /** Total unique contributors across all modules */
   total_contributors: number;
+  /** True if some commit detail fetches were rate-limited or failed */
+  partial: boolean;
+  /** Commits successfully resolved to a file list */
+  fetched_commits: number;
+  /** Commits listed (fetched_commits <= total_commits_listed when partial) */
+  total_commits_listed: number;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -114,7 +120,7 @@ async function computeBusFactor(
       else misses.push(c);
     }
 
-    const fetched = await pLimitSettled(
+    const settled = await pLimitSettled(
       misses.map((c) => async () => {
         const { data: detail } = await octokit.rest.repos.getCommit({
           owner,
@@ -127,9 +133,12 @@ async function computeBusFactor(
       }),
       { concurrency: 10 },
     );
-    for (const result of fetched) {
+    let rejected = 0;
+    for (const result of settled) {
       if (result.status === "fulfilled") commits.push(result.value);
+      else rejected++;
     }
+    const partial = rejected > 0;
 
     if (commits.length === 0) {
       return {
@@ -138,6 +147,9 @@ async function computeBusFactor(
         total_commits: 0,
         critical_modules: 0,
         total_contributors: 0,
+        partial,
+        fetched_commits: 0,
+        total_commits_listed: listed.length,
       };
     }
 
@@ -234,5 +246,8 @@ async function computeBusFactor(
       total_commits: commits.length,
       critical_modules: modules.filter((m) => m.risk === "critical").length,
       total_contributors: allContributors.size,
+      partial,
+      fetched_commits: commits.length,
+      total_commits_listed: listed.length,
     };
 }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ModuleOwnership, BusFactorResponse } from "@/app/api/github/bus-factor/route";
+import PartialDataBadge from "@/components/PartialDataBadge";
 import {
   AlertTriangle,
   Shield,
@@ -227,6 +228,9 @@ export function BusFactorHeatmap({ data }: { data: BusFactorResponse }) {
 
   return (
     <div className="space-y-4">
+      {data.partial && (
+        <PartialDataBadge fetched={data.fetched_commits} total={data.total_commits_listed} unit="commits" />
+      )}
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">

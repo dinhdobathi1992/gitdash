@@ -12,11 +12,12 @@ import {
   PieChart,
   Pie,
   Cell,
-} from "recharts";
+} from "@/components/charts";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Clock, Database, GitPullRequest, XCircle } from "lucide-react";
 import { MetricTooltip } from "@/components/MetricTooltip";
+import PartialDataBadge from "@/components/PartialDataBadge";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -332,6 +333,9 @@ export function PrLifecycleExtension({
 }) {
   return (
     <div className="space-y-4">
+      {data.partial && (
+        <PartialDataBadge fetched={data.fetched_prs} total={data.total_prs_attempted} unit="PRs" />
+      )}
       {/* Data source badge */}
       <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
         <Database className="w-2.5 h-2.5" />

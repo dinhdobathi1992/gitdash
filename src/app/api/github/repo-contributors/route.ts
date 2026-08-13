@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const CACHE_TTL = 300; // 5 minutes
-const BATCH_SIZE = 10;
+const CONCURRENCY = 10;
 
 // ── Response types ────────────────────────────────────────────────────────────
 
@@ -34,6 +35,10 @@ export interface RepoContributorsResponse {
   total_prs_analysed: number;
   period_days: number;
   bus_factor: number; // contributors responsible for >=80% of recent commits
+  /** True if some per-PR review/comment fetches were rate-limited or failed */
+  partial: boolean;
+  fetched_prs: number;
+  total_prs_attempted: number;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -75,9 +80,12 @@ export async function GET(req: NextRequest) {
         total_prs_analysed: 0,
         period_days: 0,
         bus_factor: 0,
+        partial: false,
+        fetched_prs: 0,
+        total_prs_attempted: 0,
       };
       return NextResponse.json(empty, {
-        headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
+        headers: { "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600` },
       });
     }
 
@@ -157,33 +165,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Fetch reviews for merged PRs (batched) ──────────────────────────────
+    // ── Fetch reviews for merged PRs (bounded worker pool) ──────────────────
     const detailPrs = mergedPrs.slice(0, 30); // limit to 30 for API budget
 
-    for (let i = 0; i < detailPrs.length; i += BATCH_SIZE) {
-      const batch = detailPrs.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (pr) => {
-          const [reviewsRes, commentsRes] = await Promise.all([
-            octokit.rest.pulls.listReviews({
-              owner,
-              repo,
-              pull_number: pr.number,
-              per_page: 100,
-            }),
-            octokit.rest.pulls.listReviewComments({
-              owner,
-              repo,
-              pull_number: pr.number,
-              per_page: 100,
-            }),
-          ]);
-          return { pr, reviews: reviewsRes.data, comments: commentsRes.data };
-        })
-      );
+    const detailSettled = await pLimitSettled(
+      detailPrs.map((pr) => async () => {
+        const [reviewsRes, commentsRes] = await Promise.all([
+          octokit.rest.pulls.listReviews({
+            owner,
+            repo,
+            pull_number: pr.number,
+            per_page: 100,
+          }),
+          octokit.rest.pulls.listReviewComments({
+            owner,
+            repo,
+            pull_number: pr.number,
+            per_page: 100,
+          }),
+        ]);
+        return { pr, reviews: reviewsRes.data, comments: commentsRes.data };
+      }),
+      { concurrency: CONCURRENCY },
+    );
 
-      for (const result of results) {
-        if (result.status !== "fulfilled") continue;
+    let rejectedDetails = 0;
+    for (const result of detailSettled) {
+      if (result.status !== "fulfilled") { rejectedDetails++; continue; }
+      {
         const { pr, reviews, comments } = result.value;
         const prAuthor = pr.user?.login;
         if (!prAuthor) continue;
@@ -304,11 +313,14 @@ export async function GET(req: NextRequest) {
       total_prs_analysed: mergedPrs.length,
       period_days: periodDays,
       bus_factor: busFactor,
+      partial: rejectedDetails > 0,
+      fetched_prs: detailPrs.length - rejectedDetails,
+      total_prs_attempted: detailPrs.length,
     };
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
+        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
       },
     });
   } catch (e) {

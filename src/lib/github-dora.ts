@@ -13,15 +13,23 @@
 import { getOctokit } from "@/lib/github";
 import { calculateRepoDora } from "@/lib/dora";
 import type { RepoDoraSummary, PrInput, PrDetailInput, ReleaseInput } from "@/lib/dora";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const DETAIL_LIMIT = 20;
-const BATCH_SIZE = 10;
+const CONCURRENCY = 10;
+
+export type RepoDoraSummaryWithFetchStatus = RepoDoraSummary & {
+  /** True if some per-PR detail fetches (commits/reviews/diff-stat) were rate-limited or failed */
+  partial: boolean;
+  fetched_prs: number;
+  total_prs_attempted: number;
+};
 
 export async function getRepoDoraSummary(
   token: string,
   owner: string,
   repo: string,
-): Promise<RepoDoraSummary> {
+): Promise<RepoDoraSummaryWithFetchStatus> {
   const octokit = getOctokit(token);
 
   // Kick off PRs and releases in parallel
@@ -55,10 +63,8 @@ export async function getRepoDoraSummary(
   const detailPrs = mergedPrs.slice(0, DETAIL_LIMIT);
   const detailMap = new Map<number, PrDetailInput>();
 
-  for (let i = 0; i < detailPrs.length; i += BATCH_SIZE) {
-    const batch = detailPrs.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async pr => {
+  const results = await pLimitSettled(
+    detailPrs.map(pr => async () => {
         const [commitsRes, reviewsRes, detailRes] = await Promise.all([
           octokit.rest.pulls.listCommits({
             owner,
@@ -104,13 +110,21 @@ export async function getRepoDoraSummary(
           additions: detailRes.data.additions,
           deletions: detailRes.data.deletions,
         } satisfies PrDetailInput;
-      }),
-    );
+    }),
+    { concurrency: CONCURRENCY },
+  );
 
-    for (const r of results) {
-      if (r.status === "fulfilled") detailMap.set(r.value.number, r.value);
-    }
+  let rejected = 0;
+  for (const r of results) {
+    if (r.status === "fulfilled") detailMap.set(r.value.number, r.value);
+    else rejected++;
   }
 
-  return calculateRepoDora(mergedPrs, releases, detailMap);
+  const summary = calculateRepoDora(mergedPrs, releases, detailMap);
+  return {
+    ...summary,
+    partial: rejected > 0,
+    fetched_prs: detailPrs.length - rejected,
+    total_prs_attempted: detailPrs.length,
+  };
 }

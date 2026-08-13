@@ -8,6 +8,7 @@ import { Breadcrumb } from "@/components/Sidebar";
 import { ContributorKpiCards, ContributorKpiSkeleton } from "@/components/ContributorKpiCards";
 import { ContributorActivityHeatmap } from "@/components/ContributorActivityHeatmap";
 import { ContributorPrFunnel } from "@/components/ContributorPrFunnel";
+import PartialDataBadge from "@/components/PartialDataBadge";
 import type { ContributorProfileResponse } from "@/app/api/github/contributor-profile/route";
 import {
   AlertCircle, ExternalLink, MapPin, Building2, ChevronRight,
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
-} from "recharts";
+} from "@/components/charts";
 
 // ── Tooltip style ─────────────────────────────────────────────────────────────
 const TOOLTIP_STYLE = {
@@ -300,6 +301,9 @@ export default function ContributorProfilePage() {
         <PageSkeleton />
       ) : data ? (
         <>
+          {data.partial && (
+            <PartialDataBadge fetched={data.fetched_requests} total={data.total_requests_attempted} unit="requests" />
+          )}
           {/* Profile header */}
           <div className="flex items-start gap-4 flex-wrap">
             <div className="relative shrink-0">
