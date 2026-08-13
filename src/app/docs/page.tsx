@@ -349,7 +349,12 @@ function Configuration() {
             [
               <Code key="v8">GITHUB_TOKEN</Code>,
               <span key="r8" className="text-slate-400 text-xs">Optional</span>,
-              "Fallback GitHub token used server-side when no session token is available.",
+              <>Fallback GitHub token used server-side when no session token is available. <strong>Required</strong> for the scheduled sync cron (<Code>/api/cron/sync</Code>), which has no user session.</>,
+            ],
+            [
+              <Code key="v8b">CRON_SECRET</Code>,
+              <span key="r8b" className="text-slate-400 text-xs">Optional</span>,
+              <>Bearer token that authorizes <Code>/api/cron/sync</Code>. Vercel Cron sends this automatically when the env var is set on the project; the route fails closed (401) if unset.</>,
             ],
             [
               <Code key="v9">NEXT_PUBLIC_DEMO_MODE</Code>,
@@ -1676,7 +1681,7 @@ function APIReference() {
       <SectionHeading id="api-reference" icon={Code2} badge="REST">API Reference</SectionHeading>
 
       <Callout type="info">
-        Most API routes require an authenticated session — unauthenticated requests receive a <Code>401 Unauthorized</Code> response. The exceptions are the public endpoints <Code>/api/health</Code> (liveness/readiness probes), <Code>/api/demo</Code> (sanitized fixture data for demo mode), and <Code>/api/webhooks/github</Code> (authenticated by HMAC signature, not a session cookie).
+        Most API routes require an authenticated session — unauthenticated requests receive a <Code>401 Unauthorized</Code> response. The exceptions are the public endpoints <Code>/api/health</Code> (liveness/readiness probes), <Code>/api/demo</Code> (sanitized fixture data for demo mode), <Code>/api/webhooks/github</Code> (authenticated by HMAC signature, not a session cookie), and <Code>/api/cron/sync</Code> (authenticated by <Code>CRON_SECRET</Code> bearer token).
       </Callout>
 
       {[
@@ -1799,6 +1804,28 @@ function APIReference() {
             { name: "owner", type: "string", optional: false, desc: "Repository owner." },
             { name: "repo", type: "string", optional: false, desc: "Repository name." },
           ],
+        },
+        {
+          method: "GET",
+          path: "/api/github/rate-limit",
+          description: "Current GitHub API rate-limit status for the authenticated user. Calls GET /rate_limit, which GitHub excludes from rate-limit accounting — checking it is always free.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/github/runner-stats",
+          description: "Per-runner job counts, durations, and failure rates aggregated across a repo's recent completed workflow runs.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: false, desc: "Repository name." },
+            { name: "per_page", type: "number", optional: true, desc: "Runs to analyse (default 30, max 50)." },
+          ],
+        },
+        {
+          method: "GET",
+          path: "/api/cron/sync",
+          description: "Scheduled background sync, triggered daily by Vercel Cron. Re-syncs every repo tracked in sync_cursors and sends pending digest-channel alert emails. Requires Authorization: Bearer $CRON_SECRET — not callable from the browser.",
+          params: [],
         },
         {
           method: "GET",
@@ -2168,9 +2195,36 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
+      version: "3.2.0",
+      date: "2026-08-13",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Custom domain: production now serves from gitdash.info",
+          "Scheduled background sync — daily Vercel Cron re-syncs every tracked repo so Reports and Alerts stay current without a manual click",
+          "Rate-limit budget widget in the sidebar — live GitHub API quota, free to check (GET /rate_limit is excluded from rate-limit accounting)",
+          "Runner Utilization — per-runner job counts, durations, and failure rates in Team Analytics",
+          "Partial-data indicators — fan-out routes (bus-factor, open-pr-health, repo-contributors, contributor-profile, repo-dora) now report when some sub-requests were rate-limited and show an amber banner instead of an undercounted number",
+          "Anomaly-driven alerts — new anomaly_count metric fires on statistical outliers using the same detector the workflow detail page already uses",
+          "Digest alert channel — bundle matching alerts into one daily summary email instead of a notification per event",
+          "Review Bottleneck — flags overloaded reviewers and single-point-of-failure review dependencies in Team Analytics",
+        ],
+        fixed: [
+          "RecentFailuresWidget on the repo dashboard never showed newly-loaded failures — its cache-read memo depended on an identity-stable SWR cache object; now driven by a tick counter",
+        ],
+        improved: [
+          "Consolidated all Recharts imports behind one shared module — eliminates duplicated ~388 KB chunks across routes",
+          "DORA drill-down and PR lifecycle sections (collapsed by default on the repo page) now lazy-load via next/dynamic",
+          "RepoRow on the home page is memoized — search keystrokes no longer re-render the full visible table",
+          "Fan-out routes' batch-of-N loops converted to the bounded worker pool (pLimitSettled) — no more waiting on the slowest member of each batch",
+        ],
+      },
+    },
+    {
       version: "3.1.3",
       date: "2026-03-13",
-      badge: "latest",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -2420,7 +2474,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.1.3"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.2.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2665,7 +2719,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.1.3"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.2.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

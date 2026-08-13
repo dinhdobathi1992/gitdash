@@ -6,6 +6,57 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.2.0] — 2026-08-13
+
+### Overview
+Custom domain cutover to gitdash.info, seven new features (scheduled sync, rate-limit visibility, runner utilization, partial-data honesty, anomaly-driven alerts with digest delivery, review bottleneck detection), and a second performance pass on top of 3.1.3's API-efficiency work — this one focused on client bundle size and render cost.
+
+---
+
+### Added
+
+#### Custom domain
+- Production now serves from `https://gitdash.info` (previously the `*.vercel.app` domain). `NEXT_PUBLIC_APP_URL` and the GitHub OAuth app's callback URL were updated to match.
+
+#### Scheduled background sync
+- New `GET /api/cron/sync`, triggered daily by Vercel Cron (`vercel.json`), re-syncs every repo that has ever been synced (tracked via `sync_cursors`) so Reports and Alerts stay current without manually clicking "Sync from GitHub".
+- Protected by `CRON_SECRET` (Vercel's standard `Authorization: Bearer` cron auth pattern); runs under a service-level `GITHUB_TOKEN` since a cron run has no user session.
+- Shared sync logic extracted into `src/lib/sync.ts`, used by both the cron route and the existing manual `POST /api/db/sync`.
+
+#### Rate-limit budget widget
+- Sidebar now shows live GitHub API quota (`GET /rate_limit`, which GitHub excludes from rate-limit accounting — checking it is free), with a warning state below 20% remaining.
+
+#### Runner utilization
+- New `GET /api/github/runner-stats` aggregates job counts, durations, and failure rates per runner from data the app already fetched but never surfaced (`job.runner_name` / `runner_group_name`). Shown in a new Team Analytics section, gated behind a feature flag.
+
+#### Partial-data indicators
+- Fan-out routes that fetch many PRs/commits per request now report `partial`, `fetched_*`, and `total_*` fields when some sub-requests were rate-limited or failed, and the UI shows an amber banner instead of silently returning an undercounted number. Applied to `bus-factor`, `open-pr-health`, `repo-contributors`, `contributor-profile`, and `repo-dora`.
+- These routes' batch-of-N `Promise.allSettled` loops were also converted to the bounded worker-pool `pLimitSettled` (no more waiting for the slowest member of each batch before starting the next).
+
+#### Anomaly-driven alerts + daily digest
+- New alert metric `anomaly_count`: fires when more than a threshold number of runs deviate >2 standard deviations from the rolling baseline in the window — reuses the same statistical detector the workflow detail page already uses client-side (`src/lib/anomaly.ts`, now shared between client and server).
+- New alert channel `digest`: instead of a real-time notification per event, matching alerts are bundled into one daily summary email, sent by the cron route after each sync pass (Vercel Hobby limits cron jobs to once/day, so digest delivery piggybacks on the sync cron rather than needing its own).
+
+#### Review bottleneck detection
+- New Team Analytics section flags reviewers carrying a disproportionate share of the review load ("Overloaded") and authors whose PRs are reviewed almost exclusively by one person ("Sole-Reviewer Risk") — built entirely from data `repo-contributors` already fetches, no additional GitHub API calls.
+
+### Changed
+
+#### Client bundle & render performance (Phase 2)
+- Consolidated all 7 Recharts importers behind a single `src/components/charts/index.tsx` re-export — Turbopack previously emitted two duplicated ~388 KB chunks for the same library; the repo page's DORA drill-down and PR lifecycle sections (both collapsed by default) now load via `next/dynamic` instead of shipping in the initial bundle.
+- `RepoRow` (home page repository table) is now `React.memo`'d — search-box keystrokes no longer re-render all visible rows.
+- Fixed `RecentFailuresWidget`: its cache-read `useMemo` depended on the SWR cache object, whose identity never changes as entries are added — the widget could never show newly-loaded failures. Now driven by a tick counter bumped when each row's summary fetch settles.
+
+### Known limitations
+- The Vercel Cron-based scheduled sync only runs on the Vercel deployment. The Helm/Kubernetes deployment path does not yet have an equivalent CronJob — self-hosted users on k8s still sync manually or via the GitHub webhook.
+- Digest delivery requires `RESEND_API_KEY` or `SMTP_HOST` to be configured (same as the existing `email` alert channel).
+
+### Changed (infra)
+- Bumped app version from 3.1.3 to 3.2.0
+- Bumped Helm chart version to 0.3.0 / appVersion to 3.2.0
+
+---
+
 ## [3.1.3] — 2026-03-13
 
 ### Overview

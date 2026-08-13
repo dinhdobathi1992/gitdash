@@ -286,6 +286,7 @@ GitDash works without a database for live GitHub analytics. Add a **Postgres/Neo
 - `DATABASE_URL` enables `/api/db/*` and alert rule storage
 - `/reports` relies on DB data (available in organization mode)
 - `/api/webhooks/github` upserts workflow runs from GitHub webhooks
+- `/api/cron/sync` (Vercel Cron, see `vercel.json`) re-syncs every previously-synced repo daily — set `GITHUB_TOKEN` and `CRON_SECRET` to enable it
 
 Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workflow_run` event in GitHub.
 
@@ -302,7 +303,8 @@ Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workf
 | `GITHUB_CLIENT_SECRET` | Org mode | GitHub OAuth App client secret |
 | `DATABASE_URL` | Optional | Enables historical DB sync, trends, and alerts |
 | `GITHUB_WEBHOOK_SECRET` | Optional | Signature verification for `/api/webhooks/github` |
-| `GITHUB_TOKEN` | Optional | Fallback when no session token is available |
+| `GITHUB_TOKEN` | Optional | Fallback when no session token is available. **Required** for the scheduled sync cron (`/api/cron/sync`), which has no user session |
+| `CRON_SECRET` | Optional | Bearer token authorizing `/api/cron/sync`. Vercel Cron sends this automatically when set; the route fails closed (401) if unset |
 | `NEXT_PUBLIC_DEMO_MODE` | Optional | `true` serves sanitized demo data with no token (also enabled per-request via `?demo=1`) |
 | `RESEND_API_KEY` | Optional | Enables Resend email delivery for alert rules (preferred email provider) |
 | `RESEND_FROM` | Optional | From address for Resend emails (default `alerts@gitdash.app`) |
@@ -338,6 +340,7 @@ Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workf
 | `/api/db/*` | Optional historical sync and trend endpoints |
 | `/api/alerts` | Alert-rule CRUD + events |
 | `/api/webhooks/github` | Workflow webhook ingest |
+| `/api/cron/sync` | Scheduled daily sync + digest delivery (Vercel Cron only) |
 
 ---
 
