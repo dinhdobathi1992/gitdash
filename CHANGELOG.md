@@ -6,6 +6,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.5] — 2026-08-13
+
+### Overview
+Fix for a contributor-profile crash reported right after v4.0.4: "Failed to fetch contributor profile" whenever the repo owner is a personal GitHub account rather than an organization.
+
+### Fixed
+
+#### Contributor profile broke for personal-account-owned repos
+- **Root cause:** `/api/github/contributor-profile` always called `GET /orgs/{org}/repos` to list the owner's repos. That endpoint 404s whenever `owner` is a personal account, not an organization — which is the common case for most users (personal repos, not org repos). Any click into a contributor from a personal repo's Team Analytics page failed outright.
+- Added a fallback: try the org-repos endpoint first (the common path when contributor profiles are reached from org-owned repos), and on 404 fall back to `GET /users/{username}/repos` for personal accounts. No behavior change for org-owned repos.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.4 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — no migration, no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.0.4 to 4.0.5
+- Bumped Helm chart version from 0.4.4 to 0.4.5
+
+---
+
 ## [4.0.4] — 2026-08-13
 
 ### Overview
