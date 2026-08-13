@@ -309,7 +309,7 @@ function PrThroughput({ weeks }: { weeks: RepoDoraSummary["throughput_by_week"] 
         />
         <Tooltip
           {...TOOLTIP_STYLE}
-          formatter={(val: number | undefined) => [val ?? 0, "PRs merged"]}
+          formatter={(val) => [val ?? 0, "PRs merged"]}
         />
         <Bar
           dataKey="PRs"
@@ -384,7 +384,7 @@ function WorkflowStability({ overview }: { overview: WorkflowOverview[] }) {
         />
         <Tooltip
           {...TOOLTIP_STYLE}
-          formatter={(val: number | undefined) => [`${val ?? 0}%`, "Pass rate"]}
+          formatter={(val) => [`${val ?? 0}%`, "Pass rate"]}
         />
         {/* Elite threshold */}
         <ReferenceLine

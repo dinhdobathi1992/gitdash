@@ -1,9 +1,107 @@
 import { Octokit } from "@octokit/rest";
+import { throttling } from "@octokit/plugin-throttling";
+import { retry } from "@octokit/plugin-retry";
+import { createHash } from "crypto";
+
+const OctokitWithPlugins = Octokit.plugin(throttling, retry);
+
+// ── ETag conditional-request layer ───────────────────────────────────────────
+// GitHub returns an ETag on every GET and does NOT count 304 responses against
+// the rate limit. We remember { etag, data } per (token, url) and replay
+// If-None-Match on the next identical request: unchanged data costs zero
+// rate-limit budget. The `link` header is preserved so paginate.iterator
+// still sees subsequent pages on a replayed first page.
+
+interface EtagEntry {
+  etag: string;
+  link: string | undefined;
+  data: unknown;
+}
+
+const etagStore = new Map<string, EtagEntry>();
+const ETAG_MAX_ENTRIES = 1000;
+
+function etagSet(key: string, entry: EtagEntry): void {
+  // Refresh recency on rewrite; evict oldest when over the cap.
+  if (etagStore.has(key)) etagStore.delete(key);
+  else if (etagStore.size >= ETAG_MAX_ENTRIES) {
+    const oldest = etagStore.keys().next().value;
+    if (oldest !== undefined) etagStore.delete(oldest);
+  }
+  etagStore.set(key, entry);
+}
+
+// ── Per-token Octokit instances ──────────────────────────────────────────────
+// Constructing Octokit composes the full plugin/hook chain — not free, and
+// getOctokit is called per helper (~100× inside org-overview's fan-out).
+// Instances are keyed by a token digest, never the raw token.
+
+const octokitCache = new Map<string, Octokit>();
+const OCTOKIT_MAX_INSTANCES = 100;
 
 export function getOctokit(token?: string): Octokit {
   const pat = token || process.env.GITHUB_TOKEN;
   if (!pat) throw new Error("GitHub token not configured");
-  return new Octokit({ auth: pat });
+
+  const tokenKey = createHash("sha256").update(pat).digest("hex").slice(0, 16);
+  const cached = octokitCache.get(tokenKey);
+  if (cached) return cached;
+
+  const octokit = new OctokitWithPlugins({
+    auth: pat,
+    throttle: {
+      // Retry once after the advised wait; on the second hit, give up so the
+      // route can surface a real error instead of hanging.
+      onRateLimit: (_retryAfter: number, _options: object, _octokit: unknown, retryCount: number) =>
+        retryCount < 1,
+      onSecondaryRateLimit: (_retryAfter: number, _options: object, _octokit: unknown, retryCount: number) =>
+        retryCount < 1,
+    },
+    retry: {
+      // Defaults plus 304: Not Modified is our ETag signal, not a failure.
+      doNotRetry: [304, 400, 401, 403, 404, 422, 451],
+    },
+  });
+
+  // ETag layer for GET requests.
+  octokit.hook.wrap("request", async (request, options) => {
+    if (options.method !== "GET") return request(options);
+
+    // Fully-resolved URL (path params substituted, query string appended).
+    const resolvedUrl = octokit.request.endpoint(options as never).url;
+    const key = `${tokenKey}:${resolvedUrl}`;
+    const prev = etagStore.get(key);
+    if (prev) {
+      options.headers = { ...options.headers, "if-none-match": prev.etag };
+    }
+
+    try {
+      const response = await request(options);
+      const etag = response.headers?.etag;
+      if (etag) {
+        // Callers must not mutate response.data — all our helpers map to DTOs.
+        etagSet(key, { etag, link: response.headers.link, data: response.data });
+      }
+      return response;
+    } catch (error) {
+      if (prev && (error as { status?: number }).status === 304) {
+        return {
+          status: 200,
+          url: resolvedUrl,
+          headers: { etag: prev.etag, link: prev.link },
+          data: prev.data,
+        } as Awaited<ReturnType<typeof request>>;
+      }
+      throw error;
+    }
+  });
+
+  if (octokitCache.size >= OCTOKIT_MAX_INSTANCES) {
+    const oldest = octokitCache.keys().next().value;
+    if (oldest !== undefined) octokitCache.delete(oldest);
+  }
+  octokitCache.set(tokenKey, octokit);
+  return octokit;
 }
 
 export interface Repo {

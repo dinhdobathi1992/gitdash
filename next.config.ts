@@ -12,7 +12,10 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
   },
   turbopack: {
-    root: path.resolve(__dirname),
+    // pnpm-workspace member: packages resolve through symlinks into the
+    // workspace store at ../node_modules/.pnpm, so Turbopack's root must be
+    // the workspace root or module resolution fails during build.
+    root: path.resolve(__dirname, ".."),
   },
   experimental: {
     // Zscaler TLS inspection requires system certificates for outbound requests

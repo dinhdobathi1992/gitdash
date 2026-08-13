@@ -104,7 +104,7 @@ function DurationChart({ workflows }: { workflows: WorkflowOverview[] }) {
         <Tooltip
           contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: "#94a3b8", marginBottom: 4 }}
-          formatter={(val: number | undefined) => val !== undefined ? [`${val} min`, ""] : ["—", ""]}
+          formatter={(val) => val !== undefined ? [`${val} min`, ""] : ["—", ""]}
         />
         <Legend
           wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 8 }}

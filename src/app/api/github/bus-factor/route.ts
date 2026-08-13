@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
+import { withCache, cacheGet, cacheSet, hashKey } from "@/lib/cache";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const CACHE_TTL = 600; // 10 minutes
+// A commit's file list is immutable — cache it long-term so repeat views
+// (and other users on this instance) never re-pay the per-commit detail call.
+const COMMIT_FILES_TTL = 7 * 24 * 3600;
 
 // ── Response types ────────────────────────────────────────────────────────────
 
@@ -52,64 +57,88 @@ export async function GET(req: NextRequest) {
   const repo = repoResult.data;
 
   try {
+    // Route-level cache: token-scoped (result reflects this user's repo access)
+    // and coalesced, so concurrent cold requests share one computation.
+    const response = await withCache<BusFactorResponse>(
+      `bus-factor:${hashKey(token)}:${owner}/${repo}`,
+      CACHE_TTL,
+      () => computeBusFactor(token, owner, repo),
+    );
+
+    return NextResponse.json(response, {
+      headers: {
+        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
+      },
+    });
+  } catch (e) {
+    return safeError(e, "Failed to fetch bus factor data");
+  }
+}
+
+async function computeBusFactor(
+  token: string,
+  owner: string,
+  repo: string,
+): Promise<BusFactorResponse> {
     const octokit = getOctokit(token);
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch last 300 commits (paginated)
-    const commits: { author: string; files: string[] }[] = [];
-    let page = 1;
-    const perPage = 100;
-
-    while (commits.length < 300 && page <= 3) {
+    // 1. List last 300 commits (3 pages). The listing already carries the
+    //    author — the per-commit detail call is only needed for file paths.
+    const listed: { sha: string; author: string }[] = [];
+    for (let page = 1; page <= 3 && listed.length < 300; page++) {
       const { data } = await octokit.rest.repos.listCommits({
         owner,
         repo,
         since: ninetyDaysAgo,
-        per_page: perPage,
+        per_page: 100,
         page,
       });
-
       if (data.length === 0) break;
-
-      // For each commit, we need file paths. Use the commit detail API in batches.
-      const BATCH = 5;
-      for (let i = 0; i < data.length; i += BATCH) {
-        const batch = data.slice(i, i + BATCH);
-        const results = await Promise.allSettled(
-          batch.map(async (c) => {
-            const { data: detail } = await octokit.rest.repos.getCommit({
-              owner,
-              repo,
-              ref: c.sha,
-            });
-            return {
-              author: detail.author?.login ?? detail.commit.author?.name ?? "unknown",
-              files: (detail.files ?? []).map((f) => f.filename),
-            };
-          })
-        );
-
-        for (const result of results) {
-          if (result.status === "fulfilled") {
-            commits.push(result.value);
-          }
-        }
+      for (const c of data) {
+        listed.push({
+          sha: c.sha,
+          author: c.author?.login ?? c.commit?.author?.name ?? "unknown",
+        });
       }
+    }
 
-      page++;
+    // 2. Resolve file lists — from the immutable cache where possible, else
+    //    fetch commit details with a bounded worker pool (no straggler waits).
+    const commits: { author: string; files: string[] }[] = [];
+    const misses: { sha: string; author: string }[] = [];
+
+    for (const c of listed) {
+      const files = cacheGet<string[]>(`commit-files:${owner}/${repo}:${c.sha}`);
+      if (files) commits.push({ author: c.author, files });
+      else misses.push(c);
+    }
+
+    const fetched = await pLimitSettled(
+      misses.map((c) => async () => {
+        const { data: detail } = await octokit.rest.repos.getCommit({
+          owner,
+          repo,
+          ref: c.sha,
+        });
+        const files = (detail.files ?? []).map((f) => f.filename);
+        cacheSet(`commit-files:${owner}/${repo}:${c.sha}`, files, COMMIT_FILES_TTL);
+        return { author: c.author, files };
+      }),
+      { concurrency: 10 },
+    );
+    for (const result of fetched) {
+      if (result.status === "fulfilled") commits.push(result.value);
     }
 
     if (commits.length === 0) {
-      const empty: BusFactorResponse = {
+      return {
         modules: [],
         overall_bus_factor: 0,
         total_commits: 0,
         critical_modules: 0,
         total_contributors: 0,
       };
-      return NextResponse.json(empty, {
-        headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
-      });
     }
 
     // ── Group commits by module (top-2 directory level) ─────────────────────
@@ -199,20 +228,11 @@ export async function GET(req: NextRequest) {
       if (overallCum >= commits.length * 0.8) break;
     }
 
-    const response: BusFactorResponse = {
+    return {
       modules: modules.slice(0, 30), // cap at 30 modules
       overall_bus_factor: overallBf,
       total_commits: commits.length,
       critical_modules: modules.filter((m) => m.risk === "critical").length,
       total_contributors: allContributors.size,
     };
-
-    return NextResponse.json(response, {
-      headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
-      },
-    });
-  } catch (e) {
-    return safeError(e, "Failed to fetch bus factor data");
-  }
 }

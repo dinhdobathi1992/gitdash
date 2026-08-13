@@ -88,7 +88,7 @@ function WeeklyCommitChart({
         />
         <Tooltip
           {...TOOLTIP_STYLE}
-          formatter={(val: number | undefined) => [val ?? 0, "Commits"]}
+          formatter={(val) => [val ?? 0, "Commits"]}
         />
         <Bar dataKey="Commits" radius={[3, 3, 0, 0]} fill="#7c3aed" />
       </BarChart>
@@ -123,7 +123,7 @@ function CommitHourChart({ hours }: { hours: number[] }) {
         />
         <Tooltip
           {...TOOLTIP_STYLE}
-          formatter={(val: number | undefined) => [val ?? 0, "Commits"]}
+          formatter={(val) => [val ?? 0, "Commits"]}
         />
         <Bar dataKey="Commits" radius={[2, 2, 0, 0]} fill="#0891b2" />
       </BarChart>

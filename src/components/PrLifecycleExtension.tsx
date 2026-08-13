@@ -103,8 +103,8 @@ function TimeToFirstReviewChart({
           />
           <Tooltip
             {...TOOLTIP_STYLE}
-            formatter={(val: number | undefined) => [
-              fmtHours(val ?? 0),
+            formatter={(val) => [
+              fmtHours(Number(val ?? 0)),
               "Duration",
             ]}
           />
@@ -173,7 +173,7 @@ function PrAgeDistribution({
         />
         <Tooltip
           {...TOOLTIP_STYLE}
-          formatter={(val: number | undefined) => [val ?? 0, "PRs"]}
+          formatter={(val) => [val ?? 0, "PRs"]}
         />
         <Bar dataKey="count" radius={[3, 3, 0, 0]}>
           {distribution.map((_, i) => (
@@ -247,7 +247,7 @@ function ReviewRoundChart({
           </Pie>
           <Tooltip
             {...TOOLTIP_STYLE}
-            formatter={(val: number | undefined, name: string | undefined) => [
+            formatter={(val, name) => [
               val ?? 0,
               `${name ?? ""} round${name !== "1" ? "s" : ""}`,
             ]}

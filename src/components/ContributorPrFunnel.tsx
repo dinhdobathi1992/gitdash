@@ -81,7 +81,7 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
           />
           <Tooltip
             {...TOOLTIP_STYLE}
-            formatter={(val: number | undefined) => [val ?? 0, "PRs"]}
+            formatter={(val) => [val ?? 0, "PRs"]}
           />
           <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#7c3aed">
             {data.map((entry, i) => (

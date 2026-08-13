@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getOctokit, listOrgRepos, getRepoSummary, type Repo, type RepoSummary } from "@/lib/github";
 import { validateOrg, validatePerPage, safeError } from "@/lib/validation";
-import { withCache } from "@/lib/cache";
+import { withCache, hashKey } from "@/lib/cache";
 import { pLimitSettled } from "@/lib/concurrency";
 
 const CACHE_TTL = 900; // 15 min — this is an expensive multi-request call
@@ -51,7 +51,9 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(limitResult.data, 50);
 
   try {
-    const cacheKey = `org-overview:${org}:${limit}`;
+    // Scope the key by token hash: the response reflects THIS user's private-repo
+    // visibility, so it must never be served to a different user (cross-tenant leak).
+    const cacheKey = `org-overview:${hashKey(token)}:${org}:${limit}`;
     const response = await withCache<OrgOverviewResponse>(cacheKey, CACHE_TTL, async () => {
     // 1. List all org repos (already sorted by updated desc)
     const allRepos = await listOrgRepos(token, org);
