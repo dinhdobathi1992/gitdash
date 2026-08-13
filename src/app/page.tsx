@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useRef, useEffect, useState, useMemo, useCallback, Suspense,
+  useRef, useEffect, useState, useMemo, useCallback, Suspense, memo,
 } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import Link from "next/link";
@@ -92,7 +92,7 @@ function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
 const FAILURES_CUTOFF_MS = 24 * 60 * 60 * 1000;
 const MODULE_LOAD_TIME = Date.now();
 
-function RecentFailuresWidget({ repos }: { repos: Repo[] }) {
+function RecentFailuresWidget({ repos, tick }: { repos: Repo[]; tick: number }) {
   const { cache } = useSWRConfig();
   const [dismissed, setDismissed] = useState(false);
 
@@ -117,7 +117,11 @@ function RecentFailuresWidget({ repos }: { repos: Repo[] }) {
     }
 
     return result.slice(0, 5); // cap at 5
-  }, [repos, cache]);
+    // `cache` is a stable object reference that mutates in place — it never
+    // changes identity when a row's summary loads, so `tick` (bumped by each
+    // RepoRow's useSWR onSuccess) is what actually drives recomputation here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repos, cache, tick]);
 
   if (dismissed || failures.length === 0) return null;
 
@@ -172,12 +176,14 @@ function Highlighted({ text, indices }: { text: string; indices: number[] }) {
 }
 
 // ── Repo row — lazily fetches summary when row enters viewport ────────────────
-function RepoRow({
-  repo, nameIndices, active,
+const RepoRow = memo(function RepoRow({
+  repo, nameIndices, active, onSummaryLoaded,
 }: {
   repo: Repo;
   nameIndices: number[];
   active: boolean;
+  /** Stable callback — bumps RecentFailuresWidget's cache-read memo when a summary settles. */
+  onSummaryLoaded?: () => void;
 }) {
   const ref = useRef<HTMLTableRowElement>(null);
   const [visible, setVisible] = useState(false);
@@ -200,7 +206,8 @@ function RepoRow({
 
   const { data: summary } = useSWR<RepoSummary>(
     visible ? `/api/github/repo-summary?owner=${repo.owner}&repo=${repo.name}` : null,
-    fetcher<RepoSummary>
+    fetcher<RepoSummary>,
+    { onSuccess: onSummaryLoaded }
   );
 
   return (
@@ -287,7 +294,7 @@ function RepoRow({
       </td>
     </tr>
   );
-}
+});
 
 // ── Table skeleton ────────────────────────────────────────────────────────────
 function TableSkeleton() {
@@ -426,6 +433,12 @@ function HomeContent() {
   const PAGE_SIZE = 10;
   const [pageState, setPageState] = useState<{ page: number; key: string }>({ page: 1, key: "" });
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Bumped by each RepoRow's summary fetch so RecentFailuresWidget knows to
+  // re-read the (otherwise identity-stable) SWR cache. useCallback keeps this
+  // prop reference stable across renders so it doesn't defeat RepoRow's memo.
+  const [summaryTick, setSummaryTick] = useState(0);
+  const bumpSummaryTick = useCallback(() => setSummaryTick((t) => t + 1), []);
 
   const orgParam = searchParams.get("org");
 
@@ -691,7 +704,7 @@ function HomeContent() {
         </div>
       )}
 
-      <RecentFailuresWidget repos={displayed} />
+      <RecentFailuresWidget repos={displayed} tick={summaryTick} />
 
       {/* ── Repository table ── */}
       <div className="rounded-xl border border-slate-800/80 overflow-hidden shadow-sm">
@@ -727,6 +740,7 @@ function HomeContent() {
                   repo={repo}
                   nameIndices={nameIndices}
                   active={i === clampedActiveIndex}
+                  onSummaryLoaded={bumpSummaryTick}
                 />
               ))}
               {filtered.length === 0 && !isLoading && (

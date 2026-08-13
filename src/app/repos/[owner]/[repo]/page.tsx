@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { fetcher } from "@/lib/swr";
 import { WorkflowOverview } from "@/lib/github";
-import type { RepoDoraSummary } from "@/lib/dora";
+import type { RepoDoraSummaryWithFetchStatus } from "@/lib/github-dora";
 import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import { RunHistoryBars, TrendSparkline, StatusBadge, HealthScoreRing } from "@/components/WorkflowMetrics";
 import { DoraKpiCards, DoraKpiSkeleton } from "@/components/DoraKpiCards";
-import { DoraDrillDown } from "@/components/DoraDrillDown";
-import { PrLifecycleExtension, PrLifecycleSkeleton } from "@/components/PrLifecycleExtension";
+import PartialDataBadge from "@/components/PartialDataBadge";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
@@ -22,7 +22,44 @@ import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
-} from "recharts";
+} from "@/components/charts";
+
+// ── Lazily-loaded chart sections ──────────────────────────────────────────────
+// Both are collapsed by default (behind "Show ..." toggles below) and pull in
+// Recharts — loading them only when the user actually expands the section
+// keeps them out of this page's initial JS payload.
+const DoraDrillDown = dynamic(
+  () => import("@/components/DoraDrillDown").then((m) => m.DoraDrillDown),
+  { ssr: false },
+);
+const PrLifecycleExtension = dynamic(
+  () => import("@/components/PrLifecycleExtension").then((m) => m.PrLifecycleExtension),
+  { ssr: false, loading: () => <PrLifecycleInlineSkeleton /> },
+);
+
+function PrLifecycleInlineSkeleton() {
+  return (
+    <div className="mt-3 space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+            <div className="h-3 w-20 rounded skeleton mb-3" />
+            <div className="h-6 w-12 rounded skeleton" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
+            <div className="h-4 w-40 rounded skeleton mb-2" />
+            <div className="h-3 w-56 rounded skeleton mb-4" />
+            <div className="h-32 rounded skeleton" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ── Colour palette for up to 10 workflow lines ────────────────────────────────
 const LINE_COLORS = [
@@ -272,9 +309,9 @@ export default function RepoDetailPage() {
 
   const {
     data: dora, isLoading: doraLoading,
-  } = useSWR<RepoDoraSummary>(
+  } = useSWR<RepoDoraSummaryWithFetchStatus>(
     flags.dora ? `/api/github/repo-dora?owner=${owner}&repo=${repo}` : null,
-    fetcher<RepoDoraSummary>
+    fetcher<RepoDoraSummaryWithFetchStatus>
   );
 
   const {
@@ -414,6 +451,9 @@ export default function RepoDetailPage() {
               <DoraKpiSkeleton />
             ) : dora ? (
               <div className="space-y-4">
+                {dora.partial && (
+                  <PartialDataBadge fetched={dora.fetched_prs} total={dora.total_prs_attempted} unit="PRs" />
+                )}
                 <DoraKpiCards data={dora} />
                 <button
                   onClick={() => setShowDrillDown(v => !v)}
@@ -450,7 +490,7 @@ export default function RepoDetailPage() {
               </button>
               {showPrLifecycle && (
                 prHealthLoading ? (
-                  <div className="mt-3"><PrLifecycleSkeleton /></div>
+                  <PrLifecycleInlineSkeleton />
                 ) : prHealth ? (
                   <div className="mt-3"><PrLifecycleExtension data={prHealth} /></div>
                 ) : null

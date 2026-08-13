@@ -16,7 +16,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
   ReferenceLine,
-} from "recharts";
+} from "@/components/charts";
 import {
   CheckCircle, Clock, Activity, Calendar, GitCommit, User,
   ExternalLink, AlertCircle, RefreshCw, Timer, Zap, TrendingUp,

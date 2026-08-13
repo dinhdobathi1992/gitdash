@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
+} from "@/components/charts";
 import type { DbDailyTrend, DbQuarterSummary } from "@/lib/db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────

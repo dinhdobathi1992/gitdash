@@ -14,7 +14,7 @@ import {
   LineChart,
   Line,
   ReferenceLine,
-} from "recharts";
+} from "@/components/charts";
 import type { RepoDoraSummary } from "@/lib/dora";
 import type { WorkflowOverview } from "@/lib/github";
 import { MetricTooltip } from "@/components/MetricTooltip";

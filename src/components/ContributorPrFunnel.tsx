@@ -9,7 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from "recharts";
+} from "@/components/charts";
 
 interface FunnelData {
   opened: number;
