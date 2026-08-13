@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Search, Lock, Unlock, AlertCircle, ChevronRight, ChevronLeft,
   RefreshCw, Building2, User, ChevronDown, X,
-  AlertTriangle, Keyboard,
+  AlertTriangle, Keyboard, ShieldCheck,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import { RunHistoryBars, TrendSparkline, StatusBadge, HealthBadge } from "@/components/WorkflowMetrics";
@@ -647,6 +647,14 @@ function HomeContent() {
         <div className="flex items-center gap-1.5 shrink-0">
           {orgs && (
             <OrgSelector orgs={orgs} current={orgParam} onSelect={handleOrgSelect} />
+          )}
+          {orgParam && (
+            <Link
+              href={`/org/${encodeURIComponent(orgParam)}/health`}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Team Health Scorecard</span>
+            </Link>
           )}
           <button
             onClick={handleRefresh}

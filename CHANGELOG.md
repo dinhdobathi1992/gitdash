@@ -6,6 +6,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.7] — 2026-08-13
+
+### Overview
+Fix for a UI discoverability gap reported after v4.0.0 shipped: the Team Health Scorecard (`/org/[orgName]/health`) had no visible entry point from the main dashboard — it could only be reached by manually typing the URL, or by first noticing an unlabeled icon-only "Org overview" button (`QuickActions`) that leads to the org page, which *then* has the labeled button.
+
+### Fixed
+
+#### No visible way to reach the Team Health Scorecard
+- **Root cause:** the only labeled "Team Health Scorecard" link lives in the header of `/org/[orgName]` — but the main dashboard (`/`) never links there directly. The sole path was through `QuickActions`, a small unlabeled icon (title-only tooltip) mixed in with the Alerts and Docs icon buttons.
+- The main dashboard header now shows a labeled "Team Health Scorecard" button (same style as the one on the org page) whenever an org is selected — one click from wherever a leader already is, no detour through the org overview page required.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.6 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — additive UI only, no data or API change.
+
+### Changed (infra)
+- Bumped app version from 4.0.6 to 4.0.7
+- Bumped Helm chart version from 0.4.6 to 0.4.7
+
+---
+
 ## [4.0.6] — 2026-08-13
 
 ### Overview
