@@ -22,11 +22,9 @@ const nextConfig: NextConfig = {
       ? path.resolve(__dirname, "..")
       : path.resolve(__dirname),
   },
-  experimental: {
-    // Zscaler TLS inspection requires system certificates for outbound requests
-    // (e.g. fetching Google Fonts woff2 files during dev)
-    turbopackUseSystemTlsCerts: true,
-  },
+  // Zscaler note: the former experimental.turbopackUseSystemTlsCerts flag was
+  // removed in Next 16.2+ — Turbopack now uses the OS trust store by default.
+  // If outbound TLS ever fails behind Zscaler again, use NODE_EXTRA_CA_CERTS.
 
   async headers() {
     return [
