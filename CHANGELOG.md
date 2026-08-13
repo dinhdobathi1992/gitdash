@@ -6,6 +6,73 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.9] — 2026-08-13
+
+### Overview
+Drive-by fix reported alongside v4.0.8 testing: the browser console logged `Error with Permissions-Policy header: Unrecognized feature: 'interest-cohort'` on every page load.
+
+### Fixed
+
+#### Stale Permissions-Policy directive
+- **Root cause:** the security-headers config in `next.config.ts` disabled `interest-cohort` (Google's FLoC/Topics cohort-tracking feature) via the `Permissions-Policy` header. FLoC was discontinued and modern browsers no longer recognize `interest-cohort` as a valid Permissions-Policy feature, so every request logged a harmless-but-noisy console warning.
+- Removed the directive. `camera`, `microphone`, and `geolocation` remain disabled — no functional change, this is not the cause of any loading issue.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.8 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one header value in `next.config.ts`.
+
+### Changed (infra)
+- Bumped app version from 4.0.8 to 4.0.9
+- Bumped Helm chart version from 0.4.8 to 0.4.9
+
+---
+
+## [4.0.8] — 2026-08-13
+
+### Overview
+Visual redesign of the Team Health Scorecard, requested directly after v4.0.7: the flat list of same-weight rows gave a leader no at-a-glance read of overall org health. Implemented from a design imported via Claude Design ("Scorecard board redesign" project), adapted to the app's existing Geist typography and DORA color tokens rather than introducing a separate font/palette for one page.
+
+### Changed
+
+#### Team Health Scorecard redesign
+- Added an "Estate distribution" card in the header — total repo count, a segmented proportion bar, and a legend — plus four stat tiles below it: At Risk / Watch / Healthy counts (each with a "% of estate" note) and a Median Score tile.
+- Repos are now a proper grouped table: a column header row (Repository / DORA / Bus factor / Critical / Trend / Composite), then "At Risk" / "Watch" / "Healthy" sections with a labeled group header (count chip + one-line description of what the band means), instead of one undifferentiated worst-first list.
+- Added interactive filter pills (All / At Risk / Watch / Healthy, each showing its count) and sort pills (Lowest score / Most critical / A–Z) — client-side, no extra fetches.
+- Bus factor is now a number plus a 3-pip strength indicator, colored by the same risk tone as the composite-score bar. Critical-module count is color-coded (muted at zero, amber under 5, red above).
+- Each row is a single click target with a colored left accent bar; the composite score keeps a linear bar (glow-tinted by risk band) next to the number rather than switching to a radial gauge.
+- No API or data changes — same `/api/github/org-health-scorecard` response, purely presentational.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.7 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one file (`src/app/org/[orgName]/health/page.tsx`), no data or schema change.
+
+### Changed (infra)
+- Bumped app version from 4.0.7 to 4.0.8
+- Bumped Helm chart version from 0.4.7 to 0.4.8
+
+---
+
+## [4.0.7] — 2026-08-13
+
+### Overview
+Fix for a UI discoverability gap reported after v4.0.0 shipped: the Team Health Scorecard (`/org/[orgName]/health`) had no visible entry point from the main dashboard — it could only be reached by manually typing the URL, or by first noticing an unlabeled icon-only "Org overview" button (`QuickActions`) that leads to the org page, which *then* has the labeled button.
+
+### Fixed
+
+#### No visible way to reach the Team Health Scorecard
+- **Root cause:** the only labeled "Team Health Scorecard" link lives in the header of `/org/[orgName]` — but the main dashboard (`/`) never links there directly. The sole path was through `QuickActions`, a small unlabeled icon (title-only tooltip) mixed in with the Alerts and Docs icon buttons.
+- The main dashboard header now shows a labeled "Team Health Scorecard" button (same style as the one on the org page) whenever an org is selected — one click from wherever a leader already is, no detour through the org overview page required.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.6 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — additive UI only, no data or API change.
+
+### Changed (infra)
+- Bumped app version from 4.0.6 to 4.0.7
+- Bumped Helm chart version from 0.4.6 to 0.4.7
+
+---
+
 ## [4.0.6] — 2026-08-13
 
 ### Overview
