@@ -332,6 +332,14 @@ function OrgSelector({
   onSelect: (org: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [manualOrg, setManualOrg] = useState("");
+  // GitHub's "orgs the user belongs to" endpoint only lists what the current
+  // token's scope allows it to see — a token authorized before read:org was
+  // added to the OAuth scope (or a fine-grained PAT without org access
+  // granted) silently returns an empty list even for a user who genuinely
+  // belongs to orgs. This input lets someone reach an org directly by name;
+  // the actual repo fetch (/api/github/org-repos) checks real GitHub access
+  // itself, so this works whenever discovery alone falls short.
   const selected = orgs.find((o) => o.login === current);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -369,6 +377,13 @@ function OrgSelector({
             <img src={selected.avatar_url} alt={selected.login} width={16} height={16} className="w-4 h-4 rounded-sm" />
             <span className="font-mono">{selected.login}</span>
           </>
+        ) : current ? (
+          // Reached by typed-in org name, not in the auto-discovered list —
+          // still show it as selected rather than falling back to "Personal".
+          <>
+            <Building2 className="w-4 h-4" />
+            <span className="font-mono">{current}</span>
+          </>
         ) : (
           <>
             <User className="w-4 h-4" />
@@ -391,9 +406,7 @@ function OrgSelector({
             <span>Personal repos</span>
           </button>
 
-          {orgs.length > 0 && (
-            <div className="my-1 border-t border-slate-700/50" />
-          )}
+          <div className="my-1 border-t border-slate-700/50" />
 
           {orgs.map((org) => (
             <button
@@ -409,6 +422,37 @@ function OrgSelector({
               <span className="font-mono truncate">{org.login}</span>
             </button>
           ))}
+
+          {orgs.length === 0 && (
+            <p className="px-3 py-1.5 text-[11px] text-slate-500 leading-snug">
+              No organizations found. If you belong to one, your token may
+              predate the <code className="text-slate-400">read:org</code> scope
+              — try signing out and back in, or type the org below.
+            </p>
+          )}
+
+          <div className="my-1 border-t border-slate-700/50" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const org = manualOrg.trim();
+              if (!org) return;
+              onSelect(org);
+              setManualOrg("");
+              setOpen(false);
+            }}
+            className="px-3 py-2"
+          >
+            <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+              Go to org by name
+            </label>
+            <input
+              value={manualOrg}
+              onChange={(e) => setManualOrg(e.target.value)}
+              placeholder="org-name"
+              className="w-full px-2 py-1.5 bg-slate-900/60 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+            />
+          </form>
         </div>
       )}
     </div>
@@ -560,13 +604,21 @@ function HomeContent() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          {orgParam && selectedOrg ? (
+          {orgParam ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={selectedOrg.avatar_url} alt={selectedOrg.login} width={36} height={36} className="w-9 h-9 rounded-xl ring-1 ring-slate-700 shrink-0" />
+              {selectedOrg ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={selectedOrg.avatar_url} alt={selectedOrg.login} width={36} height={36} className="w-9 h-9 rounded-xl ring-1 ring-slate-700 shrink-0" />
+              ) : (
+                // Reached by typed-in org name (not in the auto-discovered
+                // list) — still a valid, working org view, just no avatar.
+                <div className="w-9 h-9 rounded-xl bg-slate-800 ring-1 ring-slate-700 shrink-0 flex items-center justify-center">
+                  <Building2 className="w-4 h-4 text-slate-500" />
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-white font-mono truncate">{selectedOrg.login}</h1>
+                  <h1 className="text-xl font-bold text-white font-mono truncate">{orgParam}</h1>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 shrink-0">
                     <Building2 className="w-3 h-3" /> Org
                   </span>

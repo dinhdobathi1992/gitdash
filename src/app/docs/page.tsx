@@ -2112,6 +2112,35 @@ function FAQ() {
       q: "Can I use a fine-grained PAT instead of a classic PAT?",
       a: <>Yes. Use a fine-grained PAT with <Code>Actions: read</Code> and <Code>Contents: read</Code> scoped to specific repositories. Note: fine-grained PATs cannot access organization data (<Code>read:org</Code>), so org-level features will not work.</>,
     },
+    {
+      q: "My organizations don't show up in the org switcher, even though I'm a member.",
+      a: <>
+        The switcher only lists what GitHub&apos;s <Code>orgs.listForAuthenticatedUser</Code> API
+        returns for your current token — which depends on when that token was
+        authorized, not just what orgs you belong to today:
+        <ul className="list-disc pl-5 mt-2 space-y-1">
+          <li>
+            <strong>Organization mode (OAuth):</strong> if you authorized GitDash
+            before <Code>read:org</Code> was added to the requested scopes, your
+            existing session won&apos;t have it. Sign out and sign back in to
+            re-authorize with the current scope list.
+          </li>
+          <li>
+            <strong>Standalone mode (PAT):</strong> a classic PAT needs the{" "}
+            <Code>read:org</Code> scope explicitly checked; a fine-grained PAT
+            cannot see organization data at all (see the previous question).
+          </li>
+          <li>
+            Some orgs hide private membership from this API even with the
+            right scope, depending on the org&apos;s own visibility settings.
+          </li>
+        </ul>
+        In any case, you can still reach an org directly — type its name into
+        the &quot;Go to org by name&quot; box in the org switcher, or open{" "}
+        <Code>/org/&lt;name&gt;</Code> directly. Both work independently of the
+        discovery list, using your token&apos;s actual repo access.
+      </>,
+    },
   ];
 
   return (
@@ -2213,9 +2242,25 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.0.3",
+      version: "4.0.4",
       date: "2026-08-13",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Org switcher: \"Go to org by name\" input, always available — reaches any org directly regardless of what GitHub's org-discovery API returns for your token",
+        ],
+        fixed: [
+          "Org switcher showed only \"Personal repos\" with no explanation or workaround when GitHub's orgs.listForAuthenticatedUser API returned an empty list (stale OAuth scope, fine-grained PAT, or org visibility settings) — now explains why and offers the manual org input as a fallback",
+          "Navigating to an org not in the auto-discovered list incorrectly showed \"Personal Repos\" as the page title even though the repo list was correctly filtered to that org",
+        ],
+        improved: [],
+      },
+    },
+    {
+      version: "4.0.3",
+      date: "2026-08-13",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -2546,7 +2591,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.3"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.4"}
           </span>
         </div>
         {/* Mobile close */}
@@ -2791,7 +2836,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.3"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.4"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.4] — 2026-08-13
+
+### Overview
+Fix for a real usability gap reported after v4.0.0-4.0.3 shipped: on some accounts, the org switcher shows only "Personal repos" with no way to reach organization-scoped features (Team Health Scorecard, Weekly Leadership Digest), even for users who genuinely belong to orgs.
+
+### Fixed
+
+#### Org switcher silently hid orgs with no way to work around it
+- **Root cause:** the switcher only lists orgs GitHub's `orgs.listForAuthenticatedUser` API returns for the *current* token — which depends on when that token was authorized, not just current org membership. A session authorized before `read:org` was added to the OAuth scope list (or a fine-grained PAT, which cannot see org data at all) silently returns an empty list even for a user who belongs to orgs. There was no feedback and no fallback.
+- The org switcher now includes a "Go to org by name" input, always available, that navigates directly to any org by name — this works independently of the discovery list, because the actual repo fetch (`/api/github/org-repos`) checks real GitHub access itself rather than relying on the membership-listing API.
+- When the discovered org list is empty, the switcher now explains why (stale OAuth scope, fine-grained PAT limitation, or org visibility settings) instead of silently showing nothing.
+- Fixed a related cosmetic bug: navigating to an org not in the discovered list (e.g. via the new manual input, or a bookmarked `?org=` URL) previously fell back to showing "Personal Repos" as the page title even though the repo list was correctly filtered to that org — the title now always reflects the actual org being viewed.
+- Added a FAQ entry in the in-app docs explaining the scope/discovery gap and the workaround.
+
+Team Health Scorecard (`/org/[orgName]/health`) and the org-repos view already worked correctly by URL for any org name — this fix is entirely about *reaching* them when the switcher's auto-discovery falls short. No API or data-layer changes.
+
+### Changed (infra)
+- Bumped app version from 4.0.3 to 4.0.4
+- Bumped Helm chart version from 0.4.3 to 0.4.4
+
+---
+
 ## [4.0.3] — 2026-08-13
 
 ### Overview
