@@ -6,6 +6,31 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.8] — 2026-08-13
+
+### Overview
+Visual redesign of the Team Health Scorecard, requested directly after v4.0.7: the flat list of same-weight rows gave a leader no at-a-glance read of overall org health. Implemented from a design imported via Claude Design ("Scorecard board redesign" project), adapted to the app's existing Geist typography and DORA color tokens rather than introducing a separate font/palette for one page.
+
+### Changed
+
+#### Team Health Scorecard redesign
+- Added an "Estate distribution" card in the header — total repo count, a segmented proportion bar, and a legend — plus four stat tiles below it: At Risk / Watch / Healthy counts (each with a "% of estate" note) and a Median Score tile.
+- Repos are now a proper grouped table: a column header row (Repository / DORA / Bus factor / Critical / Trend / Composite), then "At Risk" / "Watch" / "Healthy" sections with a labeled group header (count chip + one-line description of what the band means), instead of one undifferentiated worst-first list.
+- Added interactive filter pills (All / At Risk / Watch / Healthy, each showing its count) and sort pills (Lowest score / Most critical / A–Z) — client-side, no extra fetches.
+- Bus factor is now a number plus a 3-pip strength indicator, colored by the same risk tone as the composite-score bar. Critical-module count is color-coded (muted at zero, amber under 5, red above).
+- Each row is a single click target with a colored left accent bar; the composite score keeps a linear bar (glow-tinted by risk band) next to the number rather than switching to a radial gauge.
+- No API or data changes — same `/api/github/org-health-scorecard` response, purely presentational.
+
+### Rollback
+- **Instant, no rebuild:** promote the v4.0.7 Vercel deployment.
+- **Full revert:** `git revert` this release's commit(s) — one file (`src/app/org/[orgName]/health/page.tsx`), no data or schema change.
+
+### Changed (infra)
+- Bumped app version from 4.0.7 to 4.0.8
+- Bumped Helm chart version from 0.4.7 to 0.4.8
+
+---
+
 ## [4.0.7] — 2026-08-13
 
 ### Overview
