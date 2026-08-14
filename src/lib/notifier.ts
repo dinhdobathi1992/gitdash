@@ -382,11 +382,33 @@ export async function deliverDigestEmail(
 
 // ── Weekly Leadership Digest (v4.0.3) ──────────────────────────────────────────
 
+/**
+ * Escape text destined for an HTML email body.
+ *
+ * Added in v4.1.4 because the AI executive summary is model-generated text
+ * interpolated into HTML. The rule-based narrative fields were never escaped
+ * either — they are derived from repository names, which can legitimately
+ * contain characters that break markup — so all of them go through this.
+ */
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export interface LeadershipDigestEmailInput {
   subject: string;
   summary_line: string;
   highlights: string[];
   concerns: string[];
+  /**
+   * Optional AI-written executive summary (v4.1.4). Absent when AI is not
+   * configured or the generation failed — the digest sends regardless.
+   */
+  aiSummary?: string;
 }
 
 export async function deliverLeadershipDigestEmail(
@@ -394,11 +416,21 @@ export async function deliverLeadershipDigestEmail(
   narrative: LeadershipDigestEmailInput,
 ): Promise<DeliveryResult> {
   const listHtml = (items: string[]) =>
-    items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("\n")}</ul>` : "<p>None this week.</p>";
+    items.length
+      ? `<ul>${items.map((i) => `<li>${escapeHtml(i)}</li>`).join("\n")}</ul>`
+      : "<p>None this week.</p>";
+
+  // Labelled explicitly so a reader always knows which half a machine wrote.
+  const aiHtml = narrative.aiSummary
+    ? `<h3 style="margin-bottom:4px">AI summary</h3>
+       <p style="white-space:pre-wrap">${escapeHtml(narrative.aiSummary)}</p>
+       <p style="color:#888;font-size:11px;margin-top:-6px">Generated from this week's metrics — verify against the figures below.</p>`
+    : "";
 
   const html = `
     <h2>GitDash Weekly Leadership Digest</h2>
-    <p>${narrative.summary_line}</p>
+    ${aiHtml}
+    <p>${escapeHtml(narrative.summary_line)}</p>
     <h3>Highlights</h3>
     ${listHtml(narrative.highlights)}
     <h3>Needs attention</h3>
@@ -406,8 +438,11 @@ export async function deliverLeadershipDigestEmail(
     <hr/>
     <p style="color:#888;font-size:12px">Sent by GitDash. To stop receiving this, delete the Weekly Leadership Digest rule in the Alerts page.</p>
   `;
+  const aiText = narrative.aiSummary
+    ? `AI summary:\n${narrative.aiSummary}\n\n(Generated from this week's metrics — verify against the figures below.)\n\n`
+    : "";
   const text =
-    `GitDash Weekly Leadership Digest\n\n${narrative.summary_line}\n\n` +
+    `GitDash Weekly Leadership Digest\n\n${aiText}${narrative.summary_line}\n\n` +
     `Highlights:\n${narrative.highlights.length ? narrative.highlights.map((i) => `- ${i}`).join("\n") : "None this week."}\n\n` +
     `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}`;
 

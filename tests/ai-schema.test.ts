@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseInsightsContent, parseAnomalyContent, parseRootCauseContent } from "@/lib/ai-schema";
+import { parseInsightsContent, parseAnomalyContent, parseRootCauseContent, parseDigestContent } from "@/lib/ai-schema";
 
 const valid = {
   summary: "Deployment frequency is healthy but change failure rate is rising.",
@@ -252,5 +252,55 @@ describe("parseRootCauseContent", () => {
   it("rejects garbage without throwing", () => {
     expect(() => parseRootCauseContent("not json")).not.toThrow();
     expect(parseRootCauseContent("not json")).toBeNull();
+  });
+});
+
+// ── Leadership digest summary (v4.1.4) ────────────────────────────────────────
+
+describe("parseDigestContent", () => {
+  const prose = "Delivery held steady this week. Alpha remains the main risk with a bus factor of 1.";
+
+  it("accepts a plain-prose summary", () => {
+    expect(parseDigestContent(JSON.stringify({ summary: prose }))).toEqual({ summary: prose });
+  });
+
+  it("strips code fences", () => {
+    expect(parseDigestContent("```json\n" + JSON.stringify({ summary: prose }) + "\n```"))
+      .toEqual({ summary: prose });
+  });
+
+  it("strips stray markdown bold rather than rejecting the whole send", () => {
+    const parsed = parseDigestContent(JSON.stringify({ summary: "**Alpha** is at risk." }));
+    expect(parsed?.summary).toBe("Alpha is at risk.");
+  });
+
+  it("strips markdown headings and bullet markers", () => {
+    const parsed = parseDigestContent(
+      JSON.stringify({ summary: "## Week in review\n- alpha is at risk\n- beta improved" }),
+    );
+    expect(parsed?.summary).not.toContain("##");
+    expect(parsed?.summary).not.toMatch(/^- /m);
+    expect(parsed?.summary).toContain("alpha is at risk");
+  });
+
+  it("rejects a missing summary", () => {
+    expect(parseDigestContent(JSON.stringify({ text: prose }))).toBeNull();
+  });
+
+  it("rejects an empty summary", () => {
+    expect(parseDigestContent(JSON.stringify({ summary: "   " }))).toBeNull();
+  });
+
+  it("rejects a summary that is only markdown punctuation", () => {
+    expect(parseDigestContent(JSON.stringify({ summary: "**" }))).toBeNull();
+  });
+
+  it("rejects an essay beyond the email-body cap", () => {
+    expect(parseDigestContent(JSON.stringify({ summary: "x".repeat(1201) }))).toBeNull();
+  });
+
+  it("rejects garbage without throwing", () => {
+    expect(() => parseDigestContent("nope")).not.toThrow();
+    expect(parseDigestContent("nope")).toBeNull();
   });
 });
