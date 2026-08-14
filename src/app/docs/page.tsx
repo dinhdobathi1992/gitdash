@@ -1329,7 +1329,7 @@ function FeatureSettings() {
     <section className="space-y-6">
       <FeaturePageHeader
         icon={Sliders} name="Settings" path="/settings"
-        chips={["PAT management", "Session info", "Billing widget"]}
+        chips={["PAT management", "Email delivery", "Feature flags", "Billing widget"]}
       />
       <ProseP>
         In <strong>standalone mode</strong> — update or revoke your GitHub Personal Access Token.
@@ -1338,6 +1338,51 @@ function FeatureSettings() {
         billing period.
       </ProseP>
       <ScreenshotSlot file="16-settings.png" alt="Settings page" />
+
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>Email Delivery</SubHeading>
+          <VersionBadge v="4.1.3" />
+        </div>
+        <ProseP>
+          Three features send email — alert notifications, the daily digest, and the Weekly
+          Leadership Digest. All three need a provider. Before v4.1.3 that meant an environment
+          variable and a redeploy; now it is configured here and stored in the database.
+        </ProseP>
+
+        <Callout type="warning">
+          <strong>This is not SMTP.</strong> GitDash talks to Resend and SendGrid over their HTTP
+          APIs — there is no SMTP client in the codebase. A mail hostname and port
+          (<Code>smtp.gmail.com</Code>, <Code>587</Code>) cannot work, and a corporate SMTP relay is
+          not supported. You need an API key from one of the two providers.
+        </Callout>
+
+        <DocTable
+          headers={["Field", "Notes"]}
+          rows={[
+            ["Provider", "Resend or SendGrid. Both are HTTP APIs — no host or port to configure"],
+            ["API key", "Encrypted at rest and never returned to the browser. The form shows a masked hint; leave it blank to keep the stored key"],
+            ["From address", "Must be on a domain you have verified with the provider, or delivery will be rejected"],
+            ["Send test email", "Verifies the whole path immediately, rather than finding out on Monday"],
+          ]}
+        />
+
+        <DocCard>
+          <SubHeading>Precedence and upgrades</SubHeading>
+          <ProseP>
+            Settings take priority, with environment variables as the fallback. An instance already
+            using <Code>RESEND_API_KEY</Code> keeps working untouched after upgrading — the database
+            only takes over once someone explicitly enables email here. The status pill shows which
+            source is actually in effect.
+          </ProseP>
+        </DocCard>
+
+        <Callout type="warning">
+          <strong>These settings are instance-wide.</strong> Like alert rules, they have no per-user
+          scoping, so any signed-in user can change them and redirect where mail is sent. The API key
+          itself cannot be read back, and the settings record who last changed them and when.
+        </Callout>
+      </DocCard>
     </section>
   );
 }
@@ -2450,6 +2495,24 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/settings/email",
+          description: "Current email delivery configuration. Returns { enabled, provider, from_address, api_key_hint, has_key, updated_by, updated_at, effective_source, db_available }. The API key itself is never returned — only a masked hint. effective_source reports whether Settings, environment variables, or nothing is actually in effect.",
+          params: [],
+        },
+        {
+          method: "PUT",
+          path: "/api/settings/email",
+          description: "Save email delivery configuration. Body: { enabled, provider (\"resend\"|\"sendgrid\"), from_address, api_key? }. Omitting api_key preserves the stored one. The key is encrypted with AES-256-GCM before storage. Rejects enabling without a key or from address. 503 when no database is configured.",
+          params: [],
+        },
+        {
+          method: "POST",
+          path: "/api/settings/email/test",
+          description: "Send a test email through the currently-resolved provider to verify configuration. Body: { to }. Returns the provider's own error verbatim on failure (bad key, unverified sender) since it is actionable and contains no secret. Rate-limited to 3/min per token.",
+          params: [],
+        },
+        {
+          method: "GET",
           path: "/api/health",
           description: "Liveness/readiness probe. Returns {\"status\":\"ok\"} with no authentication. Used by Kubernetes and load balancers.",
           params: [],
@@ -2701,9 +2764,30 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.1.2",
+      version: "4.1.3",
       date: "2026-08-14",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Email Delivery settings — configure Resend or SendGrid from Settings instead of environment variables, so enabling alert emails, daily digests and the Weekly Leadership Digest no longer needs a redeploy. Stored in the database (migration 5)",
+          "\"Send test email\" button. Email was previously the one feature whose misconfiguration was invisible — an alert or a Monday digest simply never arrived, and the only trace was a server log",
+          "The API key is write-only: it is encrypted at rest with AES-256-GCM (keyed from SESSION_SECRET) and never returned to the browser. The UI shows a masked hint like \"••••4f2a\", and leaving the field blank keeps the stored key",
+        ],
+        fixed: [
+          "The SMTP_HOST documentation was actively misleading. That path has never spoken the SMTP protocol — it POSTs to SendGrid's HTTP API at ${SMTP_HOST}/v3/mail/send — so the documented example smtp.yourprovider.com could never work, and SMTP_PORT was never read at all. The example is corrected and the limitation stated plainly",
+          "Provider selection was duplicated across three send paths with three copies of the same env-var branching. Now resolved once in resolveEmailProvider()",
+        ],
+        improved: [
+          "Existing env-var setups are untouched: resolution is database-first with an environment fallback, so an instance already using RESEND_API_KEY keeps working after upgrading and only switches over when someone explicitly enables email in Settings",
+          "Email config is instance-wide, like alert rules — any authenticated user can change it, so the settings record and display who last changed it and when",
+        ],
+      },
+    },
+    {
+      version: "4.1.2",
+      date: "2026-08-14",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3193,7 +3277,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.2"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.3"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3443,7 +3527,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.2"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.3"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

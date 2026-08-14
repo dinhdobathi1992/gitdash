@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
+import EmailSettingsCard from "@/components/EmailSettingsCard";
 import { Breadcrumb } from "@/components/Sidebar";
 import type { FeatureFlags } from "@/lib/feature-flags";
 import {
@@ -270,6 +271,9 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Email delivery ───────────────────────────────────────────── */}
+      <EmailSettingsCard />
 
       {/* ── Feature flags — card grid fills the page ──────────────────── */}
       <div className="space-y-4">
