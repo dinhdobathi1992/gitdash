@@ -43,11 +43,13 @@ const getRepoDoraSummary = vi.fn();
 const computeBusFactor = vi.fn();
 const computeScorecard = vi.fn();
 const listWorkflowRuns = vi.fn();
+const listRunJobs = vi.fn();
 
 vi.mock("@/lib/github", () => ({
   getRepoSummary: (...a: unknown[]) => getRepoSummary(...a),
   listWorkflowFileCommits: (...a: unknown[]) => listWorkflowFileCommits(...a),
   listWorkflowRuns: (...a: unknown[]) => listWorkflowRuns(...a),
+  listRunJobs: (...a: unknown[]) => listRunJobs(...a),
   getOctokit: () => ({}),
 }));
 vi.mock("@/lib/github-dora", () => ({
@@ -427,5 +429,139 @@ describe("buildAnomalySnapshot", () => {
     expect(snap.outliers).toEqual([]);
     expect(snap.total_runs_analysed).toBe(0);
     expect(snap.workflow_name).toBe("workflow");
+  });
+});
+
+// ── Root-cause snapshot (v4.1.2) ──────────────────────────────────────────────
+
+describe("buildRootCauseSnapshot", () => {
+  /** 5 failures (newest) then 10 successes, so there is a clear pattern. */
+  function failingRuns() {
+    const failures = Array.from({ length: 5 }, (_, i) =>
+      makeRun({
+        id: 500 + i,
+        run_number: 500 + i,
+        conclusion: "failure",
+        created_at: `2026-08-${String(10 + i).padStart(2, "0")}T10:00:00Z`,
+        updated_at: "2026-08-10T10:05:00Z",
+      }),
+    );
+    const successes = Array.from({ length: 10 }, (_, i) =>
+      makeRun({ id: i + 1, run_number: i + 1, conclusion: "success" }),
+    );
+    return [...failures, ...successes];
+  }
+
+  const jobsFixture = [
+    {
+      id: 1,
+      name: "build",
+      status: "completed",
+      conclusion: "failure",
+      duration_ms: 45_000,
+      steps: [
+        { name: "Checkout", status: "completed", conclusion: "success" },
+        { name: "Run tests", status: "completed", conclusion: "failure" },
+      ],
+    },
+    {
+      id: 2,
+      name: "lint",
+      status: "completed",
+      conclusion: "success",
+      duration_ms: 9_000,
+      steps: [{ name: "ESLint", status: "completed", conclusion: "success" }],
+    },
+  ];
+
+  beforeEach(() => {
+    listWorkflowRuns.mockReset().mockResolvedValue(failingRuns());
+    listRunJobs.mockReset().mockResolvedValue(jobsFixture);
+  });
+
+  it("summarises failures, steps and clustering", async () => {
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+
+    expect(snap.repo).toBe("o/r");
+    expect(snap.failure_count).toBe(5);
+    expect(snap.run_count).toBe(15);
+    expect(snap.failure_rate_pct).toBe(33);
+    expect(snap.failures).toHaveLength(5);
+    // Only the failed job is reported, and only its failed step.
+    expect(snap.failures[0].failed_jobs).toEqual([
+      { job_name: "build", failed_step_names: ["Run tests"], duration_ms: 45_000 },
+    ]);
+    expect(snap.step_failure_frequency[0]).toEqual({
+      step_name: "Run tests",
+      failure_count: 5,
+      share_of_failures_pct: 100,
+    });
+    expect(snap.failure_clustering.same_step_share_pct).toBe(100);
+  });
+
+  it("carries no forbidden keys", async () => {
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+    assertNoForbiddenKeys(snap);
+  });
+
+  it("counts the success streak preceding the newest failure", async () => {
+    // Newest-first: 2 successes, then failures.
+    const runs = [
+      makeRun({ id: 1, run_number: 1, conclusion: "success" }),
+      makeRun({ id: 2, run_number: 2, conclusion: "success" }),
+      ...Array.from({ length: 4 }, (_, i) =>
+        makeRun({ id: 10 + i, run_number: 10 + i, conclusion: "failure" }),
+      ),
+    ];
+    listWorkflowRuns.mockResolvedValue(runs);
+
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+    expect(snap.prior_success_streak).toBe(2);
+  });
+
+  it("inspects at most ten failed runs", async () => {
+    listWorkflowRuns.mockResolvedValue(
+      Array.from({ length: 25 }, (_, i) =>
+        makeRun({ id: i + 1, run_number: i + 1, conclusion: "failure" }),
+      ),
+    );
+
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+
+    expect(snap.failure_count).toBe(25);        // all counted
+    expect(snap.failures).toHaveLength(10);     // but only ten fetched
+    expect(listRunJobs).toHaveBeenCalledTimes(10);
+  });
+
+  it("flags partial when a job fetch fails, without dropping the snapshot", async () => {
+    listRunJobs.mockRejectedValueOnce(new Error("rate limited"));
+
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+
+    expect(snap.partial).toBe(true);
+    expect(snap.failures.length).toBe(4); // the other four still made it
+  });
+
+  it("computes a duration shift between passing and failing runs", async () => {
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+    expect(snap.duration_shift).not.toBeNull();
+    expect(snap.duration_shift!.during_failures_p50_ms).toBeGreaterThan(0);
+  });
+
+  it("returns an empty snapshot rather than throwing when runs cannot be fetched", async () => {
+    listWorkflowRuns.mockRejectedValue(new Error("boom"));
+
+    const { buildRootCauseSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildRootCauseSnapshot("tok", { owner: "o", repo: "r", workflowId: 7 });
+
+    expect(snap.failure_count).toBe(0);
+    expect(snap.failures).toEqual([]);
+    expect(snap.partial).toBe(true);
   });
 });

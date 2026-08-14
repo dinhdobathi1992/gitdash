@@ -11,6 +11,7 @@ import StatCard from "@/components/StatCard";
 import { ConclusionBadge } from "@/components/Badge";
 import { formatDuration, cn } from "@/lib/utils";
 import AnomalyExplanation from "@/components/AnomalyExplanation";
+import RootCauseHypotheses from "@/components/RootCauseHypotheses";
 import { estimateRunCost } from "@/lib/cost";
 import { format, getHours, getDay } from "date-fns";
 import {
@@ -1034,6 +1035,23 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
                   metric={m}
                 />
               ))}
+          </div>
+        </ChartCard>
+      )}
+
+      {/*
+        Root-cause hypotheses. Gated on recent failures existing at all — the
+        route enforces its own minimum server-side and returns content: null
+        below it, so this only avoids rendering a button that would say
+        "not enough failures".
+      */}
+      {completed.filter((r) => r.conclusion === "failure").length >= 3 && (
+        <ChartCard
+          title="AI Failure Hypotheses"
+          sub="Ranked likely causes, inferred from failed job and step names, timing, and workflow-file changes — never from run logs"
+        >
+          <div className="mt-2">
+            <RootCauseHypotheses owner={owner} repo={repo} workflowId={workflowId} />
           </div>
         </ChartCard>
       )}

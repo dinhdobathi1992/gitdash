@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseInsightsContent, parseAnomalyContent } from "@/lib/ai-schema";
+import { parseInsightsContent, parseAnomalyContent, parseRootCauseContent } from "@/lib/ai-schema";
 
 const valid = {
   summary: "Deployment frequency is healthy but change failure rate is rising.",
@@ -161,5 +161,96 @@ describe("parseAnomalyContent", () => {
   it("rejects garbage without throwing", () => {
     expect(() => parseAnomalyContent("nope")).not.toThrow();
     expect(parseAnomalyContent("nope")).toBeNull();
+  });
+});
+
+// ── Root-cause hypotheses (v4.1.2) ────────────────────────────────────────────
+
+describe("parseRootCauseContent", () => {
+  const h = (over = {}) => ({
+    rank: 1,
+    hypothesis: "The ci.yml change on 2026-08-09 broke the build step.",
+    evidence: "All 7 failures name the same step, and none precede that commit.",
+    confidence: "high",
+    next_step: "Diff .github/workflows/ci.yml at that commit.",
+    ...over,
+  });
+
+  it("accepts a well-formed payload", () => {
+    const parsed = parseRootCauseContent(JSON.stringify({ hypotheses: [h()] }));
+    expect(parsed?.hypotheses).toHaveLength(1);
+    expect(parsed?.hypotheses[0].confidence).toBe("high");
+  });
+
+  it("accepts all three confidence levels", () => {
+    for (const c of ["high", "medium", "low"]) {
+      const parsed = parseRootCauseContent(JSON.stringify({ hypotheses: [h({ confidence: c })] }));
+      expect(parsed?.hypotheses[0].confidence).toBe(c);
+    }
+  });
+
+  it("caps at three hypotheses", () => {
+    const parsed = parseRootCauseContent(
+      JSON.stringify({ hypotheses: [h(), h(), h(), h(), h()] }),
+    );
+    expect(parsed?.hypotheses).toHaveLength(3);
+  });
+
+  it("re-derives rank from position, ignoring what the model claimed", () => {
+    const parsed = parseRootCauseContent(
+      JSON.stringify({ hypotheses: [h({ rank: 7 }), h({ rank: 7 }), h({ rank: 2 })] }),
+    );
+    expect(parsed?.hypotheses.map((x) => x.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("strips code fences", () => {
+    const parsed = parseRootCauseContent("```json\n" + JSON.stringify({ hypotheses: [h()] }) + "\n```");
+    expect(parsed?.hypotheses).toHaveLength(1);
+  });
+
+  // ── Rejections ──────────────────────────────────────────────────────────────
+
+  it("rejects an invented confidence level", () => {
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [h({ confidence: "very high" })] }))).toBeNull();
+  });
+
+  it("rejects a numeric confidence", () => {
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [h({ confidence: 0.9 })] }))).toBeNull();
+  });
+
+  it("rejects an empty hypotheses list", () => {
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [] }))).toBeNull();
+  });
+
+  it("rejects a missing hypotheses key", () => {
+    expect(parseRootCauseContent(JSON.stringify({ items: [h()] }))).toBeNull();
+  });
+
+  it("rejects an entry missing evidence", () => {
+    const bad = h(); delete (bad as Record<string, unknown>).evidence;
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [bad] }))).toBeNull();
+  });
+
+  it("rejects an entry missing next_step", () => {
+    const bad = h(); delete (bad as Record<string, unknown>).next_step;
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [bad] }))).toBeNull();
+  });
+
+  it("rejects an over-long hypothesis", () => {
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [h({ hypothesis: "x".repeat(401) })] }))).toBeNull();
+  });
+
+  it("accepts evidence at the length real generations produce (~290 chars)", () => {
+    const parsed = parseRootCauseContent(JSON.stringify({ hypotheses: [h({ evidence: "x".repeat(290) })] }));
+    expect(parsed?.hypotheses).toHaveLength(1);
+  });
+
+  it("rejects evidence beyond its own cap", () => {
+    expect(parseRootCauseContent(JSON.stringify({ hypotheses: [h({ evidence: "x".repeat(501) })] }))).toBeNull();
+  });
+
+  it("rejects garbage without throwing", () => {
+    expect(() => parseRootCauseContent("not json")).not.toThrow();
+    expect(parseRootCauseContent("not json")).toBeNull();
   });
 });
