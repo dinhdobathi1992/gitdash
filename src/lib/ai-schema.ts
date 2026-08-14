@@ -80,3 +80,33 @@ export function parseInsightsContent(raw: string): InsightsContent | null {
 
   return { summary, bullets, actions };
 }
+
+// ── Anomaly explanation (v4.1.1) ──────────────────────────────────────────────
+
+export interface AnomalyExplanationContent {
+  explanation: string;
+  check: string;
+}
+
+const MAX_EXPLANATION_CHARS = 400;
+
+/** Parse and validate {explanation, check}. Returns null on any problem. */
+export function parseAnomalyContent(raw: string): AnomalyExplanationContent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripFences(raw));
+  } catch {
+    return null;
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const obj = parsed as Record<string, unknown>;
+
+  const explanation = asCleanString(obj.explanation, MAX_EXPLANATION_CHARS);
+  if (explanation === null) return null;
+
+  const check = asCleanString(obj.check, MAX_EXPLANATION_CHARS);
+  if (check === null) return null;
+
+  return { explanation, check };
+}

@@ -42,10 +42,12 @@ const listWorkflowFileCommits = vi.fn();
 const getRepoDoraSummary = vi.fn();
 const computeBusFactor = vi.fn();
 const computeScorecard = vi.fn();
+const listWorkflowRuns = vi.fn();
 
 vi.mock("@/lib/github", () => ({
   getRepoSummary: (...a: unknown[]) => getRepoSummary(...a),
   listWorkflowFileCommits: (...a: unknown[]) => listWorkflowFileCommits(...a),
+  listWorkflowRuns: (...a: unknown[]) => listWorkflowRuns(...a),
   getOctokit: () => ({}),
 }));
 vi.mock("@/lib/github-dora", () => ({
@@ -279,5 +281,151 @@ describe("buildInsightsSnapshot — org surface", () => {
     expect(snap.bus_factor).toBeNull();
     expect(snap.worst_repos).toEqual([]);
     expect(snap.risk_bands).toEqual({ healthy: 0, watch: 0, at_risk: 0, median_score: 0 });
+  });
+});
+
+// ── Anomaly snapshot (v4.1.1) ─────────────────────────────────────────────────
+
+/**
+ * A run list carrying one deliberate duration outlier.
+ *
+ * Two constraints from src/lib/anomaly.ts that the fixture must respect:
+ *   - runs arrive NEWEST-FIRST (as the GitHub API returns them), and detection
+ *     is causal — a run is only flagged against runs that precede it in time,
+ *     so the outlier has to sit at index 0 to have a baseline behind it;
+ *   - baseline stddev must exceed 1ms, so the normal runs vary slightly.
+ *     Identical durations are skipped as a false-positive guard.
+ */
+function makeRun(over: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    name: "CI",
+    run_number: 1,
+    status: "completed",
+    conclusion: "success",
+    created_at: "2026-08-01T10:00:00Z",
+    run_started_at: "2026-08-01T10:00:05Z",
+    updated_at: "2026-08-01T10:01:05Z",
+    event: "push",
+    actor: { login: "octocat", avatar_url: "" },
+    triggering_actor: { login: "octocat", avatar_url: "" },
+    head_branch: "main",
+    head_sha: "abc",
+    run_attempt: 1,
+    html_url: "https://github.com/o/r/actions/runs/1",
+    display_title: "some commit title that must not leak",
+    ...over,
+  };
+}
+
+function runsWithOutlier() {
+  // Index 0 = newest = the outlier (30 min against a ~60s baseline).
+  const outlier = makeRun({
+    id: 999,
+    run_number: 999,
+    created_at: "2026-08-12T10:00:00Z",
+    run_started_at: "2026-08-12T10:00:05Z",
+    updated_at: "2026-08-12T10:30:05Z",
+  });
+
+  const baseline = Array.from({ length: 20 }, (_, i) =>
+    makeRun({
+      id: i + 1,
+      run_number: i + 1,
+      created_at: "2026-08-01T10:00:00Z",
+      run_started_at: "2026-08-01T10:00:05Z",
+      // 60s ± a few seconds so stddev clears the > 1ms guard.
+      updated_at: `2026-08-01T10:01:${String(5 + (i % 7)).padStart(2, "0")}Z`,
+    }),
+  );
+
+  return [outlier, ...baseline];
+}
+
+describe("buildAnomalySnapshot", () => {
+  beforeEach(() => {
+    listWorkflowRuns.mockReset().mockResolvedValue(runsWithOutlier());
+  });
+
+  it("returns the flagged outliers with baseline stats", async () => {
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+
+    expect(snap.repo).toBe("o/r");
+    expect(snap.workflow_name).toBe("CI");
+    expect(snap.metric).toBe("duration");
+    expect(snap.baseline).not.toBeNull();
+    expect(snap.outliers.length).toBeGreaterThan(0);
+    expect(snap.outliers[0].run_number).toBe(999);
+    expect(snap.total_runs_analysed).toBe(21);
+  });
+
+  it("carries no forbidden keys", async () => {
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+    assertNoForbiddenKeys(snap);
+  });
+
+  it("does not leak run titles, SHAs or URLs", async () => {
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+    const s = JSON.stringify(snap);
+    expect(s).not.toContain("must not leak");
+    expect(s).not.toContain("github.com");
+  });
+
+  it("caps outliers at five", async () => {
+    // 10 slow runs (newest) against a 20-run varied baseline: every one of the
+    // slow runs clears the threshold, so more than five are flagged.
+    const slow = Array.from({ length: 10 }, (_, i) =>
+      makeRun({
+        id: 900 + i,
+        run_number: 900 + i,
+        created_at: `2026-08-${String(12 + i).padStart(2, "0")}T10:00:00Z`,
+        run_started_at: "2026-08-12T10:00:05Z",
+        updated_at: "2026-08-12T10:30:05Z",
+      }),
+    );
+    const baseline = Array.from({ length: 20 }, (_, i) =>
+      makeRun({
+        id: i + 1,
+        run_number: i + 1,
+        updated_at: `2026-08-01T10:01:${String(5 + (i % 7)).padStart(2, "0")}Z`,
+      }),
+    );
+    listWorkflowRuns.mockResolvedValue([...slow, ...baseline]);
+
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+    expect(snap.outliers.length).toBeLessThanOrEqual(5);
+  });
+
+  it("summarises the trigger mix", async () => {
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+    expect(snap.concurrent_signals.trigger_mix).toEqual({ push: 21 });
+  });
+
+  it("returns an empty snapshot rather than throwing when the run fetch fails", async () => {
+    listWorkflowRuns.mockRejectedValue(new Error("rate limited"));
+
+    const { buildAnomalySnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildAnomalySnapshot("tok", {
+      owner: "o", repo: "r", workflowId: 7, metric: "duration",
+    });
+
+    expect(snap.outliers).toEqual([]);
+    expect(snap.total_runs_analysed).toBe(0);
+    expect(snap.workflow_name).toBe("workflow");
   });
 });

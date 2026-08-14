@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseInsightsContent } from "@/lib/ai-schema";
+import { parseInsightsContent, parseAnomalyContent } from "@/lib/ai-schema";
 
 const valid = {
   summary: "Deployment frequency is healthy but change failure rate is rising.",
@@ -110,5 +110,56 @@ describe("parseInsightsContent", () => {
     for (const h of hostile) {
       expect(() => parseInsightsContent(h)).not.toThrow();
     }
+  });
+});
+
+// ── Anomaly explanation (v4.1.1) ──────────────────────────────────────────────
+
+describe("parseAnomalyContent", () => {
+  const valid = {
+    explanation: "Three runs exceeded the baseline right after the workflow file changed.",
+    check: "Diff .github/workflows/ci.yml against the commit dated 2026-08-10.",
+  };
+
+  it("accepts a well-formed payload", () => {
+    expect(parseAnomalyContent(JSON.stringify(valid))).toEqual(valid);
+  });
+
+  it("strips code fences", () => {
+    expect(parseAnomalyContent("```json\n" + JSON.stringify(valid) + "\n```")).toEqual(valid);
+  });
+
+  it("trims whitespace", () => {
+    expect(parseAnomalyContent(JSON.stringify({ explanation: " e ", check: " c " }))).toEqual({
+      explanation: "e",
+      check: "c",
+    });
+  });
+
+  it("rejects a missing check", () => {
+    expect(parseAnomalyContent(JSON.stringify({ explanation: "e" }))).toBeNull();
+  });
+
+  it("rejects a missing explanation", () => {
+    expect(parseAnomalyContent(JSON.stringify({ check: "c" }))).toBeNull();
+  });
+
+  it("rejects an empty explanation", () => {
+    expect(parseAnomalyContent(JSON.stringify({ explanation: "  ", check: "c" }))).toBeNull();
+  });
+
+  it("rejects an over-long explanation", () => {
+    expect(
+      parseAnomalyContent(JSON.stringify({ explanation: "x".repeat(401), check: "c" })),
+    ).toBeNull();
+  });
+
+  it("rejects non-string fields", () => {
+    expect(parseAnomalyContent(JSON.stringify({ explanation: 1, check: 2 }))).toBeNull();
+  });
+
+  it("rejects garbage without throwing", () => {
+    expect(() => parseAnomalyContent("nope")).not.toThrow();
+    expect(parseAnomalyContent("nope")).toBeNull();
   });
 });
