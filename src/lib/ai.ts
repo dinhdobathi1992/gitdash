@@ -24,7 +24,16 @@
  * keep this release free of schema changes (see docs/specs, §6.2).
  */
 
-export type AiProvider = "gemini" | "qwen";
+export type AiProvider = "bailian" | "gemini" | "qwen";
+
+/**
+ * Wire format. Not every provider speaks OpenAI's shape — Alibaba's Bailian
+ * "apps/anthropic" endpoint serves the Anthropic Messages API, which differs
+ * in path, auth header, where the system prompt goes, and how the response
+ * body is structured. Modelling this explicitly beats bolting on special
+ * cases at each call site.
+ */
+type AiProtocol = "openai" | "anthropic";
 
 export interface AiSuccess {
   ok: true;
@@ -54,6 +63,7 @@ export type AiResult = AiSuccess | AiFailure;
 
 interface ProviderConfig {
   name: AiProvider;
+  protocol: AiProtocol;
   keyEnv: string;
   baseEnv: string;
   modelEnv: string;
@@ -61,10 +71,24 @@ interface ProviderConfig {
   defaultModel: string;
 }
 
-/** Attempt order is significant: index 0 is primary. */
+/**
+ * Attempt order is significant: index 0 is primary. Providers without a key
+ * are skipped entirely, so the effective order is "whichever of these you
+ * have configured" — adding a provider here costs nothing at runtime.
+ */
 const PROVIDERS: ProviderConfig[] = [
   {
+    name: "bailian",
+    protocol: "anthropic",
+    keyEnv: "BAILIAN_API_KEY",
+    baseEnv: "BAILIAN_BASE_URL",
+    modelEnv: "BAILIAN_MODEL",
+    defaultBase: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic/v1",
+    defaultModel: "qwen3.6-flash",
+  },
+  {
     name: "gemini",
+    protocol: "openai",
     keyEnv: "GEMINI_API_KEY",
     baseEnv: "GEMINI_BASE_URL",
     modelEnv: "GEMINI_MODEL",
@@ -73,6 +97,7 @@ const PROVIDERS: ProviderConfig[] = [
   },
   {
     name: "qwen",
+    protocol: "openai",
     keyEnv: "QWEN_API_KEY",
     baseEnv: "QWEN_BASE_URL",
     modelEnv: "QWEN_MODEL",
@@ -151,6 +176,105 @@ interface AttemptOutcome {
   error: string;
 }
 
+interface WireRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+interface WireResponse {
+  content: string;
+  usage?: { prompt_tokens: number; completion_tokens: number };
+}
+
+function buildRequest(
+  cfg: ProviderConfig,
+  baseUrl: string,
+  model: string,
+  key: string,
+  systemPrompt: string,
+  userPayload: unknown,
+  opts: { temperature: number; maxOutputTokens: number },
+): WireRequest {
+  const userContent = JSON.stringify(userPayload);
+
+  if (cfg.protocol === "anthropic") {
+    return {
+      url: `${baseUrl}/messages`,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: opts.maxOutputTokens,
+        temperature: opts.temperature,
+        // The system prompt is a top-level field here, not a message role.
+        system: systemPrompt,
+        messages: [{ role: "user", content: userContent }],
+        // Bailian's Qwen models enable extended thinking by default, which
+        // costs ~10x the output tokens for no benefit on structured
+        // extraction — measured 799 vs 85 tokens on an identical request.
+        thinking: { type: "disabled" },
+      }),
+    };
+  }
+
+  return {
+    url: `${baseUrl}/chat/completions`,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      temperature: opts.temperature,
+      max_tokens: opts.maxOutputTokens,
+      response_format: { type: "json_object" },
+    }),
+  };
+}
+
+/** Normalise either wire format into { content, usage }. */
+function parseResponse(cfg: ProviderConfig, json: unknown): WireResponse {
+  if (cfg.protocol === "anthropic") {
+    const j = json as {
+      content?: { type?: string; text?: string }[];
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+    // Pick the text block explicitly: with thinking enabled the first block is
+    // a "thinking" block and content[0].text would be undefined. We disable
+    // thinking above, but a model is free to ignore that.
+    const text = j.content?.find((b) => b.type === "text")?.text ?? "";
+    const usage =
+      j.usage && typeof j.usage.input_tokens === "number"
+        ? {
+            prompt_tokens: j.usage.input_tokens ?? 0,
+            completion_tokens: j.usage.output_tokens ?? 0,
+          }
+        : undefined;
+    return { content: text, usage };
+  }
+
+  const j = json as {
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const usage =
+    j.usage && typeof j.usage.prompt_tokens === "number"
+      ? {
+          prompt_tokens: j.usage.prompt_tokens ?? 0,
+          completion_tokens: j.usage.completion_tokens ?? 0,
+        }
+      : undefined;
+  return { content: j.choices?.[0]?.message?.content ?? "", usage };
+}
+
 async function callProvider(
   cfg: ProviderConfig,
   systemPrompt: string,
@@ -165,23 +289,16 @@ async function callProvider(
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const startedAt = Date.now();
 
+  const wire = buildRequest(cfg, baseUrl, model, key, systemPrompt, userPayload, {
+    temperature: opts.temperature,
+    maxOutputTokens: opts.maxOutputTokens,
+  });
+
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch(wire.url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: JSON.stringify(userPayload) },
-        ],
-        temperature: opts.temperature,
-        max_tokens: opts.maxOutputTokens,
-        response_format: { type: "json_object" },
-      }),
+      headers: wire.headers,
+      body: wire.body,
       signal: controller.signal,
     });
 
@@ -200,24 +317,12 @@ async function callProvider(
       };
     }
 
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    const content = json.choices?.[0]?.message?.content;
+    const { content, usage } = parseResponse(cfg, await res.json());
 
     if (!content || !content.trim()) {
       console.error(`[ai] ${cfg.name}/${model} returned an empty completion in ${latency}ms`);
       return { kind: "retryable", error: `${cfg.name} returned an empty completion` };
     }
-
-    const usage =
-      json.usage && typeof json.usage.prompt_tokens === "number"
-        ? {
-            prompt_tokens: json.usage.prompt_tokens ?? 0,
-            completion_tokens: json.usage.completion_tokens ?? 0,
-          }
-        : undefined;
 
     if (usage) recordTokens(usage.prompt_tokens + usage.completion_tokens);
 

@@ -10,6 +10,7 @@ import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import StatCard from "@/components/StatCard";
 import { ConclusionBadge } from "@/components/Badge";
 import { formatDuration, cn } from "@/lib/utils";
+import AnomalyExplanation from "@/components/AnomalyExplanation";
 import { estimateRunCost } from "@/lib/cost";
 import { format, getHours, getDay } from "date-fns";
 import {
@@ -380,7 +381,7 @@ function WorkflowContent() {
           </div>
           <div role="tabpanel" id="tabpanel-reliability" aria-labelledby="tab-reliability" hidden={tab !== "reliability"}>
             {flags.reliabilityTab
-              ? <ReliabilityTab runs={safeRuns} completed={completed} anomalyMap={anomalyMap} />
+              ? <ReliabilityTab runs={safeRuns} completed={completed} anomalyMap={anomalyMap} owner={owner} repo={repo} workflowId={Number(workflow_id)} />
               : <DisabledFeature label="Reliability Tab" settingsHref="/settings" />}
           </div>
           <div role="tabpanel" id="tabpanel-triggers"     aria-labelledby="tab-triggers"     hidden={tab !== "triggers"}><TriggersTab    runs={safeRuns} /></div>
@@ -848,7 +849,7 @@ function QueueHeatmap({ cells }: { cells: { day: number; hour: number; avg_ms: n
 // ══════════════════════════════════════════════════════════════════════════════
 // RELIABILITY TAB
 // ══════════════════════════════════════════════════════════════════════════════
-function ReliabilityTab({ runs, completed, anomalyMap }: { runs: WorkflowRun[]; completed: WorkflowRun[]; anomalyMap: Map<number, RunAnomalies> }) {
+function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }: { runs: WorkflowRun[]; completed: WorkflowRun[]; anomalyMap: Map<number, RunAnomalies>; owner: string; repo: string; workflowId: number }) {
   // MTTR: mean time from a failure to the next success on same branch
   const mttr = useMemo(() => {
     const byBranch: Record<string, WorkflowRun[]> = {};
@@ -1009,6 +1010,30 @@ function ReliabilityTab({ runs, completed, anomalyMap }: { runs: WorkflowRun[]; 
                   </div>
                 );
               })}
+          </div>
+
+          {/*
+            One explanation per metric, not per run: the AI reads the pattern
+            across outliers (baseline, timing, concurrent workflow changes),
+            so a per-run button would ask the same question repeatedly.
+            Renders nothing unless the server has AI provider keys.
+          */}
+          <div className="mt-4 space-y-3">
+            {(["duration", "queue_wait"] as const)
+              .filter((m) =>
+                Array.from(anomalyMap.values()).some((e) =>
+                  e.anomalies.some((a) => a.metric === m),
+                ),
+              )
+              .map((m) => (
+                <AnomalyExplanation
+                  key={m}
+                  owner={owner}
+                  repo={repo}
+                  workflowId={workflowId}
+                  metric={m}
+                />
+              ))}
           </div>
         </ChartCard>
       )}

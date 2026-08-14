@@ -8,6 +8,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const AI_ENV = [
   "AI_DISABLED",
+  "BAILIAN_API_KEY",
+  "BAILIAN_BASE_URL",
+  "BAILIAN_MODEL",
   "AI_TIMEOUT_MS",
   "AI_TOTAL_BUDGET_MS",
   "AI_DAILY_TOKEN_BUDGET",
@@ -340,5 +343,127 @@ describe("generateJson — daily token budget", () => {
     expect(snap.tokens).toBe(10);
     expect(snap.limit).toBe(5000);
     expect(JSON.stringify(snap)).not.toContain("super-secret-value");
+  });
+});
+
+// ── Anthropic-protocol provider (Bailian, v4.1.1) ─────────────────────────────
+
+/** Anthropic Messages API success body. */
+function anthropicBody(text = '{"summary":"ok"}', blocks?: { type: string; text?: string }[]) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      content: blocks ?? [{ type: "text", text }],
+      usage: { input_tokens: 42, output_tokens: 85 },
+    }),
+  } as unknown as Response;
+}
+
+describe("generateJson — Anthropic protocol (bailian)", () => {
+  it("posts to /messages with x-api-key and the system prompt as a top-level field", async () => {
+    process.env.BAILIAN_API_KEY = "sk-test";
+    process.env.BAILIAN_BASE_URL = "https://bailian.test/apps/anthropic/v1";
+    process.env.BAILIAN_MODEL = "qwen3.6-flash";
+    fetchMock.mockResolvedValueOnce(anthropicBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    await generateJson("SYSTEM", { a: 1 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://bailian.test/apps/anthropic/v1/messages");
+
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-api-key"]).toBe("sk-test");
+    expect(headers["anthropic-version"]).toBe("2023-06-01");
+    expect(headers.Authorization).toBeUndefined(); // not the OpenAI scheme
+
+    const body = JSON.parse(init.body as string);
+    expect(body.model).toBe("qwen3.6-flash");
+    expect(body.system).toBe("SYSTEM"); // top-level, not a message role
+    expect(body.messages).toEqual([{ role: "user", content: '{"a":1}' }]);
+    expect(body.response_format).toBeUndefined(); // not an Anthropic concept
+  });
+
+  it("disables extended thinking to avoid ~10x output-token cost", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    fetchMock.mockResolvedValueOnce(anthropicBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    await generateJson("sys", {});
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.thinking).toEqual({ type: "disabled" });
+  });
+
+  it("extracts the text block, not content[0], when a thinking block is present", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    // A model may ignore thinking:disabled — content[0].text would be undefined.
+    fetchMock.mockResolvedValueOnce(
+      anthropicBody(undefined, [
+        { type: "thinking", text: undefined },
+        { type: "text", text: '{"summary":"real answer"}' },
+      ]),
+    );
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.content).toBe('{"summary":"real answer"}');
+  });
+
+  it("maps input_tokens/output_tokens onto the shared usage shape", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    process.env.AI_DAILY_TOKEN_BUDGET = "1000";
+    fetchMock.mockResolvedValueOnce(anthropicBody());
+
+    const { generateJson, budgetSnapshot } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.usage).toEqual({ prompt_tokens: 42, completion_tokens: 85 });
+    expect(budgetSnapshot().tokens).toBe(127);
+  });
+
+  it("treats a response with no text block as retryable", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    fetchMock
+      .mockResolvedValueOnce(anthropicBody(undefined, [{ type: "thinking" }]))
+      .mockResolvedValueOnce(anthropicBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("is tried before gemini when both are configured", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    process.env.GEMINI_API_KEY = "k";
+    fetchMock.mockResolvedValueOnce(anthropicBody());
+
+    const { generateJson, configuredProviders } = await import("@/lib/ai");
+    expect(configuredProviders()).toEqual(["bailian", "gemini"]);
+
+    const r = await generateJson("sys", {});
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.provider).toBe("bailian");
+  });
+
+  it("falls back from bailian to gemini across protocols", async () => {
+    process.env.BAILIAN_API_KEY = "k";
+    process.env.GEMINI_API_KEY = "k";
+    fetchMock.mockResolvedValueOnce(errBody(401)).mockResolvedValueOnce(okBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.provider).toBe("gemini");
+    // Second call used the OpenAI shape, proving the protocol switched.
+    const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(secondBody.messages[0].role).toBe("system");
   });
 });

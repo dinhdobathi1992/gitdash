@@ -18,11 +18,17 @@
  * Builders reuse existing fetchers only — no new GitHub API surface.
  */
 
-import { getRepoSummary, listWorkflowFileCommits, getOctokit } from "@/lib/github";
-import type { TrendPoint } from "@/lib/github";
+import {
+  getRepoSummary,
+  listWorkflowFileCommits,
+  listWorkflowRuns,
+  getOctokit,
+} from "@/lib/github";
+import type { TrendPoint, WorkflowRun } from "@/lib/github";
 import { getRepoDoraSummary } from "@/lib/github-dora";
 import { computeBusFactor } from "@/lib/bus-factor";
 import { computeScorecard } from "@/lib/org-health-scorecard";
+import { detectAnomalies, computeBaseline, type AnomalyMetric } from "@/lib/anomaly";
 import type { DoraLevel } from "@/lib/dora";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -270,4 +276,117 @@ export async function buildInsightsSnapshot(
   return scope.surface === "repo"
     ? buildRepoInsights(token, scope.owner, scope.repo)
     : buildOrgInsights(token, scope.org);
+}
+
+// ── Anomaly explanation (v4.1.1) ──────────────────────────────────────────────
+
+export interface AnomalyOutlier {
+  run_number: number;
+  date: string;
+  value_ms: number;
+  z_score: number;
+  trigger: string;
+  actor_login: string | null;
+}
+
+export interface AnomalySnapshot {
+  workflow_name: string;
+  repo: string;
+  metric: AnomalyMetric;
+  baseline: { mean_ms: number; stddev_ms: number; sample_size: number } | null;
+  /** Most recent first, capped at 5. */
+  outliers: AnomalyOutlier[];
+  concurrent_signals: {
+    workflow_file_changes: { date: string; author_login: string | null }[];
+    /** Event name → count across the analysed window. */
+    trigger_mix: Record<string, number>;
+  };
+  total_runs_analysed: number;
+}
+
+/** Duration is wall-clock; queue wait is created_at → run_started_at. */
+function runMetricValue(run: WorkflowRun, metric: AnomalyMetric): number | null {
+  if (metric === "duration") {
+    if (!run.run_started_at || !run.updated_at) return null;
+    return new Date(run.updated_at).getTime() - new Date(run.run_started_at).getTime();
+  }
+  if (!run.run_started_at || !run.created_at) return null;
+  return new Date(run.run_started_at).getTime() - new Date(run.created_at).getTime();
+}
+
+/**
+ * Build the context for explaining one metric's outliers.
+ *
+ * Note this re-fetches runs and re-runs detection server-side even though the
+ * client already computed the same anomalies. That is deliberate: prompts are
+ * assembled server-side from typed snapshots only, so the client cannot hand
+ * us numbers to feed a model. The cost is one listWorkflowRuns call plus one
+ * listWorkflowFileCommits call per cache miss.
+ */
+export async function buildAnomalySnapshot(
+  token: string,
+  params: { owner: string; repo: string; workflowId: number; metric: AnomalyMetric },
+): Promise<AnomalySnapshot> {
+  const { owner, repo, workflowId, metric } = params;
+
+  const [runsRes, commitsRes] = await Promise.allSettled([
+    listWorkflowRuns(token, owner, repo, workflowId, 50),
+    listWorkflowFileCommits(token, owner, repo, 10),
+  ]);
+
+  const runs: WorkflowRun[] = runsRes.status === "fulfilled" ? runsRes.value : [];
+  const completed = runs.filter((r) => r.status === "completed");
+
+  const inputs = completed.map((r) => ({
+    id: r.id,
+    run_number: r.run_number,
+    duration_ms: runMetricValue(r, "duration"),
+    queue_wait_ms: runMetricValue(r, "queue_wait"),
+  }));
+
+  const anomalyMap = detectAnomalies(inputs);
+  const baseline = computeBaseline(inputs, metric);
+  const byId = new Map(completed.map((r) => [r.id, r]));
+
+  const outliers: AnomalyOutlier[] = [];
+  for (const entry of anomalyMap.values()) {
+    for (const a of entry.anomalies) {
+      if (a.metric !== metric) continue;
+      const run = byId.get(a.runId);
+      if (!run) continue;
+      outliers.push({
+        run_number: a.runNumber,
+        date: run.created_at,
+        value_ms: a.value_ms,
+        z_score: Math.round(a.zScore * 10) / 10,
+        trigger: run.event,
+        actor_login: run.triggering_actor?.login ?? run.actor?.login ?? null,
+      });
+    }
+  }
+  // Most recent first, then cap — a leader cares about what just happened.
+  outliers.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const trigger_mix: Record<string, number> = {};
+  for (const r of completed) trigger_mix[r.event] = (trigger_mix[r.event] ?? 0) + 1;
+
+  return {
+    workflow_name: completed[0]?.name ?? runs[0]?.name ?? "workflow",
+    repo: `${owner}/${repo}`,
+    metric,
+    baseline: baseline
+      ? {
+          mean_ms: Math.round(baseline.mean_ms),
+          stddev_ms: Math.round(baseline.stddev_ms),
+          sample_size: baseline.sampleSize,
+        }
+      : null,
+    outliers: outliers.slice(0, 5),
+    concurrent_signals: {
+      workflow_file_changes:
+        commitsRes.status === "fulfilled" ? toWorkflowChanges(commitsRes.value, 10) : [],
+      trigger_mix,
+    },
+    total_runs_analysed: completed.length,
+  };
 }

@@ -6,6 +6,40 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.1] — 2026-08-14
+
+### Overview
+Second AI release: explanations for the statistical outliers GitDash already flags, plus a third provider whose wire format forced the provider layer to stop assuming one protocol.
+
+### Added
+
+#### AI Anomaly Explanations
+- Each flagged metric on the Workflow Detail **Reliability** tab gains a *"Why did duration spike?"* button. The explanation is built from surrounding metadata: baseline statistics, the dates the workflow file changed, and the trigger mix — then ends with one concrete check the team can run.
+- **Lazy by design.** The SWR key stays null until the button is clicked, so opening the Reliability tab never costs a provider call. Cached 30 minutes.
+- One explanation per *metric*, not per run — the model reads the pattern across outliers, so a per-run button would ask the same question repeatedly.
+- New `GET /api/ai/anomaly-explanation`. Returns **404 when there are no outliers to explain**, rather than asking a model to speculate about an empty list.
+- The `metric` parameter is validated against a literal allowlist (`duration` / `queue_wait`). It reaches a prompt, and an arbitrary string there is exactly the injection vector this layer is built to avoid.
+
+#### Bailian (Alibaba Cloud) provider
+- Added as a third provider and tried first. It serves the **Anthropic Messages API**, not the OpenAI shape — different path (`/messages`), auth header (`x-api-key`), system-prompt placement (top-level, not a message role), and response structure (`content[]` blocks, `input_tokens`/`output_tokens`).
+- The provider table now carries an explicit `protocol` field and the request/response handling branches on it, rather than special-casing at each call site. Fallback works across protocols: a Bailian failure hands off to Gemini's OpenAI-shaped endpoint transparently.
+- Default model `qwen3.6-flash`. Also available: `qwen3.6-plus`, `qwen3.7-plus`, `qwen3.7-max`, `qwen3.8-max`.
+
+### Changed
+- **Extended thinking is disabled on Bailian requests.** Qwen models there enable it by default, which costs roughly **10× the output tokens** for no benefit on structured extraction — measured at 799 vs 85 output tokens on an identical request. The response parser still selects the `text` block explicitly rather than `content[0]`, because a model may ignore the flag and emit a `thinking` block first.
+- Test count 142 → 177.
+
+### Rollback
+1. **Unset `BAILIAN_API_KEY`** — the provider is skipped; any other configured provider takes over. Unset all AI keys and every surface hides.
+2. **Promote the v4.1.0 Vercel deployment** — instant, no rebuild.
+3. **`git revert`** — no migration to undo, zero schema changes.
+
+### Changed (infra)
+- Bumped app version from 4.1.0 to 4.1.1
+- Bumped Helm chart version from 0.5.0 to 0.5.1
+
+---
+
 ## [4.1.0] — 2026-08-14
 
 ### Overview

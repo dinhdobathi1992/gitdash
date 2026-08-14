@@ -1517,6 +1517,29 @@ function FeatureAiInsights() {
         Repository Overview and Team Health Scorecard pages.
       </ProseP>
 
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>Anomaly explanations</SubHeading>
+          <VersionBadge v="4.1.1" />
+        </div>
+        <ProseP>
+          On the Workflow Detail <strong>Reliability</strong> tab, each flagged metric gains a{" "}
+          <strong>&ldquo;Why did duration spike?&rdquo;</strong> button. It explains the outliers
+          from surrounding metadata — baseline statistics, when the workflow file last changed, and
+          the mix of triggers — then suggests one concrete check you can run yourself.
+        </ProseP>
+        <Callout type="warning">
+          <strong>These explanations never read run logs.</strong> GitDash does not fetch log
+          content for any feature, and the model is told explicitly that it does not have logs and
+          must not write as though it does. A hypothesis is inferred from timing and metadata only,
+          so treat it as a lead to check rather than a diagnosis.
+        </Callout>
+        <ProseP>
+          The request is lazy — opening the Reliability tab costs nothing until you click. Results
+          are cached for 30 minutes.
+        </ProseP>
+      </DocCard>
+
       <Callout type="info">
         <strong>Entirely opt-in.</strong> With no AI provider key configured on the server, every AI
         surface is hidden and GitDash behaves exactly as it did before v4.1.0. There is no
@@ -1553,17 +1576,28 @@ function FeatureAiInsights() {
       <DocCard>
         <SubHeading>Providers and keys</SubHeading>
         <ProseP>
-          Gemini is tried first, Qwen is the fallback. Both are reached through their
-          OpenAI-compatible endpoints, so no vendor SDK is installed. Keys are read server-side only
-          and are never sent to the browser — <Code>/api/ai/status</Code> reports which providers are
-          configured, never the key material.
+          Three providers are supported and tried in order; any without a key is skipped, so
+          configuring one is enough. No vendor SDK is installed — the layer talks to each endpoint
+          with plain <Code>fetch</Code>. Keys are read server-side only and never reach the browser:{" "}
+          <Code>/api/ai/status</Code> reports which providers are configured, never the key material.
         </ProseP>
+        <DocTable
+          headers={["Order", "Provider", "Wire format", "Notes"]}
+          rows={[
+            ["1", "Bailian (Alibaba Cloud)", "Anthropic Messages API", "Qwen models. Extended thinking is disabled automatically — see below"],
+            ["2", "Google Gemini", "OpenAI-compatible", "Flash class is sufficient for this workload"],
+            ["3", "Qwen via DashScope", "OpenAI-compatible", "Distinct endpoint from Bailian"],
+          ]}
+        />
         <DocTable
           headers={["Variable", "Default", "Purpose"]}
           rows={[
-            ["GEMINI_API_KEY", "—", "Primary provider. Unset = provider skipped"],
-            ["GEMINI_MODEL", "gemini-2.5-flash", "Flash class is sufficient for this workload"],
-            ["QWEN_API_KEY", "—", "Fallback provider"],
+            ["BAILIAN_API_KEY", "—", "Primary provider. Unset = skipped"],
+            ["BAILIAN_MODEL", "qwen3.6-flash", "Also: qwen3.6-plus, qwen3.7-plus, qwen3.7-max, qwen3.8-max"],
+            ["BAILIAN_BASE_URL", "token-plan…/apps/anthropic/v1", "Anthropic-protocol endpoint"],
+            ["GEMINI_API_KEY", "—", "Second in order"],
+            ["GEMINI_MODEL", "gemini-2.5-flash", ""],
+            ["QWEN_API_KEY", "—", "Third in order"],
             ["QWEN_MODEL", "qwen-plus", ""],
             ["AI_DISABLED", "—", "Set to true to hard-kill the layer regardless of keys"],
             ["AI_TIMEOUT_MS", "15000", "Per provider attempt"],
@@ -1571,6 +1605,13 @@ function FeatureAiInsights() {
             ["AI_DAILY_TOKEN_BUDGET", "2000000", "Per instance per UTC day. 0 = unlimited"],
           ]}
         />
+        <Callout type="info">
+          <strong>Extended thinking is disabled on Bailian.</strong> Qwen models there enable it by
+          default, which cost roughly <strong>10× the output tokens</strong> for no benefit on
+          structured extraction — measured at 799 vs 85 output tokens on an identical request. The
+          layer sends <Code>thinking: {"{ type: \"disabled\" }"}</Code>, and still reads the response&apos;s
+          text block explicitly in case a model ignores that.
+        </Callout>
       </DocCard>
 
       <DocCard>
@@ -2353,6 +2394,17 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/ai/anomaly-explanation",
+          description: "Explain a workflow metric's statistical outliers from surrounding metadata (baseline stats, workflow-file change dates, trigger mix). Returns { ok, provider, model, outlier_count, content: { explanation, check } }. 404 when the metric has no outliers to explain; 503 when unconfigured or unavailable; 429 when rate-limited (20/min per token). Never reads run logs.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner" },
+            { name: "repo", type: "string", optional: false, desc: "Repository name" },
+            { name: "workflow_id", type: "number", optional: false, desc: "Workflow ID" },
+            { name: "metric", type: "duration | queue_wait", optional: false, desc: "Which metric's outliers to explain. Validated against a literal allowlist — arbitrary values are rejected, never forwarded to a prompt." },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/health",
           description: "Liveness/readiness probe. Returns {\"status\":\"ok\"} with no authentication. Used by Kubernetes and load balancers.",
           params: [],
@@ -2604,9 +2656,25 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.1.0",
+      version: "4.1.1",
       date: "2026-08-14",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "AI Anomaly Explanations — each flagged metric on the Workflow Detail reliability tab gains a \"Why did duration spike?\" button that explains the outliers from surrounding metadata: baseline statistics, when the workflow file last changed, and the trigger mix. Lazy by design — opening the tab costs nothing until you ask",
+          "Bailian (Alibaba Cloud) added as a third provider and tried first. It speaks the Anthropic Messages API rather than the OpenAI shape, so the provider layer now models the wire format explicitly instead of assuming one protocol",
+        ],
+        fixed: [],
+        improved: [
+          "Extended thinking is disabled on Bailian requests. Qwen models there enable it by default, costing roughly 10x the output tokens for no benefit on structured extraction — measured 799 vs 85 output tokens on an identical request. The response parser still picks the text block explicitly, in case a model ignores the flag",
+        ],
+      },
+    },
+    {
+      version: "4.1.0",
+      date: "2026-08-14",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3063,7 +3131,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.0"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.1"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3313,7 +3381,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.1"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

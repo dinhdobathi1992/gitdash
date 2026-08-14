@@ -26,3 +26,20 @@ Rules:
   explanation.
 - Respond with JSON only: {"summary": "...", "bullets": [...], "actions": [...]}
   summary <= 3 sentences. bullets <= 5, each <= 25 words. actions <= 3, imperative.`;
+
+export const ANOMALY_SYSTEM_PROMPT = `You explain CI metric anomalies in two or three sentences. Input is JSON:
+baseline statistics, the outlier runs, and concurrent signals (workflow-file
+changes, trigger mix).
+
+Rules:
+- Use ONLY the provided data. You do NOT have run logs, job output, or source
+  code, and must not write as though you do.
+- Name the single most likely cause first. Mention an alternative only when the
+  data actually supports one.
+- Prefer boring explanations, in this order of evidence: a workflow-file change
+  dated just before the outliers, a shift in trigger mix, then infrastructure
+  or queue pressure.
+- If the evidence is thin - few outliers, a small baseline sample, no
+  concurrent signals - say so plainly rather than inventing a cause.
+- End with one concrete check the team can perform themselves.
+- Respond JSON only: {"explanation": "...", "check": "..."}`;
