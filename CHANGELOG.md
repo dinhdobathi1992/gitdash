@@ -6,6 +6,52 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.3] — 2026-08-14
+
+### Overview
+Email delivery moves out of environment variables and into Settings. Three features already sent email — alert notifications, the daily digest, and the Weekly Leadership Digest — but configuring them required an env var and a redeploy, and a misconfiguration was completely invisible until an expected email simply never arrived.
+
+**This is the prerequisite for F2 (AI Leadership Digest)**, which was skipped in v4.1.2 precisely because the digest email could not send.
+
+### Added
+
+#### Email Delivery settings (`/settings`)
+- Configure **Resend** or **SendGrid** in the app, stored in the database (**migration 5**, `email_settings`). No redeploy needed.
+- **"Send test email"** — email was the one feature whose misconfiguration produced no visible signal; the only trace was a server log nobody reads.
+- Status pill shows what is *actually* in effect: Settings, environment variables, or nothing.
+
+#### Credential handling
+- The API key is **write-only**: encrypted at rest with AES-256-GCM (`src/lib/secret-box.ts`, key derived from `SESSION_SECRET` with domain separation) and never returned to the browser. The UI shows a masked hint (`••••4f2a`); a blank field means "keep the stored key".
+- Encryption exists because this column lands in every database backup — plaintext would make a leaked backup equivalent to a leaked credential. Stated limit: it does not defend against an attacker holding both the database *and* the environment.
+- `unseal()` returns null rather than throwing on a rotated `SESSION_SECRET`, tampering, or corruption, so a bad row degrades to "not configured" instead of taking down the cron.
+
+### Fixed
+
+#### The SMTP_HOST documentation was actively misleading
+- That code path has **never spoken the SMTP protocol** — it POSTs to SendGrid's HTTP API at `${SMTP_HOST}/v3/mail/send`. The documented example `SMTP_HOST=smtp.yourprovider.com` could therefore never work (it isn't even a valid URL), and `SMTP_PORT` was documented but never read.
+- `.env.local.example` now states this plainly and shows the correct value. The Settings UI is labelled by **provider** rather than "SMTP" for the same reason: a form asking for host/port/username/password would be a trap.
+
+#### Duplicated provider selection
+- The same env-var branching was copy-pasted across three send paths (`deliverEmail`, `deliverDigestEmail`, `deliverLeadershipDigestEmail`). Resolution now happens once in `resolveEmailProvider()`, and `process.env` is read in exactly one place.
+
+### Changed
+- **Resolution is database-first with an environment fallback**, so an instance already using `RESEND_API_KEY` keeps working after upgrading and only switches over when someone explicitly enables email in Settings. Covered by a regression test.
+- Settings are **instance-wide** (like `alert_rules`, which has no per-user scoping either), so any authenticated user can change them. `updated_by` / `updated_at` record who last did, and the key cannot be read back.
+- Provider resolution is cached for 30s — digests send in a loop and would otherwise query per recipient.
+- Test count 212 → 240.
+
+### Rollback
+1. **Toggle email off in Settings** — resolution falls straight back to environment variables.
+2. **Promote the v4.1.2 Vercel deployment** — instant.
+3. **`git revert`** — migration 5 only *adds* a table; existing rows and behaviour are untouched, so no down-migration is required.
+
+### Changed (infra)
+- Bumped app version from 4.1.2 to 4.1.3
+- Bumped Helm chart version from 0.5.2 to 0.5.3
+- **First schema change since v4.0.x** — migration 5 creates `email_settings` (singleton row, `CHECK (id = 1)`)
+
+---
+
 ## [4.1.2] — 2026-08-14
 
 ### Overview

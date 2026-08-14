@@ -7,6 +7,8 @@
  */
 
 import type { DbAlertRule } from "./db";
+import { unseal } from "./secret-box";
+import { withCache, cacheDelete } from "./cache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,12 +106,116 @@ export async function deliverSlack(payload: AlertPayload): Promise<DeliveryResul
   }
 }
 
+// ── Email provider resolution (v4.1.3) ────────────────────────────────────────
+
+export interface ResolvedEmailProvider {
+  provider: "resend" | "sendgrid";
+  apiKey: string;
+  from: string;
+  /** Where the config came from — surfaced in Settings and the test endpoint. */
+  source: "settings" | "env";
+}
+
+const DEFAULT_FROM = "alerts@gitdash.app";
+const PROVIDER_CACHE_TTL = 30; // seconds — digests send in a loop
+
+/**
+ * Resolve which provider to send through: database settings first, then
+ * environment variables.
+ *
+ * The precedence matters for upgrades. An instance that already had
+ * RESEND_API_KEY set keeps working untouched after v4.1.3; the database only
+ * takes over once someone explicitly enables email in Settings.
+ *
+ * The db import is dynamic on purpose: src/lib/db.ts imports this module, so a
+ * static import here would close a cycle. It is also genuinely lazy — nothing
+ * touches the database unless an email is actually being sent.
+ */
+export async function resolveEmailProvider(): Promise<ResolvedEmailProvider | null> {
+  const fromSettings = await withCache<ResolvedEmailProvider | null>(
+    "email-provider:settings",
+    PROVIDER_CACHE_TTL,
+    async () => {
+      try {
+        const { getEmailSettings } = await import("./db");
+        const s = await getEmailSettings();
+        if (!s || !s.enabled || !s.api_key_sealed) return null;
+
+        const apiKey = unseal(s.api_key_sealed);
+        if (!apiKey) {
+          // Sealed with a different SESSION_SECRET, or corrupted. Fall through
+          // to env rather than failing outright, and say so in the log — this
+          // is the one case an operator genuinely needs to know about.
+          console.error(
+            "[notifier] Stored email credential could not be decrypted — re-enter it in Settings.",
+          );
+          return null;
+        }
+        return {
+          provider: s.provider,
+          apiKey,
+          from: s.from_address || DEFAULT_FROM,
+          source: "settings" as const,
+        };
+      } catch {
+        // No DATABASE_URL, or the table is not reachable. Env fallback covers it.
+        return null;
+      }
+    },
+  );
+
+  if (fromSettings) return fromSettings;
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    return {
+      provider: "resend",
+      apiKey: resendKey,
+      from: process.env.RESEND_FROM ?? DEFAULT_FROM,
+      source: "env",
+    };
+  }
+
+  const sendgridKey = process.env.SMTP_PASS ?? process.env.SENDGRID_API_KEY;
+  if (process.env.SMTP_HOST && sendgridKey) {
+    return {
+      provider: "sendgrid",
+      apiKey: sendgridKey,
+      from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? DEFAULT_FROM,
+      source: "env",
+    };
+  }
+
+  return null;
+}
+
+/** Invalidate the provider cache after a Settings save. */
+export function invalidateEmailProviderCache(): void {
+  cacheDelete("email-provider:settings");
+}
+
+const NO_PROVIDER_ERROR =
+  "No email provider configured. Enable email in Settings, or set RESEND_API_KEY.";
+
+/** Single send path for every email the app produces. */
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+): Promise<DeliveryResult> {
+  const cfg = await resolveEmailProvider();
+  if (!cfg) return { ok: false, error: NO_PROVIDER_ERROR };
+
+  return cfg.provider === "resend"
+    ? deliverViaResend(to, subject, html, text, cfg.apiKey, cfg.from)
+    : deliverViaSendgridCompat(to, subject, text, html, cfg.apiKey, cfg.from);
+}
+
 // ── Email delivery ────────────────────────────────────────────────────────────
 
 /**
- * Email delivery via Resend (RESEND_API_KEY) or a generic SMTP provider
- * (SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SMTP_FROM).
- * Resend is preferred when RESEND_API_KEY is set.
+ * Alert email. Provider selection is centralised in resolveEmailProvider().
  */
 export async function deliverEmail(payload: AlertPayload): Promise<DeliveryResult> {
   const { rule, repo, value, metricLabel, metricUnit, triggeredAt } = payload;
@@ -135,18 +241,7 @@ export async function deliverEmail(payload: AlertPayload): Promise<DeliveryResul
     `Value: ${value}${metricUnit} (threshold: ${rule.threshold}${metricUnit})\n` +
     `Window: ${rule.window_hours}h — triggered at ${triggeredAt}`;
 
-  const resendKey = process.env.RESEND_API_KEY;
-
-  if (resendKey) {
-    return deliverViaResend(rule.destination, subject, html, text, resendKey);
-  }
-
-  const smtpHost = process.env.SMTP_HOST;
-  if (smtpHost) {
-    return deliverViaSendgridCompat(rule.destination, subject, text, html);
-  }
-
-  return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
+  return sendEmail(rule.destination, subject, html, text);
 }
 
 async function deliverViaResend(
@@ -155,8 +250,8 @@ async function deliverViaResend(
   html: string,
   text: string,
   apiKey: string,
+  from: string,
 ): Promise<DeliveryResult> {
-  const from = process.env.RESEND_FROM ?? "alerts@gitdash.app";
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -186,14 +281,13 @@ async function deliverViaSendgridCompat(
   subject: string,
   text: string,
   html: string,
+  apiKey: string,
+  from: string,
 ): Promise<DeliveryResult> {
-  const apiKey = process.env.SMTP_PASS ?? process.env.SENDGRID_API_KEY;
-  const from   = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "alerts@gitdash.app";
-  const host   = process.env.SMTP_HOST ?? "";
-
-  if (!apiKey) {
-    return { ok: false, error: "SMTP_PASS / SENDGRID_API_KEY not configured" };
-  }
+  // SendGrid's HTTP API base. SMTP_HOST is a legacy name for it — this path
+  // has never spoken the SMTP protocol, so a hostname like smtp.gmail.com
+  // cannot work here. Settings-based config always supplies the real base URL.
+  const host = process.env.SMTP_HOST || "https://api.sendgrid.com";
 
   try {
     const res = await fetch(`${host}/v3/mail/send`, {
@@ -283,13 +377,7 @@ export async function deliverDigestEmail(
       return `${i.repo}: ${meta.label} = ${i.value ?? "—"}${meta.unit} at ${i.fired_at}`;
     }).join("\n");
 
-  const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) return deliverViaResend(to, subject, html, text, resendKey);
-
-  const smtpHost = process.env.SMTP_HOST;
-  if (smtpHost) return deliverViaSendgridCompat(to, subject, text, html);
-
-  return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
+  return sendEmail(to, subject, html, text);
 }
 
 // ── Weekly Leadership Digest (v4.0.3) ──────────────────────────────────────────
@@ -323,11 +411,38 @@ export async function deliverLeadershipDigestEmail(
     `Highlights:\n${narrative.highlights.length ? narrative.highlights.map((i) => `- ${i}`).join("\n") : "None this week."}\n\n` +
     `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}`;
 
-  const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) return deliverViaResend(to, narrative.subject, html, text, resendKey);
+  return sendEmail(to, narrative.subject, html, text);
+}
 
-  const smtpHost = process.env.SMTP_HOST;
-  if (smtpHost) return deliverViaSendgridCompat(to, narrative.subject, text, html);
+// ── Test send (v4.1.3) ────────────────────────────────────────────────────────
 
-  return { ok: false, error: "No email provider configured. Set RESEND_API_KEY or SMTP_HOST." };
+/**
+ * Send a verification email using the currently-resolved provider.
+ *
+ * Exists because email is the one feature whose failure is otherwise invisible
+ * until a real alert or a Monday digest silently does not arrive.
+ */
+export async function sendTestEmail(to: string): Promise<DeliveryResult & { source?: string }> {
+  const cfg = await resolveEmailProvider();
+  if (!cfg) return { ok: false, error: NO_PROVIDER_ERROR };
+
+  const subject = "[GitDash] Test email";
+  const html = `
+    <h2>GitDash email is working</h2>
+    <p>This is a test message sent from your GitDash instance.</p>
+    <p style="color:#888;font-size:12px">
+      Provider: ${cfg.provider} · configured via ${cfg.source === "settings" ? "Settings" : "environment variables"}
+    </p>
+  `;
+  const text =
+    `GitDash email is working.\n\n` +
+    `This is a test message sent from your GitDash instance.\n` +
+    `Provider: ${cfg.provider} (configured via ${cfg.source === "settings" ? "Settings" : "environment variables"})`;
+
+  const result =
+    cfg.provider === "resend"
+      ? await deliverViaResend(to, subject, html, text, cfg.apiKey, cfg.from)
+      : await deliverViaSendgridCompat(to, subject, text, html, cfg.apiKey, cfg.from);
+
+  return { ...result, source: cfg.source };
 }

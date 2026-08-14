@@ -266,6 +266,34 @@ const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
       `CREATE INDEX IF NOT EXISTS idx_ae_digest_pending ON alert_events(digest_sent_at) WHERE digest_sent_at IS NULL`,
     ],
   },
+  {
+    version: 5,
+    name: "email_settings",
+    up: [
+      // Instance-wide email delivery config, editable from Settings instead of
+      // requiring an env var and a redeploy.
+      //
+      // Singleton by construction: `id` is pinned to 1 by a CHECK, so an UPSERT
+      // on the primary key is the whole write path and no code can accidentally
+      // create a second competing row.
+      //
+      // api_key_sealed holds an AES-256-GCM value from src/lib/secret-box.ts —
+      // never plaintext, because this column ends up in every backup.
+      // updated_by records the GitHub login that last changed it: the table is
+      // instance-global (like alert_rules) so any authenticated user can edit
+      // it, and attribution is what makes that acceptable.
+      `CREATE TABLE IF NOT EXISTS email_settings (
+        id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+        provider        VARCHAR(20) NOT NULL DEFAULT 'resend',
+        api_key_sealed  TEXT,
+        api_key_hint    VARCHAR(20),
+        from_address    TEXT,
+        updated_by      VARCHAR(120),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -932,3 +960,84 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
 
 // Re-export for backward compatibility
 export { _METRIC_LABELS as METRIC_LABELS };
+
+// ── Email settings (v4.1.3) ───────────────────────────────────────────────────
+
+export type EmailProvider = "resend" | "sendgrid";
+
+export interface DbEmailSettings {
+  enabled: boolean;
+  provider: EmailProvider;
+  api_key_sealed: string | null;
+  api_key_hint: string | null;
+  from_address: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Read the instance email config. Returns null when the table has no row yet
+ * (nobody has configured it) — callers then fall back to environment
+ * variables, so upgrading to v4.1.3 never breaks a working env-var setup.
+ */
+export async function getEmailSettings(): Promise<DbEmailSettings | null> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT enabled, provider, api_key_sealed, api_key_hint,
+           from_address, updated_by, updated_at
+    FROM email_settings WHERE id = 1
+  `) as DbEmailSettings[];
+  return rows[0] ?? null;
+}
+
+/**
+ * Upsert the singleton row.
+ *
+ * `api_key_sealed` is only written when a new key is supplied — passing
+ * undefined preserves the stored one, which is what lets the UI show a masked
+ * field and treat "left blank" as "unchanged" without ever round-tripping the
+ * secret through the browser.
+ */
+export async function saveEmailSettings(input: {
+  enabled: boolean;
+  provider: EmailProvider;
+  from_address: string | null;
+  updated_by: string | null;
+  api_key_sealed?: string;
+  api_key_hint?: string;
+}): Promise<void> {
+  await ensureSchema();
+  const db = getDb();
+
+  if (input.api_key_sealed !== undefined) {
+    await db`
+      INSERT INTO email_settings
+        (id, enabled, provider, api_key_sealed, api_key_hint, from_address, updated_by, updated_at)
+      VALUES
+        (1, ${input.enabled}, ${input.provider}, ${input.api_key_sealed},
+         ${input.api_key_hint ?? null}, ${input.from_address}, ${input.updated_by}, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        provider = EXCLUDED.provider,
+        api_key_sealed = EXCLUDED.api_key_sealed,
+        api_key_hint = EXCLUDED.api_key_hint,
+        from_address = EXCLUDED.from_address,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+    `;
+    return;
+  }
+
+  await db`
+    INSERT INTO email_settings
+      (id, enabled, provider, from_address, updated_by, updated_at)
+    VALUES
+      (1, ${input.enabled}, ${input.provider}, ${input.from_address}, ${input.updated_by}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      enabled = EXCLUDED.enabled,
+      provider = EXCLUDED.provider,
+      from_address = EXCLUDED.from_address,
+      updated_by = EXCLUDED.updated_by,
+      updated_at = NOW()
+  `;
+}
