@@ -1540,6 +1540,41 @@ function FeatureAiInsights() {
         </ProseP>
       </DocCard>
 
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>Failure hypotheses</SubHeading>
+          <VersionBadge v="4.1.2" />
+        </div>
+        <ProseP>
+          When a workflow has <strong>3 or more recent failures</strong>, the Reliability tab offers{" "}
+          <strong>&ldquo;Suggest why this is failing&rdquo;</strong> — up to three ranked likely
+          causes, each with the evidence behind it and a confidence level. Below that threshold the
+          feature stays quiet: speculating about one flaky run is noise, and the floor is enforced
+          server-side, not just hidden in the UI.
+        </ProseP>
+        <DocTable
+          headers={["Signal used", "What it suggests"]}
+          rows={[
+            ["A workflow-file change dated just before the first failure", "Someone changed the pipeline — usually the answer"],
+            ["One step failing far more than the rest", "A flaky or newly-broken step, rather than the environment"],
+            ["Failures clustered on one trigger or branch type", "A context-specific problem (PR-only, main-only)"],
+            ["A shift in run duration", "Timeouts, early exits, or infrastructure pressure"],
+            ["A long success streak ending abruptly", "Something changed at a knowable point in time"],
+          ]}
+        />
+        <Callout type="warning">
+          <strong>Confidence is meant literally.</strong> &ldquo;Low&rdquo; means the model is mostly
+          guessing, and it is told that one honest low-confidence hypothesis beats three invented
+          ones. Treat every hypothesis as a lead to check — the evidence line tells you exactly which
+          numbers it came from, so you can verify it in seconds.
+        </Callout>
+        <ProseP>
+          Cost is kept proportional to the problem: job detail is fetched only for runs that actually
+          failed, capped at 10, and the GitHub fan-out is cached separately from the generation.
+          This surface is rate-limited to 10 requests/minute — half the others.
+        </ProseP>
+      </DocCard>
+
       <Callout type="info">
         <strong>Entirely opt-in.</strong> With no AI provider key configured on the server, every AI
         surface is hidden and GitDash behaves exactly as it did before v4.1.0. There is no
@@ -2405,6 +2440,16 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/ai/root-cause",
+          description: "Ranked hypotheses for why a workflow is failing, inferred from failed job/step names, timing shifts, trigger and branch clustering, and workflow-file change dates. Returns { ok, provider, model, failure_count, partial, content: { hypotheses[] } } where each hypothesis carries rank, evidence, confidence (high|medium|low) and next_step. Returns content: null below 3 recent failures — enforced server-side, no provider call. Rate-limited to 10/min per token, half the other AI surfaces. Never reads run logs.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner" },
+            { name: "repo", type: "string", optional: false, desc: "Repository name" },
+            { name: "workflow_id", type: "number", optional: false, desc: "Workflow ID" },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/health",
           description: "Liveness/readiness probe. Returns {\"status\":\"ok\"} with no authentication. Used by Kubernetes and load balancers.",
           params: [],
@@ -2656,9 +2701,26 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.1.1",
+      version: "4.1.2",
       date: "2026-08-14",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "AI Failure Hypotheses — when a workflow has 3+ recent failures, the Reliability tab offers ranked likely causes with the specific evidence behind each and a confidence level. Inferred from failed job and step names, timing shifts, trigger/branch clustering and workflow-file change dates — never from run logs, which GitDash does not fetch for any feature",
+          "Confidence is validated against a literal allowlist (high/medium/low) rather than coerced, and rank is re-derived from position because models routinely emit duplicate or out-of-order ranks",
+        ],
+        fixed: [],
+        improved: [
+          "Job detail is fetched only for runs that actually failed (capped at 10) instead of every run in the window — roughly 10 GitHub calls rather than 30-50, keeping the expensive part proportional to the problem rather than the window size",
+          "The GitHub fan-out is cached separately from the LLM call on this route. Elsewhere the cache is fingerprinted on the snapshot, so a hit still pays the fan-out; here the fan-out is the expensive part and gets its own key",
+        ],
+      },
+    },
+    {
+      version: "4.1.1",
+      date: "2026-08-14",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3131,7 +3193,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.1"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.2"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3381,7 +3443,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.1"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.2"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

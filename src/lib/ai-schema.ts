@@ -110,3 +110,85 @@ export function parseAnomalyContent(raw: string): AnomalyExplanationContent | nu
 
   return { explanation, check };
 }
+
+// ── Root-cause hypotheses (v4.1.2) ────────────────────────────────────────────
+
+export type Confidence = "high" | "medium" | "low";
+
+export interface RootCauseHypothesis {
+  rank: number;
+  hypothesis: string;
+  evidence: string;
+  confidence: Confidence;
+  next_step: string;
+}
+
+export interface RootCauseContent {
+  hypotheses: RootCauseHypothesis[];
+}
+
+const MAX_HYPOTHESES = 3;
+
+/**
+ * Per-field caps, sized from observed output rather than guessed.
+ *
+ * The prompt asks the model to cite dates, counts and percentages, which
+ * makes `evidence` naturally the longest field — measured at 211-292 chars
+ * across real generations. An earlier shared 300-char cap rejected otherwise
+ * good answers that ran a few characters over, burning a retry and sometimes
+ * failing the request outright. These leave headroom without allowing essays;
+ * the prompt also asks for brevity so the model aims well below them.
+ */
+const MAX_HYPOTHESIS_CHARS = 400;
+const MAX_EVIDENCE_CHARS = 500;
+const MAX_NEXT_STEP_CHARS = 300;
+
+const CONFIDENCES: Confidence[] = ["high", "medium", "low"];
+
+/**
+ * Parse and validate the ranked-hypotheses payload.
+ *
+ * Confidence is checked against a literal allowlist rather than coerced: the
+ * UI colours a badge from it, and a model inventing "very high" would either
+ * crash the badge lookup or silently render an uncoloured chip.
+ */
+export function parseRootCauseContent(raw: string): RootCauseContent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripFences(raw));
+  } catch {
+    return null;
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const list = (parsed as Record<string, unknown>).hypotheses;
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const hypotheses: RootCauseHypothesis[] = [];
+  for (const [i, item] of list.slice(0, MAX_HYPOTHESES).entries()) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) return null;
+    const o = item as Record<string, unknown>;
+
+    const hypothesis = asCleanString(o.hypothesis, MAX_HYPOTHESIS_CHARS);
+    const evidence = asCleanString(o.evidence, MAX_EVIDENCE_CHARS);
+    const next_step = asCleanString(o.next_step, MAX_NEXT_STEP_CHARS);
+    if (hypothesis === null || evidence === null || next_step === null) return null;
+
+    const confidence = o.confidence;
+    if (typeof confidence !== "string" || !CONFIDENCES.includes(confidence as Confidence)) {
+      return null;
+    }
+
+    // Re-derive rank from position: models frequently emit duplicate or
+    // out-of-order ranks, and the display order is what actually matters.
+    hypotheses.push({
+      rank: i + 1,
+      hypothesis,
+      evidence,
+      confidence: confidence as Confidence,
+      next_step,
+    });
+  }
+
+  return { hypotheses };
+}

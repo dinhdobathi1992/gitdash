@@ -6,6 +6,47 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.2] — 2026-08-14
+
+### Overview
+Final AI feature of the v4.1.x series: ranked root-cause hypotheses for failing workflows. **F2 (AI Leadership Digest) was skipped** — the weekly digest email still cannot send (no `RESEND_API_KEY`/`SMTP_HOST` configured), and per the plan a version is never reserved for an unshipped feature. F2 can ship later once an email provider exists.
+
+### Added
+
+#### AI Failure Hypotheses
+- When a workflow has **3+ recent failures**, the Workflow Detail **Reliability** tab offers *"Suggest why this is failing"* — up to three ranked causes, each with the specific evidence behind it, a confidence level, and a next step the team can run in minutes.
+- Signals used: workflow-file change dates versus the first failure, step-level failure concentration, trigger/branch clustering, run-duration shifts, and the length of the success streak that ended.
+- **Metadata only — never run logs.** GitDash does not fetch log content for any feature, and the prompt states explicitly that the model has no logs and must not write as though it does.
+- New `GET /api/ai/root-cause`.
+
+### Changed
+
+#### Cost proportional to the problem, not the window
+- The original design called for `getJobStats()`, which fans out across every completed run (~30–50 GitHub calls). Job detail is only needed for runs that **failed**, so the builder fetches jobs for at most 10 failed runs instead — roughly 10 calls, bounded by the number of failures rather than the window size.
+- The GitHub fan-out is cached **separately** from the LLM call on this route (10 min each). Every other AI route fingerprints its cache on the snapshot, so a cache hit still pays the fan-out; here the fan-out is the expensive part and earns its own key.
+- Rate-limited to **10/min per token** — half the other AI surfaces.
+- The minimum-failure floor is enforced server-side (returns `content: null`), so a UI bug cannot turn into provider spend.
+
+#### Schema validation, corrected against real output
+- Confidence is validated against a literal allowlist (`high`/`medium`/`low`) rather than coerced — the UI colours a badge from it, and an invented `"very high"` would render an uncoloured chip.
+- Rank is re-derived from array position: models routinely emit duplicate or out-of-order ranks, and display order is what matters.
+- **Per-field length caps, sized from measured output.** An initial shared 300-character cap rejected otherwise-good answers, because the prompt asks for cited dates and counts and `evidence` measured 211–292 characters in practice. Caps are now per-field (hypothesis 400, evidence 500, next_step 300) and the prompt asks for brevity — which cut typical output from ~600 to ~220 tokens *and* improved readability.
+
+### Verified
+- End-to-end against the live provider through the real code path, three consecutive generations: **3/3 schema pass**, ~2–3s latency, ~640 in / ~220 out tokens per call.
+
+### Rollback
+1. **Unset the AI keys** — every surface hides, no redeploy.
+2. **Promote the v4.1.1 Vercel deployment** — instant.
+3. **`git revert`** — no migration to undo, zero schema changes.
+
+### Changed (infra)
+- Bumped app version from 4.1.1 to 4.1.2
+- Bumped Helm chart version from 0.5.1 to 0.5.2
+- Test count 177 → 212
+
+---
+
 ## [4.1.1] — 2026-08-14
 
 ### Overview

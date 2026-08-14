@@ -22,9 +22,11 @@ import {
   getRepoSummary,
   listWorkflowFileCommits,
   listWorkflowRuns,
+  listRunJobs,
   getOctokit,
 } from "@/lib/github";
-import type { TrendPoint, WorkflowRun } from "@/lib/github";
+import type { TrendPoint, WorkflowRun, WorkflowJob } from "@/lib/github";
+import { pLimitSettled } from "@/lib/concurrency";
 import { getRepoDoraSummary } from "@/lib/github-dora";
 import { computeBusFactor } from "@/lib/bus-factor";
 import { computeScorecard } from "@/lib/org-health-scorecard";
@@ -388,5 +390,185 @@ export async function buildAnomalySnapshot(
       trigger_mix,
     },
     total_runs_analysed: completed.length,
+  };
+}
+
+// ── Root-cause hypotheses (v4.1.2) ────────────────────────────────────────────
+
+export interface RootCauseFailure {
+  run_number: number;
+  date: string;
+  trigger: string;
+  branch_type: "main" | "pr" | "other";
+  failed_jobs: { job_name: string; failed_step_names: string[]; duration_ms: number | null }[];
+}
+
+export interface RootCauseSnapshot {
+  workflow_name: string;
+  repo: string;
+  window_runs: number;
+  run_count: number;
+  failure_count: number;
+  failure_rate_pct: number;
+  first_failure_at: string | null;
+  prior_success_streak: number;
+  /** Most recent first, capped at 10 — the runs we fetched job detail for. */
+  failures: RootCauseFailure[];
+  step_failure_frequency: { step_name: string; failure_count: number; share_of_failures_pct: number }[];
+  failure_clustering: {
+    same_step_share_pct: number;
+    trigger_distribution: Record<string, number>;
+    branch_distribution: Record<string, number>;
+  };
+  workflow_file_changes: { date: string; author_login: string | null }[];
+  duration_shift: { before_failures_p50_ms: number; during_failures_p50_ms: number } | null;
+  /** True when some per-run job fetches failed — the model is told to hedge. */
+  partial: boolean;
+}
+
+const MAX_FAILURES_INSPECTED = 10;
+
+function branchType(run: WorkflowRun): "main" | "pr" | "other" {
+  if (run.event === "pull_request") return "pr";
+  if (run.head_branch === "main" || run.head_branch === "master") return "main";
+  return "other";
+}
+
+function p50(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return Math.round(sorted[Math.floor(sorted.length / 2)]);
+}
+
+function runDurationMs(run: WorkflowRun): number | null {
+  if (!run.run_started_at || !run.updated_at) return null;
+  const ms = new Date(run.updated_at).getTime() - new Date(run.run_started_at).getTime();
+  return ms > 0 ? ms : null;
+}
+
+/**
+ * Build failure context for AI root-cause hypotheses.
+ *
+ * Cost note — this deviates from the original spec deliberately. The spec
+ * called for getJobStats(), which fans out over every completed run (~30-50
+ * GitHub calls). Job detail is only needed for runs that actually failed, so
+ * this fetches jobs for at most MAX_FAILURES_INSPECTED failed runs instead:
+ * strictly fewer calls, and it keeps the expensive part proportional to the
+ * problem rather than to the window.
+ *
+ * Metadata only. Job and step NAMES are sent; no logs, no step output.
+ */
+export async function buildRootCauseSnapshot(
+  token: string,
+  params: { owner: string; repo: string; workflowId: number },
+): Promise<RootCauseSnapshot> {
+  const { owner, repo, workflowId } = params;
+
+  const [runsRes, commitsRes] = await Promise.allSettled([
+    listWorkflowRuns(token, owner, repo, workflowId, 50),
+    listWorkflowFileCommits(token, owner, repo, 10),
+  ]);
+
+  const runs: WorkflowRun[] = runsRes.status === "fulfilled" ? runsRes.value : [];
+  const completed = runs.filter((r) => r.status === "completed");
+  const failed = completed.filter((r) => r.conclusion === "failure");
+
+  // Runs arrive newest-first. The streak is how many successes precede the
+  // most recent failure — a long streak followed by a cluster is the single
+  // strongest "something changed" signal available without logs.
+  let priorSuccessStreak = 0;
+  for (const r of completed) {
+    if (r.conclusion === "failure") break;
+    if (r.conclusion === "success") priorSuccessStreak++;
+  }
+
+  const inspect = failed.slice(0, MAX_FAILURES_INSPECTED);
+  const jobResults = await pLimitSettled(
+    inspect.map((r) => async () => ({ run: r, jobs: await listRunJobs(token, owner, repo, r.id) })),
+    { concurrency: 5 },
+  );
+
+  let partial = runsRes.status === "rejected";
+  const failures: RootCauseFailure[] = [];
+  const stepCounts = new Map<string, number>();
+
+  for (const res of jobResults) {
+    if (res.status === "rejected") {
+      partial = true;
+      continue;
+    }
+    const { run, jobs } = res.value as { run: WorkflowRun; jobs: WorkflowJob[] };
+    const failedJobs = jobs
+      .filter((j) => j.conclusion === "failure")
+      .map((j) => {
+        const failedSteps = (j.steps ?? [])
+          .filter((s) => s.conclusion === "failure")
+          .map((s) => s.name);
+        for (const name of failedSteps) {
+          stepCounts.set(name, (stepCounts.get(name) ?? 0) + 1);
+        }
+        return { job_name: j.name, failed_step_names: failedSteps, duration_ms: j.duration_ms };
+      });
+
+    failures.push({
+      run_number: run.run_number,
+      date: run.created_at,
+      trigger: run.event,
+      branch_type: branchType(run),
+      failed_jobs: failedJobs,
+    });
+  }
+
+  const totalStepFailures = [...stepCounts.values()].reduce((s, n) => s + n, 0);
+  const step_failure_frequency = [...stepCounts.entries()]
+    .map(([step_name, failure_count]) => ({
+      step_name,
+      failure_count,
+      share_of_failures_pct:
+        totalStepFailures > 0 ? Math.round((failure_count / totalStepFailures) * 100) : 0,
+    }))
+    .sort((a, b) => b.failure_count - a.failure_count);
+
+  const trigger_distribution: Record<string, number> = {};
+  const branch_distribution: Record<string, number> = {};
+  for (const f of failures) {
+    trigger_distribution[f.trigger] = (trigger_distribution[f.trigger] ?? 0) + 1;
+    branch_distribution[f.branch_type] = (branch_distribution[f.branch_type] ?? 0) + 1;
+  }
+
+  // Are failures concentrated on one step, or scattered? Concentration points
+  // at a flaky or newly-broken step; scatter points at infrastructure.
+  const same_step_share_pct = step_failure_frequency[0]?.share_of_failures_pct ?? 0;
+
+  const failedDurations = failed.map(runDurationMs).filter((v): v is number => v !== null);
+  const successDurations = completed
+    .filter((r) => r.conclusion === "success")
+    .map(runDurationMs)
+    .filter((v): v is number => v !== null);
+  const duration_shift =
+    failedDurations.length > 0 && successDurations.length > 0
+      ? {
+          before_failures_p50_ms: p50(successDurations),
+          during_failures_p50_ms: p50(failedDurations),
+        }
+      : null;
+
+  return {
+    workflow_name: completed[0]?.name ?? runs[0]?.name ?? "workflow",
+    repo: `${owner}/${repo}`,
+    window_runs: completed.length,
+    run_count: completed.length,
+    failure_count: failed.length,
+    failure_rate_pct:
+      completed.length > 0 ? Math.round((failed.length / completed.length) * 100) : 0,
+    first_failure_at: failed.length ? failed[failed.length - 1].created_at : null,
+    prior_success_streak: priorSuccessStreak,
+    failures,
+    step_failure_frequency,
+    failure_clustering: { same_step_share_pct, trigger_distribution, branch_distribution },
+    workflow_file_changes:
+      commitsRes.status === "fulfilled" ? toWorkflowChanges(commitsRes.value, 10) : [],
+    duration_shift,
+    partial,
   };
 }
