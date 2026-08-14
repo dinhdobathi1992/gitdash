@@ -1684,6 +1684,36 @@ function FeatureAiInsights() {
       </DocCard>
 
       <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>Bring your own provider</SubHeading>
+          <VersionBadge v="4.1.5" />
+        </div>
+        <ProseP>
+          In <strong>organization mode</strong>, <strong>Settings → AI Provider</strong> lets a team
+          point GitDash at its own account: provider, model, API key, and an optional base URL for a
+          gateway or regional endpoint. Useful when the deployment&apos;s default key belongs to
+          someone else, or when you want a larger model than the operator chose.
+        </ProseP>
+        <ProseP>
+          In <strong>standalone mode</strong> the section does not appear at all. A self-hosted
+          personal instance is meant to work from the environment defaults with no setup, so there is
+          nothing to configure.
+        </ProseP>
+        <Callout type="warning">
+          <strong>Your key is used exclusively.</strong> When an organization configures its own
+          provider, the server&apos;s keys are never tried as a fallback behind it. If your key fails,
+          the request fails — it does not quietly succeed on someone else&apos;s account and bill
+          them. The status pill in Settings shows which source is actually in effect.
+        </Callout>
+        <ProseP>
+          The key is write-only: encrypted at rest with the same AES-256-GCM helper used for email
+          credentials, never returned to the browser, shown only as a masked hint. Leaving the field
+          blank keeps the stored key. Base URLs must be <Code>https</Code>, because that URL carries
+          the key. Changes take effect within 30 seconds.
+        </ProseP>
+      </DocCard>
+
+      <DocCard>
         <SubHeading>Providers and keys</SubHeading>
         <ProseP>
           Three providers are supported and tried in order; any without a key is skipped, so
@@ -2525,6 +2555,18 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/settings/ai",
+          description: "Current AI provider override. Returns { configurable, mode, enabled, provider, model, base_url, api_key_hint, has_key, updated_by, updated_at, effective_source, env_providers, db_available }. The API key is never returned — only a masked hint. configurable is false in standalone mode, where the section is hidden and environment defaults apply.",
+          params: [],
+        },
+        {
+          method: "PUT",
+          path: "/api/settings/ai",
+          description: "Save an AI provider override. Body: { enabled, provider (\"bailian\"|\"gemini\"|\"qwen\"), model, base_url, api_key? }. Omitting api_key preserves the stored one; the key is encrypted before storage. base_url must be https. 403 in standalone mode, 503 when no database is configured. A configured override is used exclusively — server keys are never a fallback behind it.",
+          params: [],
+        },
+        {
+          method: "GET",
           path: "/api/settings/email",
           description: "Current email delivery configuration. Returns { enabled, provider, from_address, api_key_hint, has_key, updated_by, updated_at, effective_source, db_available }. The API key itself is never returned — only a masked hint. effective_source reports whether Settings, environment variables, or nothing is actually in effect.",
           params: [],
@@ -2794,9 +2836,27 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
+      version: "4.1.5",
+      date: "2026-08-15",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Bring-your-own AI provider in organization mode — Settings → AI Provider lets a team choose its own provider (Bailian, Gemini or Qwen), model, API key and optional base URL, instead of using whatever the server operator configured. Stored in the database (migration 6)",
+          "Standalone deployments are deliberately unchanged: the section does not appear and the environment defaults apply, so a self-hosted instance still works out of the box with no setup",
+        ],
+        fixed: [],
+        improved: [
+          "A configured org key is used EXCLUSIVELY — the server's own keys are never tried as a fallback behind it. Falling back would silently bill the deployment owner for an organization's traffic, which is a surprise best discovered before an invoice rather than after",
+          "The API key is write-only and encrypted at rest with the same AES-256-GCM helper as email credentials; the UI shows a masked hint, and a blank field keeps the stored key. Base URLs must be https, since that URL carries the key",
+          "aiEnabled() and configuredProviders() are now async so they can account for a stored override; /api/ai/status reports which source is actually in effect",
+        ],
+      },
+    },
+    {
       version: "4.1.4",
       date: "2026-08-14",
-      badge: "latest",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3326,7 +3386,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.4"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.5"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3576,7 +3636,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.4"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.5"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

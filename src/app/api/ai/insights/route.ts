@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
   // Checked server-side rather than trusting the client feature flag, which is
   // localStorage-backed and can be flipped by anyone.
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     return NextResponse.json(
       { ok: false, error: "AI features are not configured" },
       { status: 503 },

@@ -294,6 +294,30 @@ const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
       )`,
     ],
   },
+  {
+    version: 6,
+    name: "ai_settings",
+    up: [
+      // Per-instance AI provider override, editable from Settings in
+      // ORGANIZATION mode only. Standalone deployments deliberately keep using
+      // the environment defaults so they work out of the box with no setup.
+      //
+      // Singleton by the same CHECK (id = 1) construction as email_settings.
+      // api_key_sealed is AES-256-GCM from src/lib/secret-box.ts — this column
+      // reaches every backup, so it is never plaintext.
+      `CREATE TABLE IF NOT EXISTS ai_settings (
+        id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+        provider        VARCHAR(20) NOT NULL DEFAULT 'bailian',
+        model           VARCHAR(120),
+        base_url        TEXT,
+        api_key_sealed  TEXT,
+        api_key_hint    VARCHAR(20),
+        updated_by      VARCHAR(120),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -1037,6 +1061,85 @@ export async function saveEmailSettings(input: {
       enabled = EXCLUDED.enabled,
       provider = EXCLUDED.provider,
       from_address = EXCLUDED.from_address,
+      updated_by = EXCLUDED.updated_by,
+      updated_at = NOW()
+  `;
+}
+
+// ── AI settings (v4.1.5, organization mode only) ──────────────────────────────
+
+export type AiSettingsProvider = "bailian" | "gemini" | "qwen";
+
+export interface DbAiSettings {
+  enabled: boolean;
+  provider: AiSettingsProvider;
+  model: string | null;
+  base_url: string | null;
+  api_key_sealed: string | null;
+  api_key_hint: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+/** Null when no row exists — callers then fall back to environment defaults. */
+export async function getAiSettings(): Promise<DbAiSettings | null> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT enabled, provider, model, base_url, api_key_sealed, api_key_hint,
+           updated_by, updated_at
+    FROM ai_settings WHERE id = 1
+  `) as DbAiSettings[];
+  return rows[0] ?? null;
+}
+
+/**
+ * Upsert the singleton row. Omitting api_key_sealed preserves the stored key,
+ * which is what lets the UI treat a blank field as "unchanged" without ever
+ * returning the secret to the browser.
+ */
+export async function saveAiSettings(input: {
+  enabled: boolean;
+  provider: AiSettingsProvider;
+  model: string | null;
+  base_url: string | null;
+  updated_by: string | null;
+  api_key_sealed?: string;
+  api_key_hint?: string;
+}): Promise<void> {
+  await ensureSchema();
+  const db = getDb();
+
+  if (input.api_key_sealed !== undefined) {
+    await db`
+      INSERT INTO ai_settings
+        (id, enabled, provider, model, base_url, api_key_sealed, api_key_hint, updated_by, updated_at)
+      VALUES
+        (1, ${input.enabled}, ${input.provider}, ${input.model}, ${input.base_url},
+         ${input.api_key_sealed}, ${input.api_key_hint ?? null}, ${input.updated_by}, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        provider = EXCLUDED.provider,
+        model = EXCLUDED.model,
+        base_url = EXCLUDED.base_url,
+        api_key_sealed = EXCLUDED.api_key_sealed,
+        api_key_hint = EXCLUDED.api_key_hint,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+    `;
+    return;
+  }
+
+  await db`
+    INSERT INTO ai_settings
+      (id, enabled, provider, model, base_url, updated_by, updated_at)
+    VALUES
+      (1, ${input.enabled}, ${input.provider}, ${input.model}, ${input.base_url},
+       ${input.updated_by}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      enabled = EXCLUDED.enabled,
+      provider = EXCLUDED.provider,
+      model = EXCLUDED.model,
+      base_url = EXCLUDED.base_url,
       updated_by = EXCLUDED.updated_by,
       updated_at = NOW()
   `;
