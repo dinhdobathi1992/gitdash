@@ -137,6 +137,7 @@ const FLAG_DEFS: FlagDef[] = [
   { key: "reviewBottleneck", label: "Review Bottleneck", description: "Flags overloaded reviewers and stale review requests from PR review data.", affects: "Repository Team" },
   { key: "healthScorecard", label: "Team Health Scorecard", description: "Org-wide ranked view combining DORA tier and bus-factor risk per repo, worst-first.", affects: "Organization Overview" },
   { key: "workloadRisk", label: "Workload Risk Radar", description: "Flags sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload per person.", affects: "Repository Team" },
+  { key: "aiInsights", label: "AI Insights", description: "LLM-generated analysis of the metrics already on screen. Requires AI provider keys configured on the server — the surfaces stay hidden without them.", affects: "Repository Overview, Organization Health" },
 ];
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {

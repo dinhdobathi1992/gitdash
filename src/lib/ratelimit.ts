@@ -41,6 +41,26 @@ export function rateLimit(
   return { allowed: true };
 }
 
+/**
+ * Token-hash-keyed limiter for authenticated, cost-bearing routes (v4.1.0).
+ *
+ * getRateLimitKey() below keys on IP, which is the wrong axis for AI routes:
+ * the cost follows the *token*, so one user moving between networks should
+ * still be limited. Callers pass hashKey(token) from src/lib/cache.ts —
+ * never the raw token.
+ *
+ * Like the underlying limiter this is in-process, so on a multi-instance
+ * deployment it bounds per instance rather than globally. It is one of two
+ * guards; the other is the daily token budget in src/lib/ai.ts.
+ */
+export function aiRateLimit(
+  tokenHash: string,
+  surface: string,
+  limit: number,
+): { allowed: boolean; retryAfterMs?: number } {
+  return rateLimit(`ai:${surface}:${tokenHash}`, limit, 60_000);
+}
+
 /** Derive a rate-limit key from the request — prefer real IP, fallback to "unknown". */
 export function getRateLimitKey(req: Request, prefix: string): string {
   const forwarded = (req.headers as Headers).get("x-forwarded-for");
