@@ -12,6 +12,7 @@ import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import { RunHistoryBars, TrendSparkline, StatusBadge, HealthScoreRing } from "@/components/WorkflowMetrics";
 import { DoraKpiCards, DoraKpiSkeleton } from "@/components/DoraKpiCards";
 import PartialDataBadge from "@/components/PartialDataBadge";
+import AiInsightsCard from "@/components/AiInsightsCard";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
@@ -445,6 +446,9 @@ export default function RepoDetailPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* AI Insights — renders nothing unless the server has provider keys */}
+          <AiInsightsCard surface="repo" owner={owner} repo={repo} />
+
           {/* DORA KPI Cards */}
           {flags.dora ? (
             doraLoading ? (

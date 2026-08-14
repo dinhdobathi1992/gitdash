@@ -7,6 +7,7 @@ import { fetcher } from "@/lib/swr";
 import { Breadcrumb } from "@/components/Sidebar";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import { LEVEL_COLORS, LEVEL_LABELS } from "@/lib/dora";
+import AiInsightsCard from "@/components/AiInsightsCard";
 import type { OrgHealthScorecardResponse, RepoScorecardEntry } from "@/app/api/github/org-health-scorecard/route";
 import {
   Building2, ShieldCheck, TrendingUp, TrendingDown, Minus,
@@ -350,6 +351,9 @@ export default function OrgHealthScorecardPage({
 
           {data && total > 0 && (
             <>
+              {/* AI Insights — renders nothing unless the server has provider keys */}
+              <AiInsightsCard surface="org" org={orgName} />
+
               {/* Stat tiles */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatTile label="At Risk" value={counts.at_risk} note={`${Math.round((counts.at_risk / total) * 100)}% of estate`} tone="at_risk" />
