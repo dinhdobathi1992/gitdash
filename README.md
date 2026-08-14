@@ -56,6 +56,7 @@ https://github.com/user-attachments/assets/8cf2625a-3a88-4494-a703-07cb5181c11a
 | **Cost Analytics** | Track GitHub Actions spend month-over-month to identify expensive workflows and optimize CI budgets. |
 | **Enterprise-Grade Security** | AES-256-GCM encrypted sessions, zero browser token exposure, and workflow configuration static analysis. |
 | **DB-Backed Reporting** | Persist historical data beyond GitHub's 90-day retention and evaluate advanced alerting rules. |
+| **AI Insights** *(optional)* | Plain-English analysis of your metrics via Gemini or Qwen. Entirely opt-in — hidden unless you configure a provider key, and only aggregate metrics and names are ever sent. |
 
 ---
 

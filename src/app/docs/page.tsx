@@ -9,7 +9,7 @@ import {
   CheckCircle,
   Activity, FileText, ShieldAlert, User, DollarSign,
   TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders,
-  HeartPulse, AlertTriangle, Mail, MessageCircle,
+  HeartPulse, AlertTriangle, Mail, MessageCircle, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Callout } from "@/components/docs/Callout";
@@ -62,6 +62,7 @@ const NAV: NavSection[] = [
       { id: "feat-workload-risk", label: "Workload Risk Radar", icon: AlertTriangle, sub: true },
       { id: "feat-one-on-one", label: "1:1 Prep Sheet", icon: MessageCircle, sub: true },
       { id: "feat-leadership-digest", label: "Leadership Digest", icon: Mail, sub: true },
+      { id: "feat-ai-insights", label: "AI Insights", icon: Sparkles, sub: true },
     ],
   },
   {
@@ -862,6 +863,15 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
       chips: ["Weekly email", "Narrative summary", "No threshold to configure"],
       since: "4.0.3",
     },
+    {
+      id: "feat-ai-insights",
+      name: "AI Insights",
+      path: "/repos/[owner]/[repo] · /org/[orgName]/health",
+      screenshot: "22-ai-insights.png",
+      desc: "Plain-English synthesis of the metrics already on the page: what changed, why it matters, and what to do about it. Optional — the card only appears when AI provider keys are configured on the server. Metrics and names are sent to the provider; never code, logs, or commit messages.",
+      chips: ["Gemini + Qwen fallback", "Server-side keys only", "Metrics-only prompts", "Hidden when unconfigured"],
+      since: "4.1.0",
+    },
   ];
 
   return (
@@ -1488,6 +1498,113 @@ function FeatureLeadershipDigest() {
       <Callout type="warning">
         Delivery requires an email provider to be configured in the deployment
         (<Code>RESEND_API_KEY</Code> or SMTP settings) — see Configuration.
+      </Callout>
+    </section>
+  );
+}
+
+function FeatureAiInsights() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={Sparkles} name="AI Insights" path="/repos/[owner]/[repo] · /org/[orgName]/health"
+        chips={["Gemini + Qwen fallback", "Server-side keys only", "Metrics-only prompts", "Hidden when unconfigured"]}
+        since="4.1.0"
+      />
+      <ProseP>
+        An optional layer that turns the metrics already on screen into plain-English analysis —
+        what changed, why it matters, and what to do next. It appears as a collapsible card on the
+        Repository Overview and Team Health Scorecard pages.
+      </ProseP>
+
+      <Callout type="info">
+        <strong>Entirely opt-in.</strong> With no AI provider key configured on the server, every AI
+        surface is hidden and GitDash behaves exactly as it did before v4.1.0. There is no
+        placeholder and no prompt to enable anything.
+      </Callout>
+
+      <ScreenshotSlot file="22-ai-insights.png" alt="AI Insights card" />
+
+      <DocCard>
+        <SubHeading>What data leaves your instance</SubHeading>
+        <ProseP>
+          This is the part worth reading carefully. Prompts are assembled server-side from a typed
+          snapshot that allowlists its fields — anything not in the list cannot be sent, and the
+          test suite fails the build if a forbidden field appears.
+        </ProseP>
+        <DocTable
+          headers={["Sent", "Never sent"]}
+          rows={[
+            ["Aggregate metrics (DORA figures, success rates, run counts, bus factor)", "Your PAT or OAuth token"],
+            ["Repository, workflow, job and step names", "Workflow run logs"],
+            ["GitHub logins of contributors and commit authors", "Source code or file contents"],
+            ["Dates and timestamps", "Workflow YAML contents"],
+            ["Risk bands and composite scores", "PR or commit message bodies"],
+            ["Whether the data was partial", "Email addresses"],
+          ]}
+        />
+        <Callout type="warning">
+          <strong>Logins are sent.</strong> Contributor and author logins are included so the model
+          can attribute observations to people. If that is not acceptable for your organisation,
+          leave the AI keys unset — there is no partial mode.
+        </Callout>
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>Providers and keys</SubHeading>
+        <ProseP>
+          Gemini is tried first, Qwen is the fallback. Both are reached through their
+          OpenAI-compatible endpoints, so no vendor SDK is installed. Keys are read server-side only
+          and are never sent to the browser — <Code>/api/ai/status</Code> reports which providers are
+          configured, never the key material.
+        </ProseP>
+        <DocTable
+          headers={["Variable", "Default", "Purpose"]}
+          rows={[
+            ["GEMINI_API_KEY", "—", "Primary provider. Unset = provider skipped"],
+            ["GEMINI_MODEL", "gemini-2.5-flash", "Flash class is sufficient for this workload"],
+            ["QWEN_API_KEY", "—", "Fallback provider"],
+            ["QWEN_MODEL", "qwen-plus", ""],
+            ["AI_DISABLED", "—", "Set to true to hard-kill the layer regardless of keys"],
+            ["AI_TIMEOUT_MS", "15000", "Per provider attempt"],
+            ["AI_TOTAL_BUDGET_MS", "45000", "Wall-clock ceiling across all attempts in one request"],
+            ["AI_DAILY_TOKEN_BUDGET", "2000000", "Per instance per UTC day. 0 = unlimited"],
+          ]}
+        />
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>Cost and rate limiting</SubHeading>
+        <ProseP>
+          Calls are cached for 15 minutes and fingerprinted on the snapshot, so unchanged metrics
+          reuse the previous generation. Requests are rate-limited to 20/minute per token, and a
+          daily token budget stops runaway usage.
+        </ProseP>
+        <Callout type="warning">
+          Both the cache and the limiters are <strong>in-process</strong>. On a multi-instance
+          deployment each instance keeps its own counters, so these bound cost per instance rather
+          than globally — a damage-limiter, not a hard spend cap.
+        </Callout>
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>How it fails</SubHeading>
+        <DocTable
+          headers={["Situation", "What you see"]}
+          rows={[
+            ["No provider keys configured", "The card is not rendered at all"],
+            ["Feature switched off in Settings", "The card is not rendered at all"],
+            ["Provider is down or returns an error", "A muted \"unavailable\" line — the page's own metrics are unaffected"],
+            ["Rate limit or daily budget reached", "A muted \"try again in a minute\" line"],
+            ["Some metrics could not be fetched", "A \"partial data\" badge, and the model is told to hedge"],
+          ]}
+        />
+      </DocCard>
+
+      <Callout type="warning">
+        Generated text can be wrong. Every figure it cites comes from the snapshot, but the
+        reasoning around those figures is a model&apos;s. Treat it as a starting point for a
+        conversation, not a source of truth — the underlying numbers on the page are.
       </Callout>
     </section>
   );
@@ -2219,6 +2336,23 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/ai/status",
+          description: "Capability probe for the AI layer. Returns { enabled, providers } — which providers have a key configured, never the key material. Not rate-limited (no LLM call).",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/ai/insights",
+          description: "LLM synthesis of a repository's or org's metrics. Returns { ok, provider, model, generated_at, cached, partial, content: { summary, bullets, actions } }. 503 when no provider key is configured or the provider is unavailable; 429 when rate-limited (20/min per token) or the daily token budget is spent. Prompts are built from an allowlisted, metrics-only snapshot — never code, logs, or commit messages.",
+          params: [
+            { name: "owner", type: "string", optional: true, desc: "Repository owner (repo surface — pair with repo)" },
+            { name: "repo", type: "string", optional: true, desc: "Repository name (repo surface)" },
+            { name: "org", type: "string", optional: true, desc: "Organisation login (org surface — takes precedence over owner/repo)" },
+            { name: "refresh", type: "1", optional: true, desc: "Bypass the cached generation. Still rate-limited." },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/health",
           description: "Liveness/readiness probe. Returns {\"status\":\"ok\"} with no authentication. Used by Kubernetes and load balancers.",
           params: [],
@@ -2470,9 +2604,25 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
+      version: "4.1.0",
+      date: "2026-08-14",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "AI Insights — an optional card on the Repository Overview and Team Health Scorecard pages that turns the metrics already on screen into plain-English analysis: what changed, why it matters, and what to do next. Gemini primary with Qwen fallback, both via their OpenAI-compatible endpoints, so no vendor SDK is installed",
+          "Entirely opt-in: with no provider key configured on the server, every AI surface is hidden and GitDash behaves exactly as it did in v4.0.11. New \"AI Insights\" toggle in Settings → Feature Flags, and a new /api/ai/status capability probe",
+          "Privacy is enforced at the type level: prompts are built server-side from an allowlisted snapshot, and the test suite walks the serialized output to fail the build if a token, log, commit message, file path or URL ever appears. Metrics, names, logins and dates are sent; code, logs, YAML and message bodies never are",
+          "Cost controls: 15-minute snapshot-fingerprinted caching, 20 requests/minute per token, a per-attempt and total wall-clock timeout, and a daily token budget (AI_DAILY_TOKEN_BUDGET). All in-process, so they bound cost per instance rather than globally — documented as a damage-limiter, not a hard spend cap",
+        ],
+        fixed: [],
+        improved: [],
+      },
+    },
+    {
       version: "4.0.11",
       date: "2026-08-13",
-      badge: "latest",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [],
@@ -2913,7 +3063,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.11"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3058,6 +3208,7 @@ export default function DocsPage() {
     "feat-workload-risk":    <FeatureWorkloadRisk />,
     "feat-one-on-one":       <FeatureOneOnOne />,
     "feat-leadership-digest": <FeatureLeadershipDigest />,
+    "feat-ai-insights":       <FeatureAiInsights />,
     "metrics-reference":    <MetricsReference onNavigate={setActive} />,
     "metrics-dora":         <MetricsDora />,
     "metrics-pr-cycle":     <MetricsPrCycle />,
@@ -3162,7 +3313,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.0.11"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
