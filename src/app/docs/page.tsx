@@ -1541,9 +1541,39 @@ function FeatureLeadershipDigest() {
         that runs on every sync — the daily cron just checks whether today is Monday.
       </Callout>
       <Callout type="warning">
-        Delivery requires an email provider to be configured in the deployment
-        (<Code>RESEND_API_KEY</Code> or SMTP settings) — see Configuration.
+        Delivery requires an email provider. Since v4.1.3 this is configured in{" "}
+        <strong>Settings → Email Delivery</strong> (no redeploy needed); the{" "}
+        <Code>RESEND_API_KEY</Code> environment variable still works as a fallback.
       </Callout>
+
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>AI executive summary</SubHeading>
+          <VersionBadge v="4.1.4" />
+        </div>
+        <ProseP>
+          When AI is configured, the Monday email opens with a short executive summary — four to six
+          sentences of plain prose, written for a reader who will not open the dashboard. It leads
+          with the most important change, then the main risk, then one focus for the coming week.
+          The existing rule-based narrative follows directly beneath it, unchanged.
+        </ProseP>
+        <DocTable
+          headers={["Property", "Behaviour"]}
+          rows={[
+            ["Cost", "Zero extra GitHub calls — it reuses the scorecard the digest already computed"],
+            ["Grounding", "The rule-based narrative is passed in as an anchor the model may reprioritise and rephrase, but never contradict"],
+            ["Labelling", "The AI section is explicitly headed \"AI summary\", so a reader always knows which half a machine wrote"],
+            ["No week-over-week claims", "The scorecard holds no previous week, so phrasing like \"unchanged from last week\" is forbidden — trend compares halves of a 30-day window"],
+          ]}
+        />
+        <Callout type="info">
+          <strong>The digest never fails because AI is down.</strong> Missing keys, a provider error,
+          a timeout, an exhausted token budget, unparseable output, or an outright exception all
+          degrade to sending the rule-based narrative alone. A weekly email that stopped arriving
+          because a model was unavailable would be worse than not having the summary at all — there
+          is a test for each of those failure modes.
+        </Callout>
+      </DocCard>
     </section>
   );
 }
@@ -2764,9 +2794,28 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.1.3",
+      version: "4.1.4",
       date: "2026-08-14",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "AI executive summary in the Weekly Leadership Digest — 4-6 sentences of plain prose at the top of the Monday email, written for a reader who will not open the dashboard. Costs zero extra GitHub calls: it reuses the scorecard the digest already computed",
+          "The rule-based narrative is passed to the model as an anchor it may reprioritise and rephrase but never contradict, so the two halves of the email cannot disagree in front of a CTO. The AI section is explicitly labelled so a reader always knows which half a machine wrote",
+        ],
+        fixed: [
+          "The leadership digest email interpolated repository names and narrative text into an HTML body without escaping. With model-generated text now in that body, all fields are escaped — the plain-text alternative is left as-is, since it is not markup",
+        ],
+        improved: [
+          "The digest sends regardless of AI. Missing keys, provider errors, timeouts, an exhausted budget, unparseable output, and an outright throw all degrade to the rule-based narrative alone — covered by a test per failure mode",
+          "The prompt forbids week-over-week claims. Because the email is weekly, models reached for \"unchanged from last week\" phrasing the data cannot support: the scorecard has no previous week, and its trend field compares halves of a 30-day window",
+        ],
+      },
+    },
+    {
+      version: "4.1.3",
+      date: "2026-08-14",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3277,7 +3326,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.3"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.4"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3527,7 +3576,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.3"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.4"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

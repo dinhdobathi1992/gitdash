@@ -6,6 +6,48 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.4] — 2026-08-14
+
+### Overview
+**F2 — the last unshipped feature of the original AI design.** The Weekly Leadership Digest gains an LLM-written executive summary above its rule-based narrative. This was deliberately deferred through v4.1.0–v4.1.2 because the digest email could not send at all; v4.1.3 made email configurable in-app, so the summary now activates the moment a provider key is entered.
+
+### Added
+
+#### AI executive summary in the Weekly Leadership Digest
+- Four to six sentences of plain prose at the top of the Monday email, aimed at a reader who will not open the dashboard: most important change first, then the main risk, then one focus for the coming week.
+- **Zero additional GitHub calls.** `buildDigestSnapshot()` performs no fetching — it composes the scorecard and narrative the digest already computed for the email itself.
+- The rule-based narrative is passed to the model as an **anchor**: it may reprioritise and rephrase, but never contradict. The two halves of the email cannot disagree in front of a CTO.
+- The AI section is explicitly headed **"AI summary"** in both the HTML and plain-text bodies, so a reader always knows which half a machine wrote.
+
+### Fixed
+
+#### Unescaped HTML in the digest email
+- The digest interpolated repository names and narrative text straight into an HTML body. With model-generated text now in that body, every field goes through a new `escapeHtml()` helper. The plain-text alternative is deliberately left unescaped — it is not markup.
+
+### Changed
+
+#### The digest sends regardless of AI
+- Every failure path degrades to the rule-based narrative alone: no provider keys, provider error, timeout, exhausted token budget, unparseable response, wrong-shaped JSON, and an outright throw. **There is a test for each.** A weekly email that stopped arriving because a model was unavailable would be worse than never adding the summary.
+- An email delivery failure is still reported as a failure — only the *AI* is best-effort.
+
+#### Week-over-week claims are forbidden in the prompt
+- Because the email is weekly, models naturally reached for phrasing like *"this risk remains unchanged from last week"* — caught while reviewing real generated output. **The scorecard contains no previous week**: its `trend` field compares the recent half of a 30-day window against the prior half. The prompt now rules this out explicitly; verified across three consecutive live generations.
+
+### Verified
+- Live end-to-end against the provider: ~1.7–2.0s, ~550 in / ~130 out tokens, valid schema and clean prose on every run, no unsupported temporal claims.
+- Test count 240 → 266.
+
+### Rollback
+1. **Unset the AI keys** — the digest reverts to the rule-based narrative alone, no redeploy.
+2. **Promote the v4.1.3 Vercel deployment** — instant.
+3. **`git revert`** — no schema change in this release.
+
+### Changed (infra)
+- Bumped app version from 4.1.3 to 4.1.4
+- Bumped Helm chart version from 0.5.3 to 0.5.4
+
+---
+
 ## [4.1.3] — 2026-08-14
 
 ### Overview

@@ -192,3 +192,44 @@ export function parseRootCauseContent(raw: string): RootCauseContent | null {
 
   return { hypotheses };
 }
+
+// ── Leadership digest summary (v4.1.4) ────────────────────────────────────────
+
+export interface DigestContent {
+  summary: string;
+}
+
+/** Email bodies have no layout to absorb a runaway paragraph. */
+const MAX_DIGEST_SUMMARY_CHARS = 1200;
+
+/**
+ * Parse the digest executive summary.
+ *
+ * Markdown is stripped rather than rejected: the prompt forbids it, but a
+ * stray "**" reaching a plain-text email body is cosmetic, not worth failing
+ * a weekly send over and asking the model again.
+ */
+export function parseDigestContent(raw: string): DigestContent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripFences(raw));
+  } catch {
+    return null;
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+  const summary = asCleanString(
+    (parsed as Record<string, unknown>).summary,
+    MAX_DIGEST_SUMMARY_CHARS,
+  );
+  if (summary === null) return null;
+
+  const cleaned = summary
+    .replace(/\*\*/g, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/^[-*]\s+/gm, "")
+    .trim();
+
+  return cleaned ? { summary: cleaned } : null;
+}

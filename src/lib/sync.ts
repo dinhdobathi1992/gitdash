@@ -14,6 +14,10 @@ import {
   type RunUpsertRow,
 } from "@/lib/db";
 import { deliverDigestEmail, deliverLeadershipDigestEmail } from "@/lib/notifier";
+import { generateJson } from "@/lib/ai";
+import { buildDigestSnapshot } from "@/lib/ai-snapshots";
+import { DIGEST_SYSTEM_PROMPT } from "@/lib/ai-prompts";
+import { parseDigestContent } from "@/lib/ai-schema";
 import { computeScorecard } from "@/lib/org-health-scorecard";
 import { generateLeadershipNarrative } from "@/lib/leadership-narrative";
 
@@ -190,7 +194,35 @@ export async function sendWeeklyLeadershipDigests(
     try {
       const scorecard = await computeScorecard(token, octokit, org, 10);
       const narrative = generateLeadershipNarrative(scorecard);
-      const result = await deliverLeadershipDigestEmail(rule.destination, narrative);
+
+      // AI executive summary (v4.1.4) — strictly additive.
+      //
+      // The digest must never fail because AI is unavailable, so every failure
+      // path here degrades to sending the rule-based narrative alone: no keys,
+      // provider error, timeout, budget exhausted, unparseable response, or an
+      // outright throw. This is the single most important property of the
+      // feature — a weekly email that stops arriving because an LLM was down
+      // would be worse than never having added the summary.
+      let aiSummary: string | undefined;
+      try {
+        const snapshot = buildDigestSnapshot(scorecard, narrative, new Date());
+        const ai = await generateJson(DIGEST_SYSTEM_PROMPT, snapshot, { maxOutputTokens: 600 });
+        if (ai.ok) {
+          aiSummary = parseDigestContent(ai.content)?.summary;
+          if (!aiSummary) {
+            console.warn(`[leadership-digest] AI summary failed validation for ${org} — sending without it`);
+          }
+        } else {
+          console.warn(`[leadership-digest] AI summary unavailable for ${org}: ${ai.reason}`);
+        }
+      } catch (e) {
+        console.warn(`[leadership-digest] AI summary threw for ${org}, sending without it:`, e);
+      }
+
+      const result = await deliverLeadershipDigestEmail(rule.destination, {
+        ...narrative,
+        aiSummary,
+      });
       if (result.ok) sent++;
       else {
         failures++;

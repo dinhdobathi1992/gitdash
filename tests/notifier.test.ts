@@ -141,3 +141,79 @@ describe("METRIC_LABELS", () => {
     }
   });
 });
+
+// ── Leadership digest HTML escaping (v4.1.4) ──────────────────────────────────
+
+describe("deliverLeadershipDigestEmail — HTML escaping", () => {
+  const ORIGINAL = { ...process.env };
+
+  beforeEach(() => {
+    // Route through Resend so we can capture the rendered body.
+    process.env.RESEND_API_KEY = "re_test";
+    delete process.env.SMTP_HOST;
+  });
+  afterEach(() => {
+    process.env = { ...ORIGINAL };
+    vi.unstubAllGlobals();
+  });
+
+  async function capture(narrative: Record<string, unknown>) {
+    let sentBody: Record<string, string> = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        sentBody = JSON.parse(init.body as string);
+        return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+      }),
+    );
+    const { deliverLeadershipDigestEmail } = await import("@/lib/notifier");
+    await deliverLeadershipDigestEmail("cto@acme.com", narrative as never);
+    return sentBody;
+  }
+
+  const base = {
+    subject: "[GitDash] Weekly digest",
+    summary_line: "All quiet.",
+    highlights: [],
+    concerns: [],
+  };
+
+  it("escapes an AI summary containing HTML so it cannot inject markup", async () => {
+    const body = await capture({
+      ...base,
+      aiSummary: '<script>alert("xss")</script> & <b>bold</b>',
+    });
+    expect(body.html).not.toContain("<script>");
+    expect(body.html).toContain("&lt;script&gt;");
+    expect(body.html).toContain("&amp;");
+  });
+
+  it("escapes the rule-based narrative fields too", async () => {
+    const body = await capture({
+      ...base,
+      summary_line: "repo <alpha> & <beta>",
+      highlights: ["<img src=x onerror=1>"],
+      concerns: ["a & b"],
+    });
+    expect(body.html).not.toContain("<img src=x");
+    expect(body.html).toContain("&lt;img");
+    expect(body.html).toContain("&lt;alpha&gt;");
+  });
+
+  it("leaves the plain-text body unescaped — it is not markup", async () => {
+    const body = await capture({ ...base, aiSummary: "5 > 3 & rising" });
+    expect(body.text).toContain("5 > 3 & rising");
+  });
+
+  it("labels the AI section so a reader knows what a machine wrote", async () => {
+    const body = await capture({ ...base, aiSummary: "Steady week." });
+    expect(body.html).toContain("AI summary");
+    expect(body.text).toContain("AI summary");
+  });
+
+  it("omits the AI section entirely when no summary is supplied", async () => {
+    const body = await capture(base);
+    expect(body.html).not.toContain("AI summary");
+    expect(body.text).not.toContain("AI summary");
+  });
+});

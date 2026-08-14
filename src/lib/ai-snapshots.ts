@@ -30,6 +30,7 @@ import { pLimitSettled } from "@/lib/concurrency";
 import { getRepoDoraSummary } from "@/lib/github-dora";
 import { computeBusFactor } from "@/lib/bus-factor";
 import { computeScorecard } from "@/lib/org-health-scorecard";
+import type { OrgHealthScorecardResponse } from "@/lib/org-health-scorecard";
 import { detectAnomalies, computeBaseline, type AnomalyMetric } from "@/lib/anomaly";
 import type { DoraLevel } from "@/lib/dora";
 
@@ -570,5 +571,61 @@ export async function buildRootCauseSnapshot(
       commitsRes.status === "fulfilled" ? toWorkflowChanges(commitsRes.value, 10) : [],
     duration_shift,
     partial,
+  };
+}
+
+// ── Leadership digest (v4.1.4) ────────────────────────────────────────────────
+
+export interface DigestSnapshot {
+  org: string;
+  /** ISO week, e.g. "2026-W33". */
+  week: string;
+  scorecard: OrgHealthScorecardResponse;
+  /**
+   * The factual narrative that will render directly below the AI summary.
+   * Included as an anchor: the model is told it may reprioritise and rephrase
+   * this, but never contradict it, so the two halves of the email cannot
+   * disagree in front of a CTO.
+   */
+  rule_narrative: {
+    summary_line: string;
+    highlights: string[];
+    concerns: string[];
+  };
+}
+
+/** ISO-8601 week number, computed from a caller-supplied date for testability. */
+export function isoWeek(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  // Thursday determines the ISO year.
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * Build the digest snapshot from data the cron has already computed.
+ *
+ * Unlike the other builders this performs no fetching — the scorecard and
+ * narrative are handed in by sendWeeklyLeadershipDigests, which needs them
+ * for the email itself regardless. The AI summary therefore costs zero
+ * additional GitHub calls.
+ */
+export function buildDigestSnapshot(
+  scorecard: OrgHealthScorecardResponse,
+  narrative: { summary_line: string; highlights: string[]; concerns: string[] },
+  now: Date,
+): DigestSnapshot {
+  return {
+    org: scorecard.org,
+    week: isoWeek(now),
+    scorecard,
+    rule_narrative: {
+      summary_line: narrative.summary_line,
+      highlights: narrative.highlights,
+      concerns: narrative.concerns,
+    },
   };
 }
