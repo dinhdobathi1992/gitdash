@@ -11,6 +11,7 @@ export type FeatureFlags = {
   reviewBottleneck: boolean;
   healthScorecard: boolean;
   workloadRisk: boolean;
+  aiInsights: boolean;
 };
 
 export const DEFAULT_FLAGS: FeatureFlags = {
@@ -26,6 +27,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   reviewBottleneck: true,
   healthScorecard: true,
   workloadRisk: true,
+  aiInsights: true,
 };
 
 export const STORAGE_KEY = "gitdash:feature-flags";

@@ -1,0 +1,283 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+/**
+ * Snapshot-builder tests, with the privacy allowlist checked mechanically.
+ *
+ * The point of the builders is that a field absent from the interface cannot
+ * leak into a prompt. `assertNoForbiddenKeys` enforces that by walking the
+ * serialized snapshot, so an upstream fetcher that starts returning commit
+ * messages or file contents fails a test rather than quietly shipping them
+ * to a model.
+ *
+ * Every AI snapshot builder added later must reuse this helper.
+ */
+
+/** Keys that must never appear anywhere in a snapshot, at any depth. */
+const FORBIDDEN_KEYS = [
+  "token", "pat", "accessToken", "access_token", "apiKey", "api_key",
+  "logs", "log", "body", "content", "yaml", "yml",
+  "message", "commit_message", "patch", "diff",
+  "email", "html_url", "sha",
+];
+
+export function assertNoForbiddenKeys(obj: unknown, path = "$"): void {
+  if (obj === null || typeof obj !== "object") return;
+  if (Array.isArray(obj)) {
+    obj.forEach((v, i) => assertNoForbiddenKeys(v, `${path}[${i}]`));
+    return;
+  }
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    expect(
+      FORBIDDEN_KEYS,
+      `forbidden key "${k}" found at ${path}.${k} — snapshots must not carry it`,
+    ).not.toContain(k);
+    assertNoForbiddenKeys(v, `${path}.${k}`);
+  }
+}
+
+// ── Mocks for every fetcher a builder reuses ─────────────────────────────────
+
+const getRepoSummary = vi.fn();
+const listWorkflowFileCommits = vi.fn();
+const getRepoDoraSummary = vi.fn();
+const computeBusFactor = vi.fn();
+const computeScorecard = vi.fn();
+
+vi.mock("@/lib/github", () => ({
+  getRepoSummary: (...a: unknown[]) => getRepoSummary(...a),
+  listWorkflowFileCommits: (...a: unknown[]) => listWorkflowFileCommits(...a),
+  getOctokit: () => ({}),
+}));
+vi.mock("@/lib/github-dora", () => ({
+  getRepoDoraSummary: (...a: unknown[]) => getRepoDoraSummary(...a),
+}));
+vi.mock("@/lib/bus-factor", () => ({
+  computeBusFactor: (...a: unknown[]) => computeBusFactor(...a),
+}));
+vi.mock("@/lib/org-health-scorecard", () => ({
+  computeScorecard: (...a: unknown[]) => computeScorecard(...a),
+}));
+
+// ── Fixtures — deliberately carrying forbidden fields ────────────────────────
+// Each fixture mimics the *real* upstream shape, including the sensitive
+// fields the builder is responsible for dropping.
+
+const repoSummaryFixture = {
+  latest_conclusion: "success",
+  latest_status: "completed",
+  latest_run_at: "2026-08-13T10:00:00Z",
+  latest_actor: "octocat",
+  latest_sha: "deadbeef",
+  latest_message: "fix: do not leak this commit message",
+  recent_runs: [],
+  trend_30d: Array.from({ length: 30 }, (_, i) => ({
+    date: `2026-07-${String(i + 1).padStart(2, "0")}`,
+    success: 8,
+    total: 10,
+  })),
+  success_rate: 80,
+};
+
+const doraFixture = {
+  deployment_frequency: { per_day: 1.5, total: 45, period_days: 30, level: "high", label: "High" },
+  lead_time: { median_ms: 7_200_000, p95_ms: 20_000_000, sample_size: 20, level: "high", label: "High" },
+  change_failure_rate: { rate: 12, failures: 5, total: 42, level: "medium", label: "Medium" },
+  mttr: { mean_ms: 3_600_000, recoveries: 4, level: "high", label: "High" },
+  overall_level: "high",
+  cycle_breakdown: {},
+  pr_scatter: [],
+  throughput_by_week: [],
+  prs_analysed: 42,
+  releases_analysed: 3,
+  partial: false,
+  fetched_prs: 42,
+  total_prs_attempted: 42,
+};
+
+const busFactorFixture = {
+  modules: [{ path: "src/app", bus_factor: 1 }],
+  overall_bus_factor: 2,
+  total_commits: 120,
+  critical_modules: 3,
+  total_contributors: 4,
+  partial: false,
+};
+
+const workflowCommitsFixture = [
+  {
+    sha: "abc123",
+    message: "ci: bump node — this message must not reach a prompt",
+    author_login: "octocat",
+    author_avatar: "https://example.test/a.png",
+    author_name: "Octo Cat",
+    date: "2026-08-10T09:00:00Z",
+    html_url: "https://github.com/o/r/commit/abc123",
+    file_path: ".github/workflows/ci.yml",
+  },
+];
+
+const scorecardFixture = {
+  org: "acme",
+  repos: [
+    { owner: "acme", repo: "alpha", dora_level: "low", overall_bus_factor: 1, critical_modules: 5, composite_score: 25, risk_band: "at_risk", trend: "flat", partial: false },
+    { owner: "acme", repo: "beta", dora_level: "medium", overall_bus_factor: 2, critical_modules: 1, composite_score: 54, risk_band: "watch", trend: "up", partial: false },
+    { owner: "acme", repo: "gamma", dora_level: "high", overall_bus_factor: 3, critical_modules: 0, composite_score: 85, risk_band: "healthy", trend: "up", partial: false },
+  ],
+  repos_analysed: 3,
+  repos_attempted: 3,
+};
+
+beforeEach(() => {
+  getRepoSummary.mockReset().mockResolvedValue(repoSummaryFixture);
+  getRepoDoraSummary.mockReset().mockResolvedValue(doraFixture);
+  computeBusFactor.mockReset().mockResolvedValue(busFactorFixture);
+  listWorkflowFileCommits.mockReset().mockResolvedValue(workflowCommitsFixture);
+  computeScorecard.mockReset().mockResolvedValue(scorecardFixture);
+});
+
+// ── Repo surface ──────────────────────────────────────────────────────────────
+
+describe("buildInsightsSnapshot — repo surface", () => {
+  it("produces the expected shape from healthy fixtures", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+
+    expect(snap.surface).toBe("repo");
+    expect(snap.scope).toBe("o/r");
+    expect(snap.period_days).toBe(30);
+    expect(snap.dora).toEqual({
+      deployments_per_day: 1.5,
+      lead_time_p50_hours: 2,
+      change_failure_rate_pct: 12,
+      mttr_mean_hours: 1,
+      benchmark: "high",
+    });
+    expect(snap.ci).toMatchObject({ total_runs: 300, success_rate_pct: 80 });
+    expect(snap.bus_factor).toEqual({ overall: 2, critical_modules: 3, total_contributors: 4 });
+    expect(snap.partial).toBe(false);
+  });
+
+  it("carries no forbidden keys", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+    assertNoForbiddenKeys(snap);
+  });
+
+  it("drops commit messages, shas and urls from workflow-change metadata", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+
+    expect(snap.recent_workflow_changes).toEqual([
+      { date: "2026-08-10T09:00:00Z", author_login: "octocat" },
+    ]);
+    const serialized = JSON.stringify(snap);
+    expect(serialized).not.toContain("must not reach a prompt");
+    expect(serialized).not.toContain("abc123");
+    expect(serialized).not.toContain("github.com");
+  });
+
+  it("never serializes the latest commit message from the repo summary", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+    expect(JSON.stringify(snap)).not.toContain("do not leak this commit message");
+  });
+
+  it("degrades to a partial snapshot when a sub-fetch fails instead of throwing", async () => {
+    getRepoDoraSummary.mockRejectedValue(new Error("rate limited"));
+    computeBusFactor.mockRejectedValue(new Error("rate limited"));
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+
+    expect(snap.dora).toBeNull();
+    expect(snap.bus_factor).toBeNull();
+    expect(snap.ci).not.toBeNull();
+    expect(snap.partial).toBe(true);
+  });
+
+  it("flags partial when an upstream fetcher reports partial data", async () => {
+    getRepoDoraSummary.mockResolvedValue({ ...doraFixture, partial: true });
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+    expect(snap.partial).toBe(true);
+  });
+
+  it("reports a null MTTR rather than inventing a zero", async () => {
+    getRepoDoraSummary.mockResolvedValue({
+      ...doraFixture,
+      mttr: { mean_ms: null, recoveries: 0, level: "high", label: "High" },
+    });
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "repo", owner: "o", repo: "r" });
+    expect(snap.dora?.mttr_mean_hours).toBeNull();
+  });
+});
+
+// ── Org surface ───────────────────────────────────────────────────────────────
+
+describe("buildInsightsSnapshot — org surface", () => {
+  it("summarises the scorecard into bands and worst repos", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "org", org: "acme" });
+
+    expect(snap.surface).toBe("org");
+    expect(snap.scope).toBe("acme");
+    expect(snap.risk_bands).toEqual({ healthy: 1, watch: 1, at_risk: 1, median_score: 54 });
+    expect(snap.worst_repos[0]).toEqual({
+      repo: "alpha",
+      score: 25,
+      band: "at_risk",
+      dora_level: "low",
+    });
+    expect(snap.bus_factor).toEqual({
+      overall: 1,
+      critical_modules: 6,
+      total_contributors: 0,
+    });
+  });
+
+  it("carries no forbidden keys", async () => {
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "org", org: "acme" });
+    assertNoForbiddenKeys(snap);
+  });
+
+  it("caps worst_repos at five entries", async () => {
+    computeScorecard.mockResolvedValue({
+      ...scorecardFixture,
+      repos: Array.from({ length: 12 }, (_, i) => ({
+        ...scorecardFixture.repos[0],
+        repo: `r${i}`,
+        composite_score: i * 5,
+      })),
+      repos_analysed: 12,
+      repos_attempted: 12,
+    });
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "org", org: "acme" });
+    expect(snap.worst_repos).toHaveLength(5);
+    expect(snap.worst_repos[0].score).toBe(0);
+  });
+
+  it("marks partial when the scorecard could not score every repo", async () => {
+    computeScorecard.mockResolvedValue({ ...scorecardFixture, repos_analysed: 2, repos_attempted: 3 });
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "org", org: "acme" });
+    expect(snap.partial).toBe(true);
+  });
+
+  it("handles an org with no scoreable repos", async () => {
+    computeScorecard.mockResolvedValue({ org: "acme", repos: [], repos_analysed: 0, repos_attempted: 0 });
+
+    const { buildInsightsSnapshot } = await import("@/lib/ai-snapshots");
+    const snap = await buildInsightsSnapshot("tok", { surface: "org", org: "acme" });
+
+    expect(snap.bus_factor).toBeNull();
+    expect(snap.worst_repos).toEqual([]);
+    expect(snap.risk_bands).toEqual({ healthy: 0, watch: 0, at_risk: 0, median_score: 0 });
+  });
+});

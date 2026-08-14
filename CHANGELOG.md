@@ -6,6 +6,54 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.0] — 2026-08-14
+
+### Overview
+First release of the AI insight layer: an optional LLM analysis of the metrics GitDash already computes. **Entirely opt-in — with no AI provider key configured, every surface is hidden and the app behaves exactly as it did in v4.0.11.** Design and plan: `docs/specs/2026-08-14-ai-features-design.md`, `docs/plans/2026-08-14-ai-features-plan.md`.
+
+### Added
+
+#### AI provider layer (`src/lib/ai.ts`)
+- Gemini primary, Qwen fallback, both through their OpenAI-compatible chat-completions endpoints — **zero new dependencies**, just `fetch`.
+- `generateJson()` **never throws.** Every failure (no keys, disabled, timeout, HTTP error, unparseable body) returns a typed `AiFailure` with a machine-readable reason, so callers own their fallback UX instead of wrapping everything in try/catch.
+- A single wall-clock deadline (`AI_TOTAL_BUDGET_MS`, default 45s) spans *all* provider attempts, so one slow primary can never push a request past its route's `maxDuration`. Per-attempt timeout is `AI_TIMEOUT_MS` (default 15s).
+- Non-retryable statuses (400/401/403) skip straight to the next provider; 429/5xx retry once before falling through.
+- Nothing logs prompt content or snapshot payloads — provider, model, latency, status and token counts only.
+
+#### AI Insights panel
+- New card on `/repos/[owner]/[repo]` and `/org/[orgName]/health`: a summary, findings grounded in the snapshot's numbers, and up to three suggested actions.
+- New `GET /api/ai/insights` (repo and org surfaces) and `GET /api/ai/status` (capability probe — reports which providers are configured, never key material).
+- New `aiInsights` feature flag in Settings. Double-gated: the server must have keys **and** the flag must be on. The client flag controls visibility only — routes check `aiEnabled()` server-side themselves, because the flag is localStorage-backed and trivially flipped.
+- Failure is a non-event by design: an unavailable provider renders a muted one-liner, not an error box. The page's own metrics are unaffected.
+
+#### Privacy enforcement
+- Prompts are assembled server-side from typed snapshots (`src/lib/ai-snapshots.ts`) built field-by-field against an explicit interface — never by spreading a GitHub API object, so a field absent from the type cannot leak even if an upstream fetcher starts returning more.
+- **Sent:** aggregate metrics, repository/workflow/job/step names, contributor logins, dates. **Never sent:** tokens, run logs, source code, workflow YAML, PR/commit message bodies, email addresses.
+- `tests/ai-snapshots.test.ts` walks the serialized output of every builder and fails on a forbidden key. Fixtures deliberately carry commit messages, SHAs and URLs to prove the builder drops them.
+- No free-form user input enters any prompt, so the injection surface is zero by construction.
+
+#### Cost controls
+- 15-minute response caching, fingerprinted on the snapshot so unchanged metrics reuse the previous generation.
+- 20 requests/minute per token via a new `aiRateLimit()` helper that keys on the token hash rather than IP — AI cost follows the token, not the network.
+- `AI_DAILY_TOKEN_BUDGET` (default 2,000,000 tokens/day) short-circuits before any provider call once spent.
+- **These are in-process counters**, so on a multi-instance deployment they bound cost per instance rather than globally. Documented in-app and in-code as a damage-limiter, not a hard spend cap.
+
+### Changed
+- `tests/` gained its first route-handler tests (`api-ai-status`, `api-ai-insights`). Everything prior tested pure `src/lib` functions; the pattern is documented in `tests/api-ai-status.test.ts` for reuse.
+- Test count 63 → 142.
+
+### Rollback
+Three independent levers, in increasing order of cost:
+1. **Unset the AI env keys** — every surface hides immediately. No redeploy, no code change.
+2. **Promote the v4.0.11 Vercel deployment** — instant, no rebuild.
+3. **`git revert` this release's commit(s)** — **no migration to undo, zero schema changes.**
+
+### Changed (infra)
+- Bumped app version from 4.0.11 to 4.1.0
+- Bumped Helm chart version from 0.4.11 to 0.5.0
+
+---
+
 ## [4.0.11] — 2026-08-13
 
 ### Overview
