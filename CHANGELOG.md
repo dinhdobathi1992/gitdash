@@ -30,6 +30,14 @@ UI consistency and control, both reported directly after v4.2.4.
 ### Changed
 - Environment selection uses a lazy `useState` initialiser rather than an effect: React 19 forbids `setState` inside an effect, and there is no hydration risk because the environment list only renders once client-side data has arrived.
 
+#### Release workflow now matches how releases actually happen
+The workflow had never been run successfully against the current process, and failed twice over:
+
+- **`v4.2.5` was rejected as invalid.** The input regex required a bare `4.2.5`, and the workflow then built `TAG="v${VERSION}"` — so even a passing value would have produced `vv4.2.5`. A leading `v` is now stripped and normalised, since typing the tag form is the natural mistake.
+- **The next step would have failed too.** Versions are bumped in the feature PR, so `package.json` is already at the target when the workflow runs — making `git commit` exit non-zero with "nothing to commit". The bump and commit steps are now conditional, and the commit is guarded against an empty index regardless.
+- **The workflow only ever bumped `package.json`**, silently ignoring the Helm chart. It now *verifies* rather than assumes: a `Chart.yaml` `appVersion` that disagrees with the release version fails the run with a clear message, as does a missing CHANGELOG section. Shipping a chart that claims the wrong `appVersion` is a release bug worth stopping for.
+- The tag push no longer assumes a new commit exists.
+
 ### Verified
 - 332 tests passing, `tsc` clean, `eslint` **0 problems**, build succeeds.
 
