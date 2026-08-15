@@ -2998,9 +2998,42 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.3",
+      version: "4.2.5",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "The deployment environment driving the headline figures is now selectable — click any row under \"By environment\". Auto-detection can only ever guess when a repository deploys to several production targets, so choosing beats guessing better. The choice is remembered per repository",
+          "Every environment now carries its own deploys/day, change failure rate and MTTR, so switching is instant and environments can be compared directly",
+        ],
+        fixed: [
+          "The collapsible card header built for Team Analytics in v4.0.11 was left as a local function in that one page, so the DORA drill-down and PR lifecycle toggles on the repository overview kept their original bare \"› Show …\" text style. Extracted to a shared component and applied to both — the inconsistency was obvious once polished cards sat directly beneath a plain text link",
+        ],
+        improved: [],
+      },
+    },
+    {
+      version: "4.2.4",
+      date: "2026-08-15",
+      badge: null,
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "Deployment metrics showed 0.00 deploys/day with a null failure rate on repositories that deploy constantly. Status lookups are capped at 40 per request, and were taken from the most recent deployments overall — so on a busy repo none of them belonged to the chosen production environment, leaving every headline figure empty. The production environment is now selected first and its statuses resolved first, with the remaining budget covering other environments",
+          "Environment matching used exact names, so a platform-labelled environment like \"Production — my-app\" was skipped in favour of a bare, stale \"Production\". Matching is now word-boundary based, and within a tier the busiest environment wins. Word boundaries also stop \"main\" matching names like \"domain-staging\"",
+          "Deploy frequency reported 0.00 when no production status could be resolved. 0.00 asserts that a team ships nothing; the honest answer when statuses are unknown is that we cannot say, so it now returns null like the change failure rate and MTTR already did",
+        ],
+        improved: [
+          "The partial-sample note now explains that production is resolved first, so headline figures are complete even when other environments are sampled",
+        ],
+      },
+    },
+    {
+      version: "4.2.3",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3620,7 +3653,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.3"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.5"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3871,7 +3904,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.3"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.5"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

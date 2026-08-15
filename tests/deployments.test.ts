@@ -246,3 +246,86 @@ describe("getDeploymentsSummary — resilience", () => {
     expect(r.change_failure_rate_pct).toBeNull();
   });
 });
+
+// ── Regression: headline environment starved of status lookups (v4.2.4) ───────
+
+describe("getDeploymentsSummary — environment selection and status budget", () => {
+  it("prefers a platform-suffixed production environment over a bare stale one", async () => {
+    // Vercel-style naming. Exact-match selection picked the bare "Production"
+    // (11 deploys) over the environment actually in use (14).
+    listDeployments.mockResolvedValue({
+      data: [
+        ...Array.from({ length: 14 }, (_, i) => dep(100 + i, "Production — gitdash", daysAgo(1))),
+        ...Array.from({ length: 11 }, (_, i) => dep(200 + i, "Production", daysAgo(20))),
+        ...Array.from({ length: 17 }, (_, i) => dep(300 + i, "Preview — gitdash", daysAgo(1))),
+      ],
+    });
+    statusMap({});
+    expect((await run()).production_environment).toBe("Production — gitdash");
+  });
+
+  it("does not match 'main' inside an unrelated environment name", async () => {
+    listDeployments.mockResolvedValue({
+      data: [
+        dep(1, "domain-staging", daysAgo(1)),
+        dep(2, "domain-staging", daysAgo(2)),
+        dep(3, "qa", daysAgo(3)),
+      ],
+    });
+    statusMap({});
+    // Word-boundary matching: "domain-staging" must not be read as production.
+    // With no production-ish name at all, the busiest environment wins.
+    expect((await run()).production_environment).toBe("domain-staging");
+  });
+
+  it("resolves production statuses even when it exceeds the lookup budget overall", async () => {
+    // The reported bug: 75 deployments in window, only 40 statuses resolved,
+    // and none of them belonged to the chosen production environment — so
+    // every headline figure came back empty on a repo that deploys constantly.
+    const preview = Array.from({ length: 60 }, (_, i) => dep(1000 + i, "Preview — app", daysAgo(1)));
+    const production = Array.from({ length: 15 }, (_, i) => dep(2000 + i, "Production — app", daysAgo(2)));
+    // Newest-first ordering puts all the preview noise ahead of production.
+    listDeployments.mockResolvedValue({ data: [...preview, ...production] });
+
+    const statuses: Record<number, { state: string; at: string }> = {};
+    for (const d of preview) statuses[d.id] = { state: "success", at: daysAgo(1) };
+    for (const d of production) statuses[d.id] = { state: "success", at: daysAgo(2) };
+    statusMap(statuses);
+
+    const r = await run(30);
+    expect(r.production_environment).toBe("Production — app");
+    // Production must have real numbers rather than a starved zero.
+    expect(r.deploys_per_day).not.toBeNull();
+    expect(r.deploys_per_day).toBeGreaterThan(0);
+    expect(r.change_failure_rate_pct).toBe(0); // measured, not absent
+  });
+
+  it("reports a null deploy rate rather than 0.00 when production has no conclusive status", async () => {
+    // 0.00 asserts "this team ships nothing". The honest answer when statuses
+    // are unknown is that we cannot say.
+    listDeployments.mockResolvedValue({ data: [dep(1, "production", daysAgo(1))] });
+    statusMap({ 1: { state: "pending", at: daysAgo(1) } });
+
+    const r = await run();
+    expect(r.deploys_per_day).toBeNull();
+    expect(r.change_failure_rate_pct).toBeNull();
+  });
+
+  it("still fills other environments from the remaining budget", async () => {
+    listDeployments.mockResolvedValue({
+      data: [
+        dep(1, "Production — app", daysAgo(1)),
+        dep(2, "Preview — app", daysAgo(1)),
+        dep(3, "Preview — app", daysAgo(2)),
+      ],
+    });
+    statusMap({
+      1: { state: "success", at: daysAgo(1) },
+      2: { state: "failure", at: daysAgo(1) },
+      3: { state: "success", at: daysAgo(2) },
+    });
+    const r = await run();
+    const preview = r.by_environment.find((e) => e.environment === "Preview — app")!;
+    expect(preview.failure_rate_pct).toBe(50);
+  });
+});

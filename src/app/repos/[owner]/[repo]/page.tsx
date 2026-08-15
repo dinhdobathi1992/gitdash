@@ -14,10 +14,11 @@ import { DoraKpiCards, DoraKpiSkeleton } from "@/components/DoraKpiCards";
 import PartialDataBadge from "@/components/PartialDataBadge";
 import AiInsightsCard from "@/components/AiInsightsCard";
 import DeploymentsPanel from "@/components/DeploymentsPanel";
+import CollapsibleSection from "@/components/CollapsibleSection";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
-  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck, CircleDot,
+  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck, CircleDot, BarChart3,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
@@ -466,18 +467,20 @@ export default function RepoDetailPage() {
                   <PartialDataBadge fetched={dora.fetched_prs} total={dora.total_prs_attempted} unit="PRs" />
                 )}
                 <DoraKpiCards data={dora} />
-                <button
-                  onClick={() => setShowDrillDown(v => !v)}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
+                <CollapsibleSection
+                  icon={BarChart3}
+                  tone="violet"
+                  title="DORA drill-down"
+                  subtitle="Cycle time breakdown, PR size vs velocity, throughput and workflow stability — what the four numbers above are made of"
+                  open={showDrillDown}
+                  onToggle={() => setShowDrillDown(v => !v)}
                 >
-                  <ChevronRight
-                    className={cn("w-3.5 h-3.5 transition-transform", showDrillDown && "rotate-90")}
-                  />
-                  {showDrillDown ? "Hide" : "Show"} drill-down charts
-                </button>
-                {showDrillDown && overview && (
-                  <DoraDrillDown dora={dora} overview={overview} />
-                )}
+                  {overview ? (
+                    <DoraDrillDown dora={dora} overview={overview} />
+                  ) : (
+                    <p className="text-xs text-slate-500">Workflow data is still loading.</p>
+                  )}
+                </CollapsibleSection>
               </div>
             ) : null
           ) : (
@@ -494,24 +497,22 @@ export default function RepoDetailPage() {
 
           {/* PR Lifecycle Extension */}
           {flags.prLifecycle ? (
-            <div>
-              <button
-                onClick={() => setShowPrLifecycle(v => !v)}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-300 transition-colors"
-              >
-                <ChevronRight
-                  className={cn("w-3.5 h-3.5 transition-transform", showPrLifecycle && "rotate-90")}
-                />
-                {showPrLifecycle ? "Hide" : "Show"} PR lifecycle analytics
-              </button>
-              {showPrLifecycle && (
-                prHealthLoading ? (
-                  <PrLifecycleInlineSkeleton />
-                ) : prHealth ? (
-                  <div className="mt-3"><PrLifecycleExtension data={prHealth} /></div>
-                ) : null
+            <CollapsibleSection
+              icon={GitBranch}
+              tone="cyan"
+              title="PR Lifecycle Analytics"
+              subtitle="Open PR health, review response times, abandon rate and age distribution"
+              open={showPrLifecycle}
+              onToggle={() => setShowPrLifecycle(v => !v)}
+            >
+              {prHealthLoading ? (
+                <PrLifecycleInlineSkeleton />
+              ) : prHealth ? (
+                <PrLifecycleExtension data={prHealth} />
+              ) : (
+                <p className="text-xs text-slate-500">PR lifecycle data is unavailable.</p>
               )}
-            </div>
+            </CollapsibleSection>
           ) : null}
 
           {/* Duration chart */}

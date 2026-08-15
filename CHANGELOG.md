@@ -6,6 +6,82 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.5] — 2026-08-15
+
+### Overview
+UI consistency and control, both reported directly after v4.2.4.
+
+### Added
+
+#### Selectable deployment environment
+- The environment driving the headline figures is now chosen by clicking any row under **By environment**, rather than being picked automatically.
+- Auto-detection can only ever *guess* when a repository deploys to several production targets — this repo deploys to two, so no heuristic gets it right for everyone. Letting the user choose beats guessing better.
+- The choice is **remembered per repository**, and falls back to auto-detection if the saved environment no longer appears in the window.
+- Every environment now carries its own `deploys_per_day`, `failure_rate_pct`, `mttr_hours` and `mttr_samples`, so switching is instant with no refetch, and environments can be compared directly.
+- The header states which environment is in use and whether it was auto-detected or chosen.
+
+### Fixed
+
+#### Collapsible headers were inconsistent across the app
+- The polished card header built for Team Analytics in v4.0.11 was left as a **local function in that one page**. Every other collapsible kept its original bare `› Show …` text toggle.
+- The inconsistency became obvious once v4.2.1 put a fully-styled Deployments card directly beneath a plain text link on the repository overview.
+- Extracted to `src/components/CollapsibleSection.tsx` and applied to the **DORA drill-down** and **PR Lifecycle** sections. Team Analytics now imports the shared component instead of its private copy, so the six sections there are unchanged but no longer duplicated.
+
+### Changed
+- Environment selection uses a lazy `useState` initialiser rather than an effect: React 19 forbids `setState` inside an effect, and there is no hydration risk because the environment list only renders once client-side data has arrived.
+
+### Verified
+- 332 tests passing, `tsc` clean, `eslint` **0 problems**, build succeeds.
+
+### Rollback
+1. **Promote the v4.2.4 Vercel deployment** — instant.
+2. **`git revert`** — presentational plus one additive API field; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.4 to 4.2.5
+- Bumped Helm chart version from 0.6.4 to 0.6.5
+
+---
+
+## [4.2.4] — 2026-08-15
+
+### Overview
+Bug fix reported immediately after v4.2.3: a repository with 75 deployments in the window showed **0.00 deploys/day**, a null change failure rate, and a null MTTR — while the per-environment table below it clearly showed active deployments with real failure rates.
+
+Three distinct defects, all in v4.2.1's deployment metrics.
+
+### Fixed
+
+#### 1. The headline environment could be starved of status lookups
+- Status is one API call per deployment, so lookups are capped at 40. That cap was applied to **the most recent 40 deployments overall**.
+- On a repo busy enough to exceed it, none of those 40 necessarily belonged to the chosen production environment — leaving `prodConclusive = 0` and every headline figure empty on a repo that deploys constantly. The reported numbers gave it away exactly: 34 ok + 6 failed = 40, the cap.
+- The production environment is now **selected before statuses are fetched**, its deployments resolved first, and the remaining budget spent on other environments so their per-environment rates still populate.
+
+#### 2. Environment matching was exact, so platform-labelled environments were missed
+- Names were compared with equality against `production`/`prod`/`live`/`main`. Platforms label environments things like **"Production — my-app"**, which never matched — so a bare, stale `Production` with fewer deployments was chosen over the environment actually in use.
+- Matching is now **word-boundary based**, and within a matching tier the **busiest environment wins**, since a repo deploying to several production targets should report the one it actually uses.
+- Word boundaries also prevent `main` matching unrelated names such as `domain-staging`.
+
+#### 3. Deploy frequency reported 0.00 instead of null
+- With no conclusive production status, frequency was computed as `0 / periodDays` and rendered as **0.00 deploys/day** — an assertion that the team ships nothing.
+- It now returns **null**, consistent with the change failure rate and MTTR, which already made this distinction. This is the same principle v4.2.1 was built on; the frequency path simply missed it.
+
+### Changed
+- The partial-sample note now explains that production is resolved first, so headline figures are complete even when other environments are sampled.
+
+### Verified
+- Test count 327 → 332. The regression test reproduces the reported shape directly: 60 preview + 15 production deployments against a 40-lookup budget, asserting production still resolves to real figures rather than a starved zero.
+
+### Rollback
+1. **Promote the v4.2.3 Vercel deployment** — instant.
+2. **`git revert`** — one library file, one UI string; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.3 to 4.2.4
+- Bumped Helm chart version from 0.6.3 to 0.6.4
+
+---
+
 ## [4.2.3] — 2026-08-15
 
 ### Overview

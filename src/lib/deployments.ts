@@ -49,6 +49,15 @@ export interface EnvironmentStat {
   failed: number;
   /** Null when nothing conclusive was recorded for this environment. */
   failure_rate_pct: number | null;
+  /**
+   * Full headline metrics per environment (v4.2.5), so the UI can let the
+   * user pick which environment drives the summary without another request.
+   * Auto-detection can only ever guess when a repo deploys to several
+   * production targets; letting them choose beats guessing better.
+   */
+  deploys_per_day: number | null;
+  mttr_hours: number | null;
+  mttr_samples: number;
 }
 
 export interface DeploymentsSummary {
@@ -79,23 +88,46 @@ const MAX_STATUS_LOOKUPS = 40;
 const MAX_RECENT_RETURNED = 15;
 const DEFAULT_PERIOD_DAYS = 30;
 
-/** Names teams actually use for production, in preference order. */
-const PRODUCTION_NAMES = ["production", "prod", "live", "main"];
+/**
+ * Production-ish environment names, in preference order.
+ *
+ * Word-boundary matching rather than equality: platforms label environments
+ * things like "Production — my-app", so an exact-match check finds only the
+ * bare name and misses the one actually being deployed to. Word boundaries
+ * also stop "main" matching "domain-staging".
+ */
+const PRODUCTION_PATTERNS = [/\bproduction\b/i, /\bprod\b/i, /\blive\b/i, /\bmain\b/i];
 
-function pickProductionEnvironment(records: DeploymentRecord[]): string | null {
-  if (records.length === 0) return null;
-
+function countByEnvironment(deployments: { environment: string }[]): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const r of records) counts.set(r.environment, (counts.get(r.environment) ?? 0) + 1);
+  for (const d of deployments) counts.set(d.environment, (counts.get(d.environment) ?? 0) + 1);
+  return counts;
+}
 
-  for (const name of PRODUCTION_NAMES) {
-    for (const env of counts.keys()) {
-      if (env.toLowerCase() === name) return env;
-    }
+/**
+ * Choose the environment whose figures become the headline.
+ *
+ * Runs against the raw deployment list — before statuses are fetched — so
+ * status resolution can be aimed at whatever this returns. Picking first and
+ * resolving second is what stops the headline environment ending up with no
+ * data (see the note on MAX_STATUS_LOOKUPS).
+ *
+ * Within a matching tier the busiest environment wins: a repo that deploys to
+ * several production targets should report the one it actually uses most,
+ * not whichever happens to sort first.
+ */
+function pickProductionEnvironment(deployments: { environment: string }[]): string | null {
+  if (deployments.length === 0) return null;
+  const counts = countByEnvironment(deployments);
+  const byVolume = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+
+  for (const pattern of PRODUCTION_PATTERNS) {
+    const matches = byVolume.filter(([env]) => pattern.test(env));
+    if (matches.length > 0) return matches[0][0];
   }
-  // No conventional name — fall back to the busiest environment, which is
-  // very nearly always the one that matters.
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  // No conventional name — the busiest environment is very nearly always the
+  // one that matters.
+  return byVolume[0][0];
 }
 
 const isSuccess = (r: DeploymentRecord) => r.state === "success";
@@ -176,9 +208,21 @@ export async function getDeploymentsSummary(
   const inWindow = deployments.filter((d) => new Date(d.created_at).getTime() >= cutoff);
   if (inWindow.length === 0) return empty;
 
-  // Statuses are one request per deployment, so only the newest slice is
-  // resolved. Everything older still counts toward volume.
-  const toResolve = inWindow.slice(0, MAX_STATUS_LOOKUPS);
+  // Decide the headline environment BEFORE resolving statuses, so the budget
+  // can be aimed at it.
+  //
+  // The original version resolved "the 40 most recent deployments overall",
+  // which broke on any repo busy enough to exceed that in the window: if none
+  // of production's deployments landed in that slice, every headline figure
+  // came back empty — 0.00 deploys/day on a repo that deploys constantly.
+  // Production is filled first, then the remaining budget covers other
+  // environments so their per-environment rates still populate.
+  const productionEnvironment = pickProductionEnvironment(inWindow);
+  const isProd = (d: { environment: string }) => d.environment === productionEnvironment;
+  const toResolve = [
+    ...inWindow.filter(isProd),
+    ...inWindow.filter((d) => !isProd(d)),
+  ].slice(0, MAX_STATUS_LOOKUPS);
   const settled = await pLimitSettled(
     toResolve.map((d) => async () => {
       const { data } = await octokit.rest.repos.listDeploymentStatuses({
@@ -215,7 +259,6 @@ export async function getDeploymentsSummary(
     };
   });
 
-  const productionEnvironment = pickProductionEnvironment(records);
   const production = records.filter((r) => r.environment === productionEnvironment);
 
   const prodSuccess = production.filter(isSuccess).length;
@@ -225,7 +268,8 @@ export async function getDeploymentsSummary(
   const byEnvironment = new Map<string, EnvironmentStat>();
   for (const r of records) {
     const stat = byEnvironment.get(r.environment) ?? {
-      environment: r.environment, total: 0, success: 0, failed: 0, failure_rate_pct: null,
+      environment: r.environment, total: 0, success: 0, failed: 0,
+      failure_rate_pct: null, deploys_per_day: null, mttr_hours: null, mttr_samples: 0,
     };
     stat.total++;
     if (isSuccess(r)) stat.success++;
@@ -235,6 +279,13 @@ export async function getDeploymentsSummary(
   for (const stat of byEnvironment.values()) {
     const conclusive = stat.success + stat.failed;
     stat.failure_rate_pct = conclusive > 0 ? Math.round((stat.failed / conclusive) * 100) : null;
+    // Same null-not-zero rule as the headline: an unresolved environment must
+    // not claim a deploy rate of nothing.
+    stat.deploys_per_day =
+      conclusive > 0 ? Math.round((stat.success / periodDays) * 100) / 100 : null;
+    const envMttr = computeMttr(records.filter((r) => r.environment === stat.environment));
+    stat.mttr_hours = envMttr.hours;
+    stat.mttr_samples = envMttr.samples;
   }
 
   const { hours: mttrHours, samples: mttrSamples } = computeMttr(production);
@@ -249,7 +300,13 @@ export async function getDeploymentsSummary(
     failed: records.filter(isFailure).length,
     // Frequency counts SUCCESSFUL production deploys: a failed rollout is not
     // a delivery, and counting it would flatter the number.
-    deploys_per_day: Math.round((prodSuccess / periodDays) * 100) / 100,
+    //
+    // Null — not 0.00 — when nothing conclusive was resolved for production.
+    // "0.00 deploys/day" is an assertion that the team ships nothing; the
+    // truthful statement when statuses are unknown is that we cannot say.
+    // This is the same reasoning already applied to CFR and MTTR below.
+    deploys_per_day:
+      prodConclusive > 0 ? Math.round((prodSuccess / periodDays) * 100) / 100 : null,
     change_failure_rate_pct:
       prodConclusive > 0 ? Math.round((prodFailed / prodConclusive) * 100) : null,
     mttr_hours: mttrHours,
