@@ -2998,9 +2998,26 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.2",
+      version: "4.2.3",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Command palette on ⌘K (Ctrl+K on Windows) — jump to any repository or page from anywhere. Repo-scoped destinations like Team, Issues and Security appear only while you are inside a repository, since they are meaningless without knowing which one",
+          "Fuzzy matching over both the repository name and owner/name, so \"acme/api\" finds what you expect. The repository list is fetched lazily on first open and shares its SWR key with the repositories page, so it costs nothing when that data is already cached",
+        ],
+        fixed: [],
+        improved: [
+          "All 11 outstanding lint warnings resolved — the codebase is now completely clean. Worth stating what they were NOT: every one was an authentication transition (sign-out, PAT change, session expiry, first login) where a full page reload is deliberate, because it discards the SWR cache populated under the old token",
+          "Converting those to router.push() would have been a regression: the previous session's cached data would remain in memory and could render after sign-out. They are now documented in place with the reason, rather than silently suppressed or wrongly \"fixed\"",
+        ],
+      },
+    },
+    {
+      version: "4.2.2",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3603,7 +3620,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.2"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.3"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3854,7 +3871,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.2"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.3"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

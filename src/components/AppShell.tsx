@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
+import CommandPalette from "@/components/CommandPalette";
 
 const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo"];
 
@@ -18,6 +19,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     // `items-stretch` makes all direct flex children fill the full row height
     <div className="flex items-stretch min-h-screen bg-[#0f1117]">
+
+      {/* Global ⌘K. Rendered inside the shell so it is absent from the
+          full-page auth routes, where there is nothing to navigate to. */}
+      <Suspense fallback={null}>
+        <CommandPalette />
+      </Suspense>
+
 
       {/* Desktop sidebar — sticky, full viewport height, scrolls internally */}
       <div className="hidden md:block md:w-60 shrink-0 bg-[#0d1117] border-r border-slate-800">

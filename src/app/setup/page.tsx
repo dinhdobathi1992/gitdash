@@ -25,6 +25,9 @@ export default function SetupPage() {
         setError(data.error ?? "Something went wrong. Try again.");
         return;
       }
+      // A session was just created; a hard load ensures every subsequent fetch
+      // runs with the new token rather than replaying pre-auth cache.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/";
     } catch {
       setError("Network error — could not reach the server.");

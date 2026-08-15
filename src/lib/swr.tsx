@@ -52,6 +52,9 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
             typeof window !== "undefined" &&
             !["/login", "/setup", "/docs"].includes(window.location.pathname)
           ) {
+            // The session expired. A hard reload drops the stale cache rather than
+            // carrying it into the re-authenticated session.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.href = "/";
           }
         },

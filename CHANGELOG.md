@@ -6,6 +6,46 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.3] — 2026-08-15
+
+### Overview
+Last of the four features from the gap review. A command palette, and a correction: the 11 standing lint warnings were **not** the bug I assumed they were.
+
+### Added
+
+#### Command palette — ⌘K / Ctrl+K
+- Jump to any repository or page from anywhere. GitDash has ~20 pages and, in a real org, hundreds of repositories; navigation was a sidebar plus page-local search, so reaching a specific repo took several clicks from anywhere that wasn't the repo list.
+- Fuzzy matching over both the repository name and `owner/name`, so `acme/api` finds what you expect. Reuses the existing `fuzzyMatch` helper and its highlight rendering.
+- **Repo-scoped destinations** (Overview, Team, Issues, Security, Audit) appear only while you are inside a repository — "Security" is meaningless without knowing which repo it belongs to.
+- The repository list is fetched **lazily on first open** and shares its SWR key with the repositories page, so the palette costs nothing when that data is already cached and warms it for the page when it isn't.
+- Mounted inside the app shell, so it is absent from `/login`, `/setup` and `/demo`, where there is nothing to navigate to.
+- Documented in the existing keyboard-shortcuts modal.
+
+### Fixed
+
+#### All 11 lint warnings resolved — the codebase is now completely clean
+Worth recording what these were **not**. Every one was flagged by
+`@next/next/no-location-assign-relative-destination`, and the obvious "fix" would have been to swap `window.location.href` for `router.push()`.
+
+That would have been a **regression**. All 11 sites are authentication-state transitions — sign-out, PAT change, session expiry, first login — where a full page reload is the point: it discards the SWR cache populated under the old or now-invalid token. Using client-side navigation would leave the previous session's cached data in memory, able to render after sign-out.
+
+They are now documented in place with the specific reason at each site, rather than silently suppressed or wrongly "corrected". Behaviour is unchanged; only the explanation is new.
+
+(`src/lib/demo.ts` also reads `window.location.href`, but to parse a URL rather than to navigate — never a warning, and untouched.)
+
+### Verified
+- 327 tests still passing, `tsc` clean, **`eslint` reports 0 problems** for the first time in this series, build succeeds.
+
+### Rollback
+1. **Promote the v4.2.2 Vercel deployment** — instant.
+2. **`git revert`** — the palette is additive and the lint changes are comments only; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.2 to 4.2.3
+- Bumped Helm chart version from 0.6.2 to 0.6.3
+
+---
+
 ## [4.2.2] — 2026-08-15
 
 ### Overview
