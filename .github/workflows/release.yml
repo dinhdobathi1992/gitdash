@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (semver, e.g. 2.1.0)"
+        description: "Release version — 4.2.5 or v4.2.5 (leading v is stripped)"
         required: true
         type: string
       prerelease:
@@ -33,23 +33,65 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate semver input
+      - name: Validate and normalise version
         id: validate
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          RAW="${{ github.event.inputs.version }}"
+          # Accept both "4.2.5" and "v4.2.5" — typing the tag form is the
+          # natural mistake, and failing on it wastes a run for no reason.
+          VERSION="${RAW#v}"
+
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
-            echo "ERROR: '$VERSION' is not a valid semver (expected e.g. 2.1.0 or 2.1.0-beta.1)"
+            echo "::error::'$RAW' is not a valid semver. Expected 4.2.5 or v4.2.5 (pre-release suffixes allowed)."
             exit 1
           fi
+
           TAG="v${VERSION}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "ERROR: Tag '$TAG' already exists."
+            echo "::error::Tag '$TAG' already exists."
             exit 1
           fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
+
+      # Versions are bumped in the feature PR (package.json, Helm chart, docs
+      # and CHANGELOG all move together), so by the time this runs the repo is
+      # normally already at the target version. This step therefore VERIFIES
+      # rather than assumes, and only bumps when something is genuinely behind.
+      #
+      # A mismatch between the Helm chart and package.json is a release bug
+      # worth stopping for: it ships a chart claiming the wrong appVersion.
+      - name: Verify version consistency
+        id: consistency
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+          PKG=$(node -p "require('./package.json').version")
+          CHART_APP=$(grep -E '^appVersion:' helm/gitdash/Chart.yaml | sed 's/appVersion:[[:space:]]*//; s/"//g')
+
+          echo "requested=$VERSION  package.json=$PKG  chart appVersion=$CHART_APP"
+
+          if [ "$CHART_APP" != "$VERSION" ]; then
+            echo "::error::helm/gitdash/Chart.yaml appVersion is '$CHART_APP' but the release is '$VERSION'. Bump it in the PR before releasing."
+            exit 1
+          fi
+
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${VERSION}]' section. Add release notes before releasing."
+            exit 1
+          fi
+
+          if [ "$PKG" = "$VERSION" ]; then
+            echo "needs_bump=false" >> "$GITHUB_OUTPUT"
+            echo "package.json already at $VERSION — nothing to bump."
+          else
+            echo "needs_bump=true" >> "$GITHUB_OUTPUT"
+            echo "package.json at $PKG — will bump to $VERSION."
+          fi
 
       - name: Bump package.json version
+        if: steps.consistency.outputs.needs_bump == 'true'
         run: |
           VERSION="${{ steps.validate.outputs.version }}"
           node -e "
@@ -64,13 +106,11 @@ jobs:
         id: notes
         run: |
           VERSION="${{ steps.validate.outputs.version }}"
-          # Extract the section for this version: from "## [VERSION]" to the next "## ["
+          # Section for this version: from "## [VERSION]" to the next "## [".
           NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
           if [ -z "$NOTES" ]; then
-            echo "WARNING: No CHANGELOG entry found for version $VERSION — using generic message."
             NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details."
           fi
-          # Write to a temp file to avoid issues with special chars in GITHUB_OUTPUT
           echo "$NOTES" > /tmp/release_notes.md
           {
             echo "notes<<RELEASE_NOTES_EOF"
@@ -79,21 +119,37 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure git
+        if: steps.consistency.outputs.needs_bump == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Commit version bump
+        if: steps.consistency.outputs.needs_bump == 'true'
         run: |
           TAG="${{ steps.validate.outputs.tag }}"
           git add package.json
-          git commit -m "chore: release ${TAG}"
+          # Guard anyway: `git commit` exits non-zero on an empty index, which
+          # would fail the release for the least interesting possible reason.
+          if git diff --cached --quiet; then
+            echo "Nothing staged — skipping commit."
+          else
+            git commit -m "chore: release ${TAG}"
+          fi
 
       - name: Create and push tag
         run: |
           TAG="${{ steps.validate.outputs.tag }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Release ${TAG}"
-          git push origin HEAD:main "$TAG"
+          # Push the branch only when this run actually created a commit;
+          # otherwise HEAD already matches origin/main and the tag is enough.
+          if [ "${{ steps.consistency.outputs.needs_bump }}" = "true" ]; then
+            git push origin HEAD:main "$TAG"
+          else
+            git push origin "$TAG"
+          fi
 
   # ── 2. CI gate (lint + typecheck + build) ────────────────────────────────────
   ci:
