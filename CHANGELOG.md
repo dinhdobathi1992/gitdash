@@ -6,6 +6,58 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.1] — 2026-08-15
+
+### Overview
+The DORA figures on the repository overview were **inferred from naming conventions, not measured**. This adds real delivery metrics from GitHub's Deployments API — and, just as importantly, makes the app state which of the two you are looking at.
+
+### The problem
+
+| Metric | Previous derivation | How it failed |
+| --- | --- | --- |
+| Deploy frequency | GitHub Releases → **falls back to every merged PR** | A team that doesn't tag releases had its *merge rate* reported as its deploy rate |
+| Change failure rate | PRs whose branch matches `/hotfix\|revert\|fix-prod\|emergency/` | A team that doesn't use those names got **exactly 0%** — which reads as excellence, not as no signal |
+| MTTR | How long those PRs took to merge | Same fragility, plus it measured *merge speed*, not recovery |
+
+These are reasonable proxies. The danger is that they fail **quietly and flatteringly**.
+
+### Added
+
+#### Deployments panel (`/repos/[owner]/[repo]`)
+- Real deploy frequency, change failure rate and MTTR from GitHub's Deployments API, with a per-environment breakdown and recent rollout history.
+- Production environment is detected by convention (`production`, `prod`, `live`, `main`), falling back to the busiest environment.
+- New `GET /api/github/deployments`, cached 10 minutes.
+
+### Changed
+
+#### Provenance is now explicit
+- Measured figures **never silently replace** estimated ones. The response carries `source`, and the panel is labelled **Measured** when real deployments exist.
+- When a repo has no deployments, the panel *explains what the DORA cards above actually represent* rather than hiding. Knowing whether a number was measured or inferred matters more than the number.
+- The DORA metrics reference now documents both definitions side by side.
+
+#### Definitions that avoid flattering the numbers
+- **Only successful production deploys** count toward frequency — a failed rollout is not a delivery.
+- Pending and in-progress deploys are excluded from the failure rate entirely; a rate with nothing conclusive returns **null rather than 0%**.
+- MTTR measures from the **first failure of a streak** to the next success, because recovery starts when things broke, not at the last symptom before the fix.
+- A deployment with no status is treated as inconclusive, never as a failure.
+- MTTR built from a single recovery is labelled as an anecdote in the UI rather than presented as a trend.
+
+### Cost
+- One call to list deployments, then status lookups for the 40 most recent (concurrency 8) — bounded, and `partial` is set when the sample was truncated or a lookup failed.
+
+### Verified
+- Test count 291 → 308, covering provenance, production-environment selection, rate exclusions, streak-aware MTTR, unrecovered failures, and partial-sample resilience.
+
+### Rollback
+1. **Promote the v4.2.0 Vercel deployment** — instant.
+2. **`git revert`** — the panel is additive and the existing DORA calculation is untouched; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.0 to 4.2.1
+- Bumped Helm chart version from 0.6.0 to 0.6.1
+
+---
+
 ## [4.2.0] — 2026-08-15
 
 ### Overview
