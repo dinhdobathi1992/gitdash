@@ -17,7 +17,7 @@ import DeploymentsPanel from "@/components/DeploymentsPanel";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
-  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck,
+  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck, CircleDot,
 } from "lucide-react";
 import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
@@ -405,6 +405,12 @@ export default function RepoDetailPage() {
             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
           >
             <Users className="w-3.5 h-3.5" /> Team
+          </Link>
+          <Link
+            href={`/repos/${owner}/${repo}/issues`}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+          >
+            <CircleDot className="w-3.5 h-3.5" /> Issues
           </Link>
           <Link
             href={`/repos/${owner}/${repo}/security`}
