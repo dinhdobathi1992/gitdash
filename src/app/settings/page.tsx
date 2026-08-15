@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import EmailSettingsCard from "@/components/EmailSettingsCard";
+import AiProviderCard from "@/components/AiProviderCard";
 import { Breadcrumb } from "@/components/Sidebar";
 import type { FeatureFlags } from "@/lib/feature-flags";
 import {
@@ -271,6 +272,9 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* ── AI provider (organization mode only) ─────────────────────── */}
+      <AiProviderCard />
 
       {/* ── Email delivery ───────────────────────────────────────────── */}
       <EmailSettingsCard />

@@ -24,6 +24,10 @@
  * keep this release free of schema changes (see docs/specs, §6.2).
  */
 
+import { unseal } from "./secret-box";
+import { withCache, cacheDelete } from "./cache";
+import { isStandaloneMode } from "./mode";
+
 export type AiProvider = "bailian" | "gemini" | "qwen";
 
 /**
@@ -121,15 +125,89 @@ function isDisabled(): boolean {
   return process.env.AI_DISABLED === "true";
 }
 
-/** Providers with a key present, in attempt order. Never returns key material. */
-export function configuredProviders(): AiProvider[] {
+// ── Organization-mode provider override (v4.1.5) ──────────────────────────────
+
+export interface AiOverride {
+  provider: AiProvider;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
+}
+
+const OVERRIDE_CACHE_KEY = "ai-provider:settings";
+const OVERRIDE_CACHE_TTL = 30; // seconds
+
+/**
+ * Resolve an instance-configured provider, when one applies.
+ *
+ * Only ever consulted in **organization** mode. A standalone deployment is
+ * meant to work out of the box from environment defaults, so it never touches
+ * the database here — that is the whole shape of the feature.
+ *
+ * The db import is dynamic to keep this module free of a static dependency on
+ * the database layer, and because nothing should query on a request that will
+ * not make an AI call anyway.
+ */
+export async function resolveAiOverride(): Promise<AiOverride | null> {
+  if (isDisabled()) return null;
+  if (isStandaloneMode()) return null;
+
+  return withCache<AiOverride | null>(OVERRIDE_CACHE_KEY, OVERRIDE_CACHE_TTL, async () => {
+    try {
+      const { getAiSettings } = await import("./db");
+      const s = await getAiSettings();
+      if (!s || !s.enabled || !s.api_key_sealed) return null;
+
+      const apiKey = unseal(s.api_key_sealed);
+      if (!apiKey) {
+        console.error(
+          "[ai] Stored provider key could not be decrypted — re-enter it in Settings.",
+        );
+        return null;
+      }
+
+      const cfg = PROVIDERS.find((p) => p.name === s.provider);
+      if (!cfg) return null;
+
+      return {
+        provider: s.provider,
+        model: s.model || cfg.defaultModel,
+        apiKey,
+        baseUrl: (s.base_url || cfg.defaultBase).replace(/\/+$/, ""),
+      };
+    } catch {
+      // No DATABASE_URL or table unreachable — environment defaults apply.
+      return null;
+    }
+  });
+}
+
+/** Drop the cached override after a Settings save. */
+export function invalidateAiOverrideCache(): void {
+  cacheDelete(OVERRIDE_CACHE_KEY);
+}
+
+/** Providers with a key in the environment. Never returns key material. */
+export function envProviders(): AiProvider[] {
   return PROVIDERS.filter((p) => Boolean(process.env[p.keyEnv])).map((p) => p.name);
 }
 
-/** True when the layer is not hard-disabled and at least one provider has a key. */
-export function aiEnabled(): boolean {
+/**
+ * Providers actually available right now, accounting for an org-mode override.
+ * Never returns key material.
+ */
+export async function configuredProviders(): Promise<AiProvider[]> {
+  if (isDisabled()) return [];
+  const override = await resolveAiOverride();
+  if (override) return [override.provider];
+  return envProviders();
+}
+
+/** True when the layer is not hard-disabled and some provider is usable. */
+export async function aiEnabled(): Promise<boolean> {
   if (isDisabled()) return false;
-  return configuredProviders().length > 0;
+  if (await resolveAiOverride()) return true;
+  return envProviders().length > 0;
 }
 
 // ── Daily token budget ────────────────────────────────────────────────────────
@@ -279,11 +357,19 @@ async function callProvider(
   cfg: ProviderConfig,
   systemPrompt: string,
   userPayload: unknown,
-  opts: { temperature: number; maxOutputTokens: number; timeoutMs: number },
+  opts: {
+    temperature: number;
+    maxOutputTokens: number;
+    timeoutMs: number;
+    /** Set when an organization has configured its own provider in Settings. */
+    override?: AiOverride;
+  },
 ): Promise<AttemptOutcome> {
-  const key = process.env[cfg.keyEnv]!;
-  const baseUrl = (process.env[cfg.baseEnv] || cfg.defaultBase).replace(/\/+$/, "");
-  const model = process.env[cfg.modelEnv] || cfg.defaultModel;
+  const key = opts.override?.apiKey ?? process.env[cfg.keyEnv]!;
+  const baseUrl = (
+    opts.override?.baseUrl ?? process.env[cfg.baseEnv] ?? cfg.defaultBase
+  ).replace(/\/+$/, "");
+  const model = opts.override?.model ?? process.env[cfg.modelEnv] ?? cfg.defaultModel;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -370,7 +456,15 @@ export async function generateJson(
     return { ok: false, reason: "disabled", error: "AI layer is disabled by AI_DISABLED" };
   }
 
-  const available = PROVIDERS.filter((p) => Boolean(process.env[p.keyEnv]));
+  // An organization-configured provider takes over EXCLUSIVELY — it is never
+  // used as a first attempt with the instance's own keys behind it. Falling
+  // back would silently bill the deployment owner for an org's traffic, which
+  // is a surprise nobody wants to discover on an invoice.
+  const override = await resolveAiOverride();
+  const available = override
+    ? PROVIDERS.filter((p) => p.name === override.provider)
+    : PROVIDERS.filter((p) => Boolean(process.env[p.keyEnv]));
+
   if (available.length === 0) {
     return { ok: false, reason: "no_keys", error: "No AI provider key is configured" };
   }
@@ -400,6 +494,7 @@ export async function generateJson(
       temperature,
       maxOutputTokens,
       timeoutMs: Math.min(perAttemptMs, remaining),
+      override: override ?? undefined,
     });
 
     if (attempt.kind === "success") return attempt.result!;
@@ -413,6 +508,7 @@ export async function generateJson(
           temperature,
           maxOutputTokens,
           timeoutMs: Math.min(perAttemptMs, deadline - Date.now()),
+          override: override ?? undefined,
         });
         if (retry.kind === "success") return retry.result!;
         lastError = retry.error;

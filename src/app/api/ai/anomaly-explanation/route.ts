@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     return NextResponse.json(
       { ok: false, error: "AI features are not configured" },
       { status: 503 },

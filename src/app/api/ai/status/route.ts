@@ -25,8 +25,8 @@ export async function GET() {
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body: AiStatusResponse = {
-    enabled: aiEnabled(),
-    providers: configuredProviders(),
+    enabled: await aiEnabled(),
+    providers: await configuredProviders(),
   };
 
   return NextResponse.json(body, {

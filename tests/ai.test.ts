@@ -6,8 +6,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
  * the network.
  */
 
+const getAiSettings = vi.fn();
+vi.mock("@/lib/db", () => ({ getAiSettings: () => getAiSettings() }));
+
+async function sealValue(v: string) {
+  const { seal } = await import("@/lib/secret-box");
+  return seal(v);
+}
+
 const AI_ENV = [
   "AI_DISABLED",
+  "MODE",
+  "SESSION_SECRET",
   "BAILIAN_API_KEY",
   "BAILIAN_BASE_URL",
   "BAILIAN_MODEL",
@@ -51,6 +61,10 @@ beforeEach(async () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   const { __resetBudgetForTests } = await import("@/lib/ai");
   __resetBudgetForTests();
+  getAiSettings.mockReset().mockResolvedValue(null);
+  process.env.SESSION_SECRET = "a".repeat(64);
+  const { cacheDelete } = await import("@/lib/cache");
+  cacheDelete("ai-provider:settings");
 });
 
 afterEach(() => {
@@ -62,19 +76,19 @@ afterEach(() => {
 describe("aiEnabled", () => {
   it("is false when no provider key is set", async () => {
     const { aiEnabled } = await import("@/lib/ai");
-    expect(aiEnabled()).toBe(false);
+    expect(await aiEnabled()).toBe(false);
   });
 
   it("is true when GEMINI_API_KEY is set", async () => {
     process.env.GEMINI_API_KEY = "k";
     const { aiEnabled } = await import("@/lib/ai");
-    expect(aiEnabled()).toBe(true);
+    expect(await aiEnabled()).toBe(true);
   });
 
   it("is true when only QWEN_API_KEY is set", async () => {
     process.env.QWEN_API_KEY = "k";
     const { aiEnabled } = await import("@/lib/ai");
-    expect(aiEnabled()).toBe(true);
+    expect(await aiEnabled()).toBe(true);
   });
 
   it("is false when AI_DISABLED=true even with keys present", async () => {
@@ -82,27 +96,27 @@ describe("aiEnabled", () => {
     process.env.QWEN_API_KEY = "k";
     process.env.AI_DISABLED = "true";
     const { aiEnabled } = await import("@/lib/ai");
-    expect(aiEnabled()).toBe(false);
+    expect(await aiEnabled()).toBe(false);
   });
 });
 
 describe("configuredProviders", () => {
   it("returns an empty list with no keys", async () => {
     const { configuredProviders } = await import("@/lib/ai");
-    expect(configuredProviders()).toEqual([]);
+    expect(await configuredProviders()).toEqual([]);
   });
 
   it("returns gemini before qwen when both are configured", async () => {
     process.env.GEMINI_API_KEY = "k";
     process.env.QWEN_API_KEY = "k";
     const { configuredProviders } = await import("@/lib/ai");
-    expect(configuredProviders()).toEqual(["gemini", "qwen"]);
+    expect(await configuredProviders()).toEqual(["gemini", "qwen"]);
   });
 
   it("never leaks key material", async () => {
     process.env.GEMINI_API_KEY = "super-secret-value";
     const { configuredProviders } = await import("@/lib/ai");
-    expect(JSON.stringify(configuredProviders())).not.toContain("super-secret-value");
+    expect(JSON.stringify(await configuredProviders())).not.toContain("super-secret-value");
   });
 });
 
@@ -445,7 +459,7 @@ describe("generateJson — Anthropic protocol (bailian)", () => {
     fetchMock.mockResolvedValueOnce(anthropicBody());
 
     const { generateJson, configuredProviders } = await import("@/lib/ai");
-    expect(configuredProviders()).toEqual(["bailian", "gemini"]);
+    expect(await configuredProviders()).toEqual(["bailian", "gemini"]);
 
     const r = await generateJson("sys", {});
     expect(r.ok).toBe(true);
@@ -465,5 +479,155 @@ describe("generateJson — Anthropic protocol (bailian)", () => {
     // Second call used the OpenAI shape, proving the protocol switched.
     const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     expect(secondBody.messages[0].role).toBe("system");
+  });
+});
+
+// ── Organization-mode provider override (v4.1.5) ──────────────────────────────
+
+describe("resolveAiOverride — mode gating", () => {
+  it("never consults the database in standalone mode", async () => {
+    process.env.MODE = "standalone";
+    process.env.BAILIAN_API_KEY = "env-key";
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toBeNull();
+    expect(getAiSettings).not.toHaveBeenCalled();
+  });
+
+  it("returns null in org mode when nothing is configured", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue(null);
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toBeNull();
+  });
+
+  it("returns null when the row exists but is disabled", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue({
+      enabled: false, provider: "gemini", model: "m",
+      api_key_sealed: await sealValue("k"), base_url: null,
+    });
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toBeNull();
+  });
+
+  it("returns null when AI_DISABLED is set, without touching the database", async () => {
+    process.env.MODE = "organization";
+    process.env.AI_DISABLED = "true";
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toBeNull();
+    expect(getAiSettings).not.toHaveBeenCalled();
+  });
+
+  it("resolves provider, model and key from settings", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "gemini-2.5-pro",
+      base_url: null, api_key_sealed: await sealValue("org-key"),
+    });
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toEqual({
+      provider: "gemini",
+      model: "gemini-2.5-pro",
+      apiKey: "org-key",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    });
+  });
+
+  it("falls back to the provider's default model when none is stored", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "bailian", model: null,
+      base_url: null, api_key_sealed: await sealValue("k"),
+    });
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect((await resolveAiOverride())?.model).toBe("qwen3.6-flash");
+  });
+
+  it("returns null when the stored key cannot be decrypted", async () => {
+    process.env.MODE = "organization";
+    const good = await sealValue("k");
+    process.env.SESSION_SECRET = "z".repeat(64); // rotated since it was stored
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "m", base_url: null, api_key_sealed: good,
+    });
+    const { resolveAiOverride } = await import("@/lib/ai");
+    expect(await resolveAiOverride()).toBeNull();
+  });
+});
+
+describe("aiEnabled / configuredProviders with an override", () => {
+  it("is enabled by an org override even with no environment keys", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "m",
+      base_url: null, api_key_sealed: await sealValue("k"),
+    });
+    const { aiEnabled, configuredProviders } = await import("@/lib/ai");
+    expect(await aiEnabled()).toBe(true);
+    expect(await configuredProviders()).toEqual(["gemini"]);
+  });
+
+  it("reports only the overridden provider, hiding the instance's env providers", async () => {
+    process.env.MODE = "organization";
+    process.env.BAILIAN_API_KEY = "env-key";
+    process.env.QWEN_API_KEY = "env-key";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "m",
+      base_url: null, api_key_sealed: await sealValue("k"),
+    });
+    const { configuredProviders } = await import("@/lib/ai");
+    expect(await configuredProviders()).toEqual(["gemini"]);
+  });
+});
+
+describe("generateJson with an org override", () => {
+  it("uses the org's key, model and base URL", async () => {
+    process.env.MODE = "organization";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "gemini-2.5-pro",
+      base_url: "https://org.proxy.test/v1", api_key_sealed: await sealValue("org-secret"),
+    });
+    fetchMock.mockResolvedValueOnce(okBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://org.proxy.test/v1/chat/completions");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer org-secret");
+    expect(JSON.parse(init.body as string).model).toBe("gemini-2.5-pro");
+  });
+
+  it("does NOT fall back to the instance's env keys when the org key fails", async () => {
+    // Falling back would silently bill the deployment owner for org traffic.
+    process.env.MODE = "organization";
+    process.env.BAILIAN_API_KEY = "instance-key";
+    getAiSettings.mockResolvedValue({
+      enabled: true, provider: "gemini", model: "m",
+      base_url: null, api_key_sealed: await sealValue("org-key"),
+    });
+    fetchMock.mockResolvedValue(errBody(401)); // fatal for the org provider
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+
+    expect(r.ok).toBe(false);
+    // Exactly one attempt: the org's provider. No instance fallback.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses environment providers normally when no override is set", async () => {
+    process.env.MODE = "organization";
+    process.env.GEMINI_API_KEY = "env-key";
+    getAiSettings.mockResolvedValue(null);
+    fetchMock.mockResolvedValueOnce(okBody());
+
+    const { generateJson } = await import("@/lib/ai");
+    const r = await generateJson("sys", {});
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.provider).toBe("gemini");
+    expect((fetchMock.mock.calls[0][1].headers as Record<string,string>).Authorization)
+      .toBe("Bearer env-key");
   });
 });

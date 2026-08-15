@@ -6,6 +6,49 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.5] — 2026-08-15
+
+### Overview
+Organizations can bring their own AI provider. A shared team deployment usually wants its own LLM account and model choice rather than whatever the server operator configured — while a self-hosted personal instance should keep working out of the box with no setup at all. Those are different needs, so the feature is deliberately mode-dependent.
+
+### Added
+
+#### AI Provider settings — organization mode only
+- **Settings → AI Provider**: choose provider (Bailian, Gemini or Qwen), model, API key, and an optional base URL for a gateway or regional endpoint. Stored in the database (**migration 6**, `ai_settings`).
+- Model is a free-text field with per-provider suggestions, so any model an account can reach is accepted rather than only a hardcoded list.
+- **Standalone mode is untouched** — the section does not render, `PUT` returns 403, and the environment defaults apply exactly as before. Nothing about a standalone deployment changes.
+
+### Changed
+
+#### A configured key is used exclusively
+- When an organization sets its own provider, the server's keys are **never tried as a fallback behind it**. If the org's key fails, the request fails.
+- Falling back would silently bill the deployment owner for an organization's traffic — the kind of surprise best discovered before an invoice rather than after. There is a test asserting exactly one provider attempt in this case.
+
+#### Credential handling
+- The key is write-only: encrypted at rest with the same AES-256-GCM helper introduced for email credentials (`src/lib/secret-box.ts`), never returned to the browser, surfaced only as a masked hint. A blank field on save keeps the stored key.
+- Base URLs must be `https` — that URL carries the API key, so `http` is refused rather than accepted with a warning.
+- Like email settings, this is instance-wide with no per-user scoping, so `updated_by` / `updated_at` record who last changed it.
+
+#### API surface
+- `aiEnabled()` and `configuredProviders()` are now **async**, since either may depend on stored settings. All four AI routes await them.
+- `/api/ai/status` and `/api/settings/ai` both report `effective_source` — whether the override, the environment, or nothing is actually in effect.
+- Standalone mode never queries the database for this: the mode check short-circuits before any lookup.
+
+### Verified
+- Test count 266 → 278, covering mode gating, decryption failure, default-model fallback, exclusive-use billing safety, and normal environment behaviour when no override exists.
+
+### Rollback
+1. **Toggle the override off in Settings** — resolution returns to the environment defaults, no redeploy.
+2. **Promote the v4.1.4 Vercel deployment** — instant.
+3. **`git revert`** — migration 6 only *adds* a table; nothing existing is altered, so no down-migration is required.
+
+### Changed (infra)
+- Bumped app version from 4.1.4 to 4.1.5
+- Bumped Helm chart version from 0.5.4 to 0.5.5
+- Migration 6 creates `ai_settings` (singleton row, `CHECK (id = 1)`)
+
+---
+
 ## [4.1.4] — 2026-08-14
 
 ### Overview
