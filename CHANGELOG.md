@@ -6,6 +6,43 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.5] — 2026-08-15
+
+### Overview
+UI consistency and control, both reported directly after v4.2.4.
+
+### Added
+
+#### Selectable deployment environment
+- The environment driving the headline figures is now chosen by clicking any row under **By environment**, rather than being picked automatically.
+- Auto-detection can only ever *guess* when a repository deploys to several production targets — this repo deploys to two, so no heuristic gets it right for everyone. Letting the user choose beats guessing better.
+- The choice is **remembered per repository**, and falls back to auto-detection if the saved environment no longer appears in the window.
+- Every environment now carries its own `deploys_per_day`, `failure_rate_pct`, `mttr_hours` and `mttr_samples`, so switching is instant with no refetch, and environments can be compared directly.
+- The header states which environment is in use and whether it was auto-detected or chosen.
+
+### Fixed
+
+#### Collapsible headers were inconsistent across the app
+- The polished card header built for Team Analytics in v4.0.11 was left as a **local function in that one page**. Every other collapsible kept its original bare `› Show …` text toggle.
+- The inconsistency became obvious once v4.2.1 put a fully-styled Deployments card directly beneath a plain text link on the repository overview.
+- Extracted to `src/components/CollapsibleSection.tsx` and applied to the **DORA drill-down** and **PR Lifecycle** sections. Team Analytics now imports the shared component instead of its private copy, so the six sections there are unchanged but no longer duplicated.
+
+### Changed
+- Environment selection uses a lazy `useState` initialiser rather than an effect: React 19 forbids `setState` inside an effect, and there is no hydration risk because the environment list only renders once client-side data has arrived.
+
+### Verified
+- 332 tests passing, `tsc` clean, `eslint` **0 problems**, build succeeds.
+
+### Rollback
+1. **Promote the v4.2.4 Vercel deployment** — instant.
+2. **`git revert`** — presentational plus one additive API field; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.4 to 4.2.5
+- Bumped Helm chart version from 0.6.4 to 0.6.5
+
+---
+
 ## [4.2.4] — 2026-08-15
 
 ### Overview

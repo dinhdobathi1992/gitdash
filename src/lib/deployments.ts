@@ -49,6 +49,15 @@ export interface EnvironmentStat {
   failed: number;
   /** Null when nothing conclusive was recorded for this environment. */
   failure_rate_pct: number | null;
+  /**
+   * Full headline metrics per environment (v4.2.5), so the UI can let the
+   * user pick which environment drives the summary without another request.
+   * Auto-detection can only ever guess when a repo deploys to several
+   * production targets; letting them choose beats guessing better.
+   */
+  deploys_per_day: number | null;
+  mttr_hours: number | null;
+  mttr_samples: number;
 }
 
 export interface DeploymentsSummary {
@@ -259,7 +268,8 @@ export async function getDeploymentsSummary(
   const byEnvironment = new Map<string, EnvironmentStat>();
   for (const r of records) {
     const stat = byEnvironment.get(r.environment) ?? {
-      environment: r.environment, total: 0, success: 0, failed: 0, failure_rate_pct: null,
+      environment: r.environment, total: 0, success: 0, failed: 0,
+      failure_rate_pct: null, deploys_per_day: null, mttr_hours: null, mttr_samples: 0,
     };
     stat.total++;
     if (isSuccess(r)) stat.success++;
@@ -269,6 +279,13 @@ export async function getDeploymentsSummary(
   for (const stat of byEnvironment.values()) {
     const conclusive = stat.success + stat.failed;
     stat.failure_rate_pct = conclusive > 0 ? Math.round((stat.failed / conclusive) * 100) : null;
+    // Same null-not-zero rule as the headline: an unresolved environment must
+    // not claim a deploy rate of nothing.
+    stat.deploys_per_day =
+      conclusive > 0 ? Math.round((stat.success / periodDays) * 100) / 100 : null;
+    const envMttr = computeMttr(records.filter((r) => r.environment === stat.environment));
+    stat.mttr_hours = envMttr.hours;
+    stat.mttr_samples = envMttr.samples;
   }
 
   const { hours: mttrHours, samples: mttrSamples } = computeMttr(production);
