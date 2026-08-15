@@ -6,6 +6,52 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.2] — 2026-08-15
+
+### Overview
+GitDash measured **supply** — pull requests, CI, deployments — and nothing about **demand**. Issues are where work arrives, and a backlog growing faster than it drains is a leading indicator no delivery metric will show you: delivery can look healthy right up until the queue behind it collapses. This adds the missing half.
+
+Third of the four features from the gap review. Before this release there were **zero** `octokit.rest.issues.*` calls anywhere in the codebase.
+
+### Added
+
+#### Issue & Triage Health (`/repos/[owner]/[repo]/issues`)
+- **Backlog direction** — opened vs closed over a selectable 7/30/90-day window, shown as a signed delta because the sign is what a lead reads first.
+- **Time to close** — median and p90 days, from issues actually resolved in the window.
+- **Age distribution** of the open backlog across under a week, 1–4 weeks, 1–3 months, and over 3 months.
+- **Label and assignee breakdowns**, plus the oldest open issue.
+- New `GET /api/github/issues`, cached 5 minutes. Linked from the repo overview nav.
+
+#### Triage debt
+Two signals, framed as process problems rather than individual output:
+- **Unlabelled** open issues — work that arrived but was never routed to a person, area or priority, and is therefore invisible to every filter the team uses.
+- **No reply** — open 14+ days with not a single comment. Somebody reported this and heard nothing back; that is a relationship cost, not just a queue cost.
+
+### Changed
+
+#### Pull requests are excluded from every issue metric
+GitHub's REST API returns pull requests from the issues endpoint, each carrying a `pull_request` key. Counting them would report **delivery throughput as triage throughput** — wrong in a direction that looks entirely plausible, and the classic mistake with this API. Filtering happens once, immediately, before anything is computed, and is covered by dedicated tests including one asserting a merged PR cannot inflate time-to-close.
+
+#### Cost
+- Three paginated calls, **no per-issue fan-out** — cheap for the surface area it covers.
+- Time-to-first-response would need one request per issue, so it is deliberately not computed. "Issues nobody has commented on" is used instead: a cheaper signal for the same underlying worry.
+
+#### Sampling honesty
+- The issue list is ordered by recent activity, so hitting the page cap means quiet older issues were never seen. In that case the page states that counts are a **floor rather than a total**, instead of presenting a partial sample as complete.
+
+### Verified
+- Test count 308 → 327, covering PR exclusion, backlog direction in both directions, window boundaries, triage debt on open issues only, label formats (object and bare string), null assignees, and partial sampling.
+
+### Rollback
+1. **Promote the v4.2.1 Vercel deployment** — instant.
+2. **`git revert`** — the page and route are additive, nothing existing changed; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.1 to 4.2.2
+- Bumped Helm chart version from 0.6.1 to 0.6.2
+
+---
+
 ## [4.2.1] — 2026-08-15
 
 ### Overview

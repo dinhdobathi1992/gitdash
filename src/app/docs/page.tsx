@@ -9,7 +9,7 @@ import {
   CheckCircle,
   Activity, FileText, ShieldAlert, User, DollarSign,
   TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders,
-  HeartPulse, AlertTriangle, Mail, MessageCircle, Sparkles,
+  HeartPulse, AlertTriangle, Mail, MessageCircle, Sparkles, CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Callout } from "@/components/docs/Callout";
@@ -51,6 +51,7 @@ const NAV: NavSection[] = [
       { id: "feat-audit", label: "Audit Trail", icon: FileText, sub: true },
       { id: "feat-security", label: "Security Scan", icon: ShieldAlert, sub: true },
       { id: "feat-repo-team", label: "Repo Team Stats", icon: Trophy, sub: true },
+      { id: "feat-issues", label: "Issue & Triage Health", icon: CircleDot, sub: true },
       { id: "feat-team", label: "Team Insights", icon: Users, sub: true },
       { id: "feat-contributor", label: "Contributor Profile", icon: User, sub: true },
       { id: "feat-cost", label: "Cost Analytics", icon: DollarSign, sub: true },
@@ -770,6 +771,15 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
       screenshot: "11-repo-team.png",
       desc: "Per-contributor delivery metrics for a repository: CI pass rate, avg run duration, run count. Reviewer load matrix (author × reviewer heatmap). Bus factor analysis showing which modules have fewer than 2 active contributors.",
       chips: ["CI leaderboard", "Reviewer matrix", "Bus factor"],
+    },
+    {
+      id: "feat-issues",
+      name: "Issue & Triage Health",
+      path: "/repos/[owner]/[repo]/issues",
+      screenshot: "23-issues.png",
+      desc: "The demand side of engineering: is the backlog growing or draining, how long does work take to close, and what has been sitting untouched. Includes two triage-debt signals — unlabelled issues (unrouted work) and issues nobody has replied to.",
+      chips: ["Backlog direction", "Time to close", "Triage debt", "Age distribution"],
+      since: "4.2.2",
     },
     {
       id: "feat-team",
@@ -1826,6 +1836,66 @@ function FeatureAiInsights() {
   );
 }
 
+function FeatureIssues() {
+  return (
+    <section className="space-y-6">
+      <FeaturePageHeader
+        icon={CircleDot} name="Issue & Triage Health" path="/repos/[owner]/[repo]/issues"
+        chips={["Backlog direction", "Time to close", "Triage debt", "Age distribution"]}
+        since="4.2.2"
+      />
+      <ProseP>
+        Every other page in GitDash measures <strong>supply</strong> — pull requests, CI runs,
+        deployments. Issues are where work <strong>arrives</strong>. A backlog growing faster than it
+        drains is a leading indicator that no delivery metric will show you, because delivery can
+        look healthy right up until the queue behind it collapses.
+      </ProseP>
+      <ScreenshotSlot file="23-issues.png" alt="Issue and triage health" />
+
+      <DocCard>
+        <SubHeading>What it measures</SubHeading>
+        <DocTable
+          headers={["Metric", "Meaning"]}
+          rows={[
+            ["Backlog direction", "Opened minus closed in the window. Positive means the queue grew."],
+            ["Time to close", "Median and p90 days from open to close, over issues closed in the window."],
+            ["Age distribution", "How the open backlog splits across under a week, 1–4 weeks, 1–3 months, and over 3 months."],
+            ["Stale", "Open with no activity for 30+ days — not necessarily abandoned, but nobody has touched it."],
+            ["By label / assignee", "Where open work is concentrated."],
+          ]}
+        />
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>Triage debt</SubHeading>
+        <ProseP>
+          Two signals framed deliberately as process problems rather than individual output:
+        </ProseP>
+        <DocTable
+          headers={["Signal", "Why it matters"]}
+          rows={[
+            ["Unlabelled", "Work that arrived but was never routed to a person, area or priority. It is invisible to every filter the team uses."],
+            ["No reply", "Open 14+ days with not one comment. Somebody reported this and heard nothing back — that is a relationship cost, not just a queue cost."],
+          ]}
+        />
+      </DocCard>
+
+      <Callout type="info">
+        <strong>Pull requests are excluded.</strong> GitHub&apos;s REST API returns pull requests
+        from the issues endpoint, so counting them would report delivery throughput as triage
+        throughput — a mistake that produces plausible-looking numbers. Every metric here filters
+        them out first.
+      </Callout>
+
+      <Callout type="warning">
+        Counts are a <strong>floor, not a total</strong>, when the sample cap is reached. The issue
+        list is ordered by recent activity, so a very large backlog may have quiet old issues beyond
+        the window examined. The page says so when that happens.
+      </Callout>
+    </section>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Metrics Reference ─────────────────────────────────────────────────────────
 
@@ -2619,6 +2689,16 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/github/issues",
+          description: "Issue and triage health. Returns { open_count, opened_in_period, closed_in_period, backlog_delta, median_days_to_close, p90_days_to_close, stale_count, unlabelled_count, unanswered_count, age_buckets[], top_labels[], assignee_load[], neglected[], oldest_open, total_analysed, partial }. Pull requests are excluded — GitHub's issues endpoint returns both, and counting PRs would report delivery throughput as triage throughput.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner" },
+            { name: "repo", type: "string", optional: false, desc: "Repository name" },
+            { name: "days", type: "number", optional: true, desc: "Window in days, 7-90. Defaults to 30." },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/github/deployments",
           description: "Measured delivery metrics from GitHub's Deployments API. Returns { source, production_environment, deploys_per_day, change_failure_rate_pct, mttr_hours, mttr_samples, by_environment[], recent[], partial }. source is \"deployments\" when the repo genuinely uses the API and \"none\" otherwise — the caller keeps its release/PR estimates in that case rather than being handed zeros. Rates exclude pending and in-progress deploys, and return null rather than 0% when nothing is conclusive.",
           params: [
@@ -2918,9 +2998,28 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.1",
+      version: "4.2.2",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Issue & Triage Health — a new page at /repos/[owner]/[repo]/issues covering the half of engineering GitDash could not see. PRs, CI and deployments measure supply; issues are where work arrives, and a backlog growing faster than it drains is a leading indicator no delivery metric will show you",
+          "Backlog direction (opened vs closed in the window), median and p90 time to close, an age distribution of the open backlog, label and assignee breakdowns, and the oldest open issue",
+          "Two triage-debt signals: unlabelled open issues (work that arrived but was never routed) and issues open 14+ days with not a single comment (someone reported it and heard nothing back)",
+        ],
+        fixed: [],
+        improved: [
+          "Pull requests are excluded from every issue metric. GitHub's REST API returns PRs from the issues endpoint, so counting them would report delivery throughput as triage throughput — wrong in a direction that looks entirely plausible. There is a dedicated test for it",
+          "Costs three paginated calls with no per-issue fan-out. Time-to-first-response would need one call per issue, so \"issues nobody has commented on\" is used instead — a cheaper signal for the same worry",
+          "Counts are labelled as a floor rather than a total when the sample cap is hit, since the list is ordered by recent activity and quiet old issues fall outside it",
+        ],
+      },
+    },
+    {
+      version: "4.2.1",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3504,7 +3603,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.1"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.2"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3638,6 +3737,7 @@ export default function DocsPage() {
     "feat-audit": <FeatureAudit />,
     "feat-security": <FeatureSecurity />,
     "feat-repo-team": <FeatureRepoTeam />,
+    "feat-issues":     <FeatureIssues />,
     "feat-team": <FeatureTeamInsights />,
     "feat-contributor": <FeatureContributor />,
     "feat-cost": <FeatureCost />,
@@ -3754,7 +3854,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.1"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.2"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
