@@ -80,28 +80,85 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
 
   if (error || !data) return null;
 
-  // No deployments recorded — explain what the DORA cards above are actually
-  // measuring, rather than leaving the reader to assume they are exact.
-  if (data.source === "none") {
+  // Nothing in the window. Two very different situations share that symptom,
+  // and collapsing them (as v4.2.5 did) threw away the more interesting one.
+  if (data.source === "none" || data.source === "stale") {
+    const stale = data.source === "stale";
+    // Age comes from the server: render must stay pure under React 19, and the
+    // server clock is the one that decided the window this age is relative to.
+    const daysAgo = data.newest_deployment_age_days;
+
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+      <div
+        className={cn(
+          "rounded-2xl border p-5",
+          stale ? "border-amber-500/25 bg-amber-500/[0.03]" : "border-slate-800 bg-slate-900/40",
+        )}
+      >
         <div className="flex items-start gap-3">
-          <span className="shrink-0 w-9 h-9 rounded-lg border border-slate-700 bg-slate-800/60 flex items-center justify-center">
-            <Rocket className="w-4 h-4 text-slate-400" />
+          <span
+            className={cn(
+              "shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center",
+              stale ? "border-amber-500/30 bg-amber-500/[0.12]" : "border-slate-700 bg-slate-800/60",
+            )}
+          >
+            <Rocket className={cn("w-4 h-4", stale ? "text-amber-300" : "text-slate-400")} />
           </span>
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-white">Deployments</h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              This repository has no deployments recorded through GitHub&apos;s Deployments API in
-              the last {data.period_days} days, so the DORA figures above are{" "}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-[15px] font-semibold text-white">Deployments</h3>
+              {stale && (
+                <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300">
+                  Recording stopped
+                </span>
+              )}
+            </div>
+
+            {stale ? (
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                This repository has{" "}
+                <strong className="text-amber-200">{data.all_time_count} deployments</strong> on
+                record, but the most recent was{" "}
+                <strong className="text-amber-200">
+                  {daysAgo} day{daysAgo === 1 ? "" : "s"} ago
+                </strong>
+                {data.newest_deployment_at && (
+                  <> ({new Date(data.newest_deployment_at).toLocaleDateString()})</>
+                )}{" "}
+                — outside the {data.period_days}-day window. Something used to record deployments
+                here and no longer does, which usually means the pipeline was replaced or its
+                deployment step was removed.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                This repository has never recorded a deployment through GitHub&apos;s Deployments
+                API.
+              </p>
+            )}
+
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Until then the DORA figures above are{" "}
               <strong className="text-slate-400">estimated</strong>: deployment frequency from
               releases (or merged PRs when there are no releases), and change failure rate from PRs
               whose branch looks like a hotfix or revert.
             </p>
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              If your pipeline creates GitHub deployments, those numbers become measured instead —
-              actual deploys, actual failed rollouts, actual recovery time.
-            </p>
+
+            {/* The point people miss: a workflow that deploys is not the same
+                thing as a deployment record. Worth stating explicitly, because
+                the obvious reading of "no deployments" is "you don't deploy". */}
+            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+              <p className="flex items-start gap-1.5 text-[11px] text-slate-400 leading-relaxed">
+                <Info className="w-3 h-3 mt-0.5 shrink-0 text-slate-500" />
+                <span>
+                  A workflow that deploys does not create a deployment record on its own. GitHub
+                  writes one only when a job declares an{" "}
+                  <code className="font-mono text-slate-300">environment:</code> key, or when
+                  something calls the Deployments API directly. A job-level{" "}
+                  <code className="font-mono text-slate-300">environment: production</code> on your
+                  deploy job is usually the whole change, and it makes all three figures measured.
+                </span>
+              </p>
+            </div>
           </div>
         </div>
       </div>

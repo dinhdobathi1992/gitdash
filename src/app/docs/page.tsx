@@ -1994,6 +1994,32 @@ function MetricsDora() {
           deployments, the panel says so and explains what the numbers above actually represent.
           Knowing which of the two you are reading matters more than the number itself.
         </Callout>
+        <ProseP>
+          <strong>What actually creates a deployment record</strong> — the most common surprise here
+          is a repository that deploys every day through GitHub Actions and still shows nothing
+          measured. A workflow that deploys is not the same thing as a deployment record. GitHub
+          writes one only when:
+        </ProseP>
+        <DocTable
+          headers={["Trigger", "What it looks like"]}
+          rows={[
+            ["A job declares an environment", <>A job-level <Code>environment: production</Code> key. This is the usual one-line fix — note that a <Code>workflow_dispatch</Code> input <em>named</em> <Code>environment</Code> does not count, since it is an input rather than a job key.</>],
+            ["Something calls the API directly", <>A <Code>POST /repos/&#123;owner&#125;/&#123;repo&#125;/deployments</Code> call, or an action that wraps it. Platform integrations such as Vercel and Heroku do this automatically.</>],
+          ]}
+        />
+        <ProseP>
+          Deploying to ECS, Kubernetes or a VM from a plain <Code>run:</Code> step creates no record,
+          so those rollouts are invisible to these metrics no matter how often they happen. Adding
+          the <Code>environment:</Code> key to the deploy job is normally enough to turn all three
+          figures from estimated into measured.
+        </ProseP>
+        <Callout type="warning">
+          If a repository has deployment history but nothing inside the 30-day window, the panel
+          flags it <strong>Recording stopped</strong> rather than reporting an absence — it shows how
+          many deployments are on record and how long ago the last one was. That gap is usually a
+          replaced pipeline or a deploy step that lost its <Code>environment:</Code> key, and it is
+          worth investigating rather than ignoring.
+        </Callout>
       </DocCard>
       <DocCard>
         <SubHeading>Throughput &amp; Velocity</SubHeading>
@@ -2700,7 +2726,7 @@ function APIReference() {
         {
           method: "GET",
           path: "/api/github/deployments",
-          description: "Measured delivery metrics from GitHub's Deployments API. Returns { source, production_environment, deploys_per_day, change_failure_rate_pct, mttr_hours, mttr_samples, by_environment[], recent[], partial }. source is \"deployments\" when the repo genuinely uses the API and \"none\" otherwise — the caller keeps its release/PR estimates in that case rather than being handed zeros. Rates exclude pending and in-progress deploys, and return null rather than 0% when nothing is conclusive.",
+          description: "Measured delivery metrics from GitHub's Deployments API. Returns { source, production_environment, deploys_per_day, change_failure_rate_pct, mttr_hours, mttr_samples, by_environment[], recent[], partial, all_time_count, newest_deployment_at }. source is \"deployments\" when the window has data, \"stale\" when the repo has deployment history but none inside the window, and \"none\" when it has never recorded one — the caller keeps its release/PR estimates for the latter two rather than being handed zeros. all_time_count and newest_deployment_at describe history at any age, so a stale window can state how much exists and when it stopped. Rates exclude pending and in-progress deploys, and return null rather than 0% when nothing is conclusive.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner" },
             { name: "repo", type: "string", optional: false, desc: "Repository name" },
@@ -2998,9 +3024,24 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.5",
+      version: "4.2.6",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "The deployments panel now separates \"no deployments recorded in the last 30 days\" from \"none ever recorded\". A repository with deployment history whose newest record is older than the window is flagged \"Recording stopped\", with the total on record and how long ago the last one was — a gap that usually means the pipeline was replaced or its deploy step removed, which the previous wording hid entirely",
+        ],
+        fixed: [
+          "\"This repository has no deployments\" read as \"you do not deploy\", which was misleading on repositories that deploy daily through GitHub Actions. The panel now states the actual mechanism: GitHub only writes a deployment record when a job declares an environment: key or something calls the Deployments API, so a deploy workflow without one is invisible to these metrics. The one-line fix is named directly",
+        ],
+        improved: [],
+      },
+    },
+    {
+      version: "4.2.5",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3653,7 +3694,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.5"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.6"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3904,7 +3945,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.5"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.6"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

@@ -27,8 +27,17 @@
 import { getOctokit } from "@/lib/github";
 import { pLimitSettled } from "@/lib/concurrency";
 
-/** Where a metric came from. Surfaced in the UI — never hidden. */
-export type DeployMetricSource = "deployments" | "none";
+/**
+ * Where a metric came from. Surfaced in the UI — never hidden.
+ *
+ * `stale` is distinct from `none` on purpose (v4.2.6). A repo with 36
+ * deployments whose newest is two months old was previously reported the same
+ * way as a repo that has never recorded one, because both produce an empty
+ * window. But those are opposite situations: the second team does not use the
+ * Deployments API, while the first one *did* and then stopped — which is
+ * usually a broken or replaced pipeline, and is worth saying out loud.
+ */
+export type DeployMetricSource = "deployments" | "stale" | "none";
 
 export interface DeploymentRecord {
   id: number;
@@ -81,6 +90,21 @@ export interface DeploymentsSummary {
   recent: DeploymentRecord[];
   /** True when some status fetches failed — figures are from a partial sample. */
   partial: boolean;
+  /**
+   * Deployments on record regardless of the window, capped at the 100 fetched
+   * (v4.2.6). Reported so an empty window can still say how much history
+   * exists rather than implying there is none.
+   */
+  all_time_count: number;
+  /** Newest deployment on record at any age, or null when there are none. */
+  newest_deployment_at: string | null;
+  /**
+   * Whole days since that deployment, computed here rather than in the client.
+   * Render must stay pure under React 19, and the server clock is the one that
+   * decided the window — deriving the age from the browser's clock could
+   * disagree with the very cutoff that produced this response.
+   */
+  newest_deployment_age_days: number | null;
 }
 
 /** Status lookups are one call each, so the newest slice is the bounded part. */
@@ -186,6 +210,9 @@ export async function getDeploymentsSummary(
     by_environment: [],
     recent: [],
     partial: false,
+    all_time_count: 0,
+    newest_deployment_at: null,
+    newest_deployment_age_days: null,
   };
 
   let deployments: { id: number; environment: string; created_at: string; ref: string; sha: string }[];
@@ -204,9 +231,30 @@ export async function getDeploymentsSummary(
     return empty;
   }
 
+  // History is reported even when the window is empty, so "nothing recent" can
+  // be told apart from "nothing ever". Computed rather than taking index 0:
+  // listDeployments is documented newest-first, but the ordering is not worth
+  // depending on for a value the UI states as fact.
+  const newestAt =
+    deployments.length > 0
+      ? deployments.reduce((newest, d) => (d.created_at > newest ? d.created_at : newest),
+          deployments[0].created_at)
+      : null;
+  const history = {
+    all_time_count: deployments.length,
+    newest_deployment_at: newestAt,
+    newest_deployment_age_days: newestAt
+      ? Math.floor((Date.now() - new Date(newestAt).getTime()) / 86_400_000)
+      : null,
+  };
+
   const cutoff = Date.now() - periodDays * 86_400_000;
   const inWindow = deployments.filter((d) => new Date(d.created_at).getTime() >= cutoff);
-  if (inWindow.length === 0) return empty;
+  if (inWindow.length === 0) {
+    // Deployments exist but all predate the window: the pipeline that recorded
+    // them stopped. That is a finding, not an absence.
+    return { ...empty, source: deployments.length > 0 ? "stale" : "none", ...history };
+  }
 
   // Decide the headline environment BEFORE resolving statuses, so the budget
   // can be aimed at it.
@@ -316,5 +364,6 @@ export async function getDeploymentsSummary(
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, MAX_RECENT_RETURNED),
     partial: partial || inWindow.length > toResolve.length,
+    ...history,
   };
 }
