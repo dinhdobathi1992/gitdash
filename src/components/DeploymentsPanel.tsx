@@ -203,8 +203,9 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
         {data.partial && (
           <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
             <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-slate-600" />
-            Status was resolved for the most recent deployments only, so rates are based on a
-            partial sample.
+            More deployments exist than statuses were fetched for. The production environment is
+            resolved first, so the headline figures are complete; other environments may show rates
+            from a partial sample.
           </p>
         )}
       </div>

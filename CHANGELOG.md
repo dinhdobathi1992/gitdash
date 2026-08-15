@@ -6,6 +6,45 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.4] — 2026-08-15
+
+### Overview
+Bug fix reported immediately after v4.2.3: a repository with 75 deployments in the window showed **0.00 deploys/day**, a null change failure rate, and a null MTTR — while the per-environment table below it clearly showed active deployments with real failure rates.
+
+Three distinct defects, all in v4.2.1's deployment metrics.
+
+### Fixed
+
+#### 1. The headline environment could be starved of status lookups
+- Status is one API call per deployment, so lookups are capped at 40. That cap was applied to **the most recent 40 deployments overall**.
+- On a repo busy enough to exceed it, none of those 40 necessarily belonged to the chosen production environment — leaving `prodConclusive = 0` and every headline figure empty on a repo that deploys constantly. The reported numbers gave it away exactly: 34 ok + 6 failed = 40, the cap.
+- The production environment is now **selected before statuses are fetched**, its deployments resolved first, and the remaining budget spent on other environments so their per-environment rates still populate.
+
+#### 2. Environment matching was exact, so platform-labelled environments were missed
+- Names were compared with equality against `production`/`prod`/`live`/`main`. Platforms label environments things like **"Production — my-app"**, which never matched — so a bare, stale `Production` with fewer deployments was chosen over the environment actually in use.
+- Matching is now **word-boundary based**, and within a matching tier the **busiest environment wins**, since a repo deploying to several production targets should report the one it actually uses.
+- Word boundaries also prevent `main` matching unrelated names such as `domain-staging`.
+
+#### 3. Deploy frequency reported 0.00 instead of null
+- With no conclusive production status, frequency was computed as `0 / periodDays` and rendered as **0.00 deploys/day** — an assertion that the team ships nothing.
+- It now returns **null**, consistent with the change failure rate and MTTR, which already made this distinction. This is the same principle v4.2.1 was built on; the frequency path simply missed it.
+
+### Changed
+- The partial-sample note now explains that production is resolved first, so headline figures are complete even when other environments are sampled.
+
+### Verified
+- Test count 327 → 332. The regression test reproduces the reported shape directly: 60 preview + 15 production deployments against a 40-lookup budget, asserting production still resolves to real figures rather than a starved zero.
+
+### Rollback
+1. **Promote the v4.2.3 Vercel deployment** — instant.
+2. **`git revert`** — one library file, one UI string; no schema change.
+
+### Changed (infra)
+- Bumped app version from 4.2.3 to 4.2.4
+- Bumped Helm chart version from 0.6.3 to 0.6.4
+
+---
+
 ## [4.2.3] — 2026-08-15
 
 ### Overview
