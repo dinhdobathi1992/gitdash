@@ -2,8 +2,8 @@ apiVersion: v2
 name: gitdash
 description: Self-hosted GitHub Actions metrics dashboard (standalone PAT or GitHub OAuth)
 type: application
-version: 0.6.5
-appVersion: "4.2.5"
+version: 0.6.6
+appVersion: "4.2.6"
 keywords:
   - github-actions
   - dashboard

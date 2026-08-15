@@ -6,6 +6,47 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.6] — 2026-08-15
+
+### Overview
+The deployments panel told the truth in a way that read as a lie. Reported against
+`tesda-backend`, which deploys to ECS every day and was shown as having no deployments.
+
+### Added
+
+#### "Recording stopped" — a stale window is a finding, not an absence
+- A repository with deployment history whose newest record predates the window now returns
+  `source: "stale"` instead of `"none"`, and the panel says how many deployments are on record and
+  how long ago the last one was.
+- The two situations were previously indistinguishable in the response, because both produce an
+  empty window. They are opposites: one team has never used the Deployments API, the other *did*
+  and then stopped — which usually means a replaced pipeline or a deploy step that lost its
+  `environment:` key.
+- `tesda-backend` is the worked example: **36 deployments on record, newest 2026-06-18**, i.e. 58
+  days before the 30-day cutoff. Reported as "no deployments" before this change.
+- Two new response fields, `all_time_count` and `newest_deployment_at`, describe history at any age.
+  `newest_deployment_at` is computed by value rather than taken from index 0 — `listDeployments` is
+  documented newest-first, but the UI states that date as fact and should not depend on it.
+
+### Fixed
+
+#### "No deployments" read as "you do not deploy"
+- The empty-state copy named the Deployments API but never explained what writes to it, so a
+  repository deploying daily through GitHub Actions looked like one that never ships.
+- The panel now states the mechanism directly: GitHub writes a deployment record only when a job
+  declares an `environment:` key, or when something calls the Deployments API. A plain `run:` step
+  that deploys to ECS, Kubernetes or a VM creates nothing, however often it runs.
+- The one-line fix — a job-level `environment: production` — is named in the panel and in the
+  metrics documentation, including the trap that a `workflow_dispatch` **input** named
+  `environment` does not count. That is exactly what `tesda-backend`'s `cd.yml` has.
+
+### Documentation
+- The DORA metrics section gains a "What actually creates a deployment record" table covering both
+  triggers, and a callout describing the Recording stopped state.
+- API Reference updated for `source: "stale"` and the two new fields.
+
+---
+
 ## [4.2.5] — 2026-08-15
 
 ### Overview

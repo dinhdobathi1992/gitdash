@@ -60,10 +60,48 @@ describe("getDeploymentsSummary — provenance", () => {
     expect(r.total_deployments).toBe(0);
   });
 
-  it('reports source "none" when every deployment predates the window', async () => {
-    listDeployments.mockResolvedValue({ data: [dep(1, "production", daysAgo(90))] });
+  // v4.2.6: "nothing recent" and "nothing ever" used to be indistinguishable
+  // in the response, so a repo whose pipeline stopped recording two months ago
+  // was reported exactly like one that has never used the API.
+  it('reports source "stale" — not "none" — when every deployment predates the window', async () => {
+    listDeployments.mockResolvedValue({
+      data: [dep(1, "production", daysAgo(90)), dep(2, "production", daysAgo(58))],
+    });
     const r = await run(30);
+    expect(r.source).toBe("stale");
+    expect(r.all_time_count).toBe(2);
+    // Figures stay null: a stale window is still nothing to measure.
+    expect(r.deploys_per_day).toBeNull();
+    expect(r.total_deployments).toBe(0);
+  });
+
+  it("reports the newest deployment date so a stale window can be dated", async () => {
+    const newest = daysAgo(58);
+    listDeployments.mockResolvedValue({
+      data: [dep(1, "production", daysAgo(90)), dep(2, "production", newest)],
+    });
+    const r = await run(30);
+    expect(r.newest_deployment_at).toBe(newest);
+    // Age is computed server-side so the client can render it without calling
+    // Date.now() during render, which React 19 rejects as impure.
+    expect(r.newest_deployment_age_days).toBe(58);
+  });
+
+  it("takes the newest date by value, not by list position", async () => {
+    const newest = daysAgo(40);
+    // Deliberately oldest-first: the real API is newest-first, but the UI
+    // states this date as fact, so it must not depend on that ordering.
+    listDeployments.mockResolvedValue({
+      data: [dep(1, "production", daysAgo(120)), dep(2, "production", newest)],
+    });
+    expect((await run(30)).newest_deployment_at).toBe(newest);
+  });
+
+  it('keeps source "none" when there is genuinely no history', async () => {
+    const r = await run();
     expect(r.source).toBe("none");
+    expect(r.all_time_count).toBe(0);
+    expect(r.newest_deployment_at).toBeNull();
   });
 
   it('reports source "deployments" once there is data in the window', async () => {
@@ -71,6 +109,7 @@ describe("getDeploymentsSummary — provenance", () => {
     statusMap({ 1: { state: "success", at: daysAgo(2) } });
     const r = await run();
     expect(r.source).toBe("deployments");
+    expect(r.all_time_count).toBe(1);
   });
 });
 
