@@ -6,6 +6,55 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.0] — 2026-08-15
+
+### Overview
+The Security page reported none of GitHub's own security findings. It statically analysed workflow YAML — useful, and something GitHub does not do for you — but a page called *Security* that cannot say how many critical CVEs are open, or whether a credential is currently leaked, is answering the wrong question first. This adds those.
+
+First of four features chosen from a codebase gap review; the others are honest DORA from real deployments, issues/triage health, and a command palette.
+
+### Added
+
+#### GitHub Security Alerts
+- New panel on `/repos/[owner]/[repo]/security`, above the workflow analysis — a live CVE or leaked credential outranks a YAML anti-pattern.
+- Three sources: **Dependabot** (vulnerable dependencies), **code scanning** (CodeQL and third-party), and **secret scanning** (committed credentials).
+- Severity counts, the age of the oldest open alert, and — per source — how many alerts were resolved in the last 90 days plus **mean time to remediate**. "We fix things quickly" becomes a number.
+- New `GET /api/github/security-alerts`, cached 5 minutes.
+
+### Changed
+
+#### An unreadable source must never look like a clean one
+This is the design rule the whole feature is built around, and it drove most of the code:
+
+- Each source carries its **own status** — `ok`, `forbidden`, `not_enabled`, or `error` — rather than collapsing into one success/failure for the request.
+- A `403` renders as a loud, actionable warning; a genuinely clean repo renders as a calm green state. Showing "0 alerts" when the real answer is "we could not check" would turn a token permission gap into false confidence on a security page.
+- A `404` is reported as *not enabled for this repo*, not as a permission problem — those need different fixes and shouldn't be conflated.
+- Every failure mode is covered by a test, including all three sources failing at once.
+
+#### Scope requirement, stated plainly
+- These endpoints need the **`security_events`** scope, which GitDash has never requested — so most existing tokens will be refused. The panel says exactly that, with the fix for both classic and fine-grained PATs, instead of surfacing a generic error.
+
+#### Severity normalisation
+- GitHub uses several severity vocabularies. Dependabot's `moderate` maps to medium; code scanning prefers `security_severity_level` over `rule.severity`, since the latter describes rule *confidence* (note/warning/error), not impact.
+- Secret scanning alerts carry no severity at all and are always ranked **critical** — a live credential needs no triage debate.
+
+#### Page retitled
+- "Workflow Security" → **"Security"**, since it now covers more than workflow files.
+
+### Verified
+- Test count 278 → 291, covering permission and availability failures, severity normalisation across all three vocabularies, ordering, ageing, and MTTR.
+
+### Rollback
+1. **Disable the Security Scan feature flag** — hides the whole page including the new panel.
+2. **Promote the v4.1.5 Vercel deployment** — instant.
+3. **`git revert`** — no schema change in this release.
+
+### Changed (infra)
+- Bumped app version from 4.1.5 to 4.2.0
+- Bumped Helm chart version from 0.5.5 to 0.6.0
+
+---
+
 ## [4.1.5] — 2026-08-15
 
 ### Overview

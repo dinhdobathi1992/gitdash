@@ -1096,14 +1096,49 @@ function FeatureSecurity() {
   return (
     <section className="space-y-6">
       <FeaturePageHeader
-        icon={ShieldAlert} name="Security Scan" path="/repos/[owner]/[repo]/security"
-        chips={["Static analysis", "Severity grouping", "Per-file findings"]}
+        icon={ShieldAlert} name="Security" path="/repos/[owner]/[repo]/security"
+        chips={["GitHub alerts", "Static analysis", "Severity grouping", "Remediation time"]}
       />
       <ProseP>
-        Runs static analysis on all workflow YAML files in the repository, checking for common
-        security anti-patterns without executing any code. Findings are grouped by severity and
-        collapsed per file for easy triage.
+        Two independent layers. <strong>GitHub Security Alerts</strong> reports what GitHub itself
+        has found — vulnerable dependencies, code scanning results, and exposed secrets.{" "}
+        <strong>Workflow static analysis</strong> then checks your Actions YAML for anti-patterns,
+        which GitHub does not do for you.
       </ProseP>
+
+      <DocCard>
+        <div className="flex items-center gap-2 mb-2">
+          <SubHeading>GitHub Security Alerts</SubHeading>
+          <VersionBadge v="4.2.0" />
+        </div>
+        <DocTable
+          headers={["Source", "What it reports"]}
+          rows={[
+            ["Dependabot", "Vulnerable dependencies, with advisory severity and CVE"],
+            ["Code scanning", "CodeQL and third-party analysis findings, ranked by security severity rather than rule confidence"],
+            ["Secret scanning", "Credentials committed to the repository — always ranked critical"],
+          ]}
+        />
+        <ProseP>
+          Each source also reports how many alerts were resolved in the last 90 days and the mean
+          time to remediate, so &ldquo;we fix things quickly&rdquo; becomes a number rather than a
+          belief.
+        </ProseP>
+
+        <Callout type="warning">
+          <strong>Requires the <Code>security_events</Code> scope</strong>, which GitDash does not
+          request by default — so an existing token will most likely be refused. Add it to a classic
+          PAT, or grant <em>Dependabot alerts</em>, <em>Code scanning alerts</em> and{" "}
+          <em>Secret scanning alerts</em> read access on a fine-grained PAT.
+        </Callout>
+
+        <Callout type="info">
+          <strong>An unreadable source never looks like a clean one.</strong> Each source carries its
+          own status, and a permission failure renders as a warning rather than an empty list. On a
+          security page, showing &ldquo;0 alerts&rdquo; when the real answer is &ldquo;we could not
+          check&rdquo; would turn a token gap into false confidence.
+        </Callout>
+      </DocCard>
       <ScreenshotSlot file="10-security.png" alt="Security Scan results" />
       <DocCard>
         <SubHeading>Checks performed</SubHeading>
@@ -2555,6 +2590,15 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/github/security-alerts",
+          description: "GitHub's own security findings: Dependabot, code scanning and secret scanning alerts. Returns { sources, alerts[], counts, total_open, oldest_open_days, partial, needs_scope } where each source carries its own status (ok | forbidden | not_enabled | error) plus 90-day fix count and mean time to remediate. Requires the security_events scope; a 403 on any source sets needs_scope rather than failing the request, so an unreadable source is never reported as a clean one.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner" },
+            { name: "repo", type: "string", optional: false, desc: "Repository name" },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/settings/ai",
           description: "Current AI provider override. Returns { configurable, mode, enabled, provider, model, base_url, api_key_hint, has_key, updated_by, updated_at, effective_source, env_providers, db_available }. The API key is never returned — only a masked hint. configurable is false in standalone mode, where the section is hidden and environment defaults apply.",
           params: [],
@@ -2836,9 +2880,27 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.1.5",
+      version: "4.2.0",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "GitHub Security Alerts on the Security page — vulnerable dependencies (Dependabot), code scanning findings, and exposed secrets, with severity counts, age of the oldest open alert, and mean time to remediate per source. Until now the page only lint-checked workflow YAML and showed none of GitHub's own findings",
+          "Exposed secrets are always ranked critical: those alerts carry no severity field, and a live credential needs no triage debate",
+        ],
+        fixed: [],
+        improved: [
+          "An unreadable source can never look like a clean one. Each source reports its own status, and a permission failure renders as a loud actionable warning rather than an empty list — on a security page, conflating \"we couldn't look\" with \"nothing found\" would let a token gap read as safety",
+          "Reading these alerts needs the security_events scope, which GitDash has never requested. When a source returns 403 the panel says exactly that and how to fix it, for both classic and fine-grained tokens",
+          "The page is now titled \"Security\" rather than \"Workflow Security\", since it covers more than workflow files",
+        ],
+      },
+    },
+    {
+      version: "4.1.5",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3386,7 +3448,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.5"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3636,7 +3698,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.1.5"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
