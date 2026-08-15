@@ -174,6 +174,8 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
                   <button
                     onClick={() => {
                       fetch("/api/auth/logout", { method: "POST" })
+                        // Deliberate hard reload on sign-out — clears the SWR cache.
+                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                         .finally(() => { window.location.href = "/setup"; });
                     }}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors w-full text-left cursor-pointer"
@@ -185,6 +187,8 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
                   <button
                     onClick={() => {
                       fetch("/api/auth/logout", { method: "POST" })
+                        // Deliberate hard reload on sign-out — clears the SWR cache.
+                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                         .finally(() => { window.location.href = "/login"; });
                     }}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors w-full text-left cursor-pointer"

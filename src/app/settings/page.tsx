@@ -33,6 +33,9 @@ function PatInlineForm({ login }: { login: string }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Something went wrong."); return; }
+      // The PAT just changed, so every cached response was fetched with the old
+      // token. A hard reload discards that cache; router.push would keep it.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/settings";
     } catch {
       setError("Network error — could not reach the server.");
@@ -58,6 +61,9 @@ function PatInlineForm({ login }: { login: string }) {
           <button
             onClick={() => {
               fetch("/api/auth/logout", { method: "POST" })
+                // Full reload on sign-out is deliberate — it clears the SWR cache so the
+              // previous session's data cannot render after logout.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 .finally(() => { window.location.href = "/setup"; });
             }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-600 hover:border-red-500/20 transition-colors"
@@ -261,6 +267,9 @@ export default function SettingsPage() {
                 <button
                   onClick={() => {
                     fetch("/api/auth/logout", { method: "POST" })
+                      // Full reload on sign-out is deliberate — it clears the SWR cache so the
+                    // previous session's data cannot render after logout.
+                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                       .finally(() => { window.location.href = "/login"; });
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-colors shrink-0"

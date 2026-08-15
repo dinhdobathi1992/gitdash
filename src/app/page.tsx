@@ -21,6 +21,7 @@ import { MissionControl, QuickActions } from "@/components/MissionControl";
 
 // ── Keyboard shortcuts modal ───────────────────────────────────────────────────
 const SHORTCUTS = [
+  { keys: ["⌘", "K"], description: "Open command palette (Ctrl+K on Windows)" },
   { keys: ["/"], description: "Focus search" },
   { keys: ["Escape"], description: "Clear search / close modal" },
   { keys: ["↑", "↓"], description: "Navigate repository list" },
