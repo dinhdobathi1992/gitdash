@@ -1895,6 +1895,35 @@ function MetricsDora() {
             ["Time to Restore (MTTR)", "How quickly the team recovers from a production failure", "Average cycle time (open → merged) of hotfix/revert PRs identified in the Change Failure Rate calculation.", "Elite: <1h · High: <1d · Medium: <1wk · Low: ≥1wk"],
           ]}
         />
+
+        <div className="flex items-center gap-2 mt-5 mb-2">
+          <SubHeading>Measured vs estimated</SubHeading>
+          <VersionBadge v="4.2.1" />
+        </div>
+        <ProseP>
+          The calculations above are <strong>estimates</strong>, and they fail quietly. A team that
+          does not tag releases has its <em>merge rate</em> reported as its deploy rate. A team that
+          does not name branches <Code>hotfix</Code> or <Code>revert</Code> gets a change failure
+          rate of exactly 0% — which reads as excellence rather than as no signal.
+        </ProseP>
+        <ProseP>
+          When a repository actually uses GitHub&apos;s <strong>Deployments API</strong>, the same
+          three metrics become measurable and appear in a separate <strong>Deployments</strong> panel
+          on the repository overview, labelled <em>Measured</em>:
+        </ProseP>
+        <DocTable
+          headers={["Metric", "Measured definition"]}
+          rows={[
+            ["Deploy Frequency", "Successful production deployments per day. A failed rollout is not a delivery, so it does not count."],
+            ["Change Failure Rate", "Failed ÷ conclusive production deployments. Pending and in-progress deploys are excluded entirely."],
+            ["Time to Restore (MTTR)", "Hours from the first failure of a streak to the next successful deploy on that environment — when it broke, not the last symptom before the fix."],
+          ]}
+        />
+        <Callout type="info">
+          The measured figures never silently replace the estimated ones. If a repo has no
+          deployments, the panel says so and explains what the numbers above actually represent.
+          Knowing which of the two you are reading matters more than the number itself.
+        </Callout>
       </DocCard>
       <DocCard>
         <SubHeading>Throughput &amp; Velocity</SubHeading>
@@ -2590,6 +2619,15 @@ function APIReference() {
         },
         {
           method: "GET",
+          path: "/api/github/deployments",
+          description: "Measured delivery metrics from GitHub's Deployments API. Returns { source, production_environment, deploys_per_day, change_failure_rate_pct, mttr_hours, mttr_samples, by_environment[], recent[], partial }. source is \"deployments\" when the repo genuinely uses the API and \"none\" otherwise — the caller keeps its release/PR estimates in that case rather than being handed zeros. Rates exclude pending and in-progress deploys, and return null rather than 0% when nothing is conclusive.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner" },
+            { name: "repo", type: "string", optional: false, desc: "Repository name" },
+          ],
+        },
+        {
+          method: "GET",
           path: "/api/github/security-alerts",
           description: "GitHub's own security findings: Dependabot, code scanning and secret scanning alerts. Returns { sources, alerts[], counts, total_open, oldest_open_days, partial, needs_scope } where each source carries its own status (ok | forbidden | not_enabled | error) plus 90-day fix count and mean time to remediate. Requires the security_events scope; a 403 on any source sets needs_scope rather than failing the request, so an unreadable source is never reported as a clean one.",
           params: [
@@ -2880,9 +2918,27 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.0",
+      version: "4.2.1",
       date: "2026-08-15",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Deployments panel on the repository overview, using GitHub's Deployments API — real deploy frequency, change failure rate and MTTR, plus a per-environment breakdown and recent rollout history",
+          "MTTR is measured from the first failure of a streak to the next successful deploy on the same environment, which is when things actually broke rather than the last symptom before the fix",
+        ],
+        fixed: [],
+        improved: [
+          "DORA figures now state their provenance. Until now deploy frequency came from Releases (falling back to counting every merged PR), and change failure rate from PRs whose branch matched /hotfix|revert|emergency/ — so a team that does not tag releases had its merge rate reported as its deploy rate, and a team that does not name branches \"hotfix\" got a change failure rate of exactly 0%, which reads as excellence rather than as no signal",
+          "Measured figures never silently replace estimated ones. When a repo has no deployments the panel explains what the existing numbers actually mean instead of hiding, so you always know which you are reading",
+          "Only successful production deploys count toward frequency — a failed rollout is not a delivery. Pending and in-progress deploys are excluded from the failure rate entirely, and a rate with nothing conclusive reports null rather than a flattering 0%",
+        ],
+      },
+    },
+    {
+      version: "4.2.0",
+      date: "2026-08-15",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3448,7 +3504,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.0"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.1"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3698,7 +3754,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.1"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

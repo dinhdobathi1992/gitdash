@@ -13,6 +13,7 @@ import { RunHistoryBars, TrendSparkline, StatusBadge, HealthScoreRing } from "@/
 import { DoraKpiCards, DoraKpiSkeleton } from "@/components/DoraKpiCards";
 import PartialDataBadge from "@/components/PartialDataBadge";
 import AiInsightsCard from "@/components/AiInsightsCard";
+import DeploymentsPanel from "@/components/DeploymentsPanel";
 import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
 import {
   AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
@@ -479,6 +480,11 @@ export default function RepoDetailPage() {
               DORA Metrics are disabled — enable in <a href="/settings" className="text-violet-400 hover:underline ml-1">Settings → Feature Flags</a>
             </div>
           )}
+
+          {/* Deployments — sits directly beneath the DORA cards because it
+              qualifies them: measured figures when the repo uses GitHub
+              deployments, otherwise an explanation of what "estimated" means. */}
+          {flags.dora && <DeploymentsPanel owner={owner} repo={repo} />}
 
           {/* PR Lifecycle Extension */}
           {flags.prLifecycle ? (
