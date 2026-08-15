@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
+import SecurityAlertsPanel from "@/components/SecurityAlertsPanel";
 import { fetcher } from "@/lib/swr";
 import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import type {
@@ -406,9 +407,9 @@ export default function SecurityPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Workflow Security</h1>
+          <h1 className="text-2xl font-bold text-white mb-1">Security</h1>
           <p className="text-sm text-slate-400">
-            Static analysis of GitHub Actions workflow YAML files for security issues in{" "}
+            GitHub&apos;s own security alerts, plus static analysis of workflow YAML, for{" "}
             <span className="font-mono text-slate-300">
               {owner}/{repo}
             </span>
@@ -421,6 +422,15 @@ export default function SecurityPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> Back to repo
         </Link>
       </div>
+
+      {/* GitHub's own findings — shown above the YAML analysis because a live
+          CVE or leaked credential outranks a workflow anti-pattern. Gated on
+          the same flag as the rest of the page. */}
+      {flags.securityScan && <SecurityAlertsPanel owner={owner} repo={repo} />}
+
+      {flags.securityScan && (
+        <h2 className="text-base font-semibold text-white pt-2">Workflow static analysis</h2>
+      )}
 
       {/* Disabled state */}
       {!flags.securityScan && (
