@@ -6,6 +6,43 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.7] — 2026-08-16
+
+### Overview
+The security panel blamed the reader's token for problems it had not caused. Found while
+answering "where can I check it — I don't see any error in the UI", which turned out to be the
+right question: there was no error, and the guidance about needing a scope was wrong.
+
+### Fixed
+
+#### A disabled feature is not a permission problem
+- GitHub answers `403` both when a token is insufficient **and** when a security feature is
+  switched off for a repository. `statusFromError` mapped every `403` to `forbidden`, rendered as
+  **"Token lacks permission"** with `needs_scope: true`.
+- Measured on a real repository without Code Security:
+  `403 {"message":"Code Security must be enabled for this repository to use code scanning."}`
+  Nothing about that is a permission failure, but the panel told the reader to regenerate a PAT —
+  a fix that could not possibly work.
+- A `403` is now classified by its response body, checked on both `.message` and
+  `.response.data.message` rather than depending on one Octokit shape. A disabled feature becomes
+  `not_enabled`; anything else stays `forbidden`.
+- Ambiguity deliberately resolves toward `forbidden`: a wrongly reported permission gap is at
+  least actionable, whereas a wrong "not enabled" hides a real access problem on a security page.
+
+#### The `security_events` claim was wrong
+- The module header, the panel warning and the Security documentation all stated that reading
+  these alerts requires the `security_events` scope and that "most existing tokens will 403 here".
+- Measured against the API, a classic PAT with `repo` reads all three sources. That false premise
+  is what produced the 403 mapping above, so it is corrected at the source rather than papered over.
+- Fine-grained PATs *do* have separate permissions, so those are now named on their own — read
+  access to **Dependabot alerts**, **Code scanning alerts** and **Secret scanning alerts**.
+
+### Documentation
+- The Security section explains that `403` carries two meanings and how they are told apart.
+- API Reference updated: no scope requirement, and the body-based classification described.
+
+---
+
 ## [4.2.6] — 2026-08-15
 
 ### Overview

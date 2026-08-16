@@ -20,9 +20,20 @@ vi.mock("@/lib/github", () => ({
   }),
 }));
 
-function httpError(status: number) {
-  const e = new Error(`HTTP ${status}`) as Error & { status: number };
+function httpError(status: number, message?: string) {
+  const e = new Error(message ?? `HTTP ${status}`) as Error & { status: number };
   e.status = status;
+  return e;
+}
+
+/** A 403 whose body arrives on the response rather than on `.message`. */
+function httpErrorWithBody(status: number, bodyMessage: string) {
+  const e = new Error(`HTTP ${status}`) as Error & {
+    status: number;
+    response: { data: { message: string } };
+  };
+  e.status = status;
+  e.response = { data: { message: bodyMessage } };
   return e;
 }
 
@@ -73,6 +84,42 @@ describe("getSecurityAlerts — permission and availability failures", () => {
     expect(r.partial).toBe(true);
     // Crucially, this is NOT reported as a clean repo.
     expect(r.sources.dependabot.open_count).toBe(0);
+  });
+
+  // v4.2.7: GitHub answers 403 for a *disabled feature* as well as for an
+  // insufficient token. Blaming the token for both told people to widen a PAT
+  // that was already sufficient — a fix that cannot possibly work.
+  it("treats a 403 that names a disabled feature as not_enabled, not a scope gap", async () => {
+    listCodeScanning.mockRejectedValue(
+      httpError(403, "Code Security must be enabled for this repository to use code scanning."),
+    );
+    const r = await run();
+
+    expect(r.sources.code_scanning.status).toBe("not_enabled");
+    expect(r.needs_scope).toBe(false);
+    // Still not a clean repo — the source remains unreadable.
+    expect(r.partial).toBe(true);
+  });
+
+  it("reads the disabled-feature message from the response body too", async () => {
+    listSecretScanning.mockRejectedValue(
+      httpErrorWithBody(403, "Advanced Security must be enabled for this repository."),
+    );
+    const r = await run();
+
+    expect(r.sources.secret_scanning.status).toBe("not_enabled");
+    expect(r.needs_scope).toBe(false);
+  });
+
+  it("keeps a 403 with no disabled-feature message as forbidden", async () => {
+    // Ambiguity resolves toward "permission problem": that fix is at least
+    // under the reader's control, whereas a wrong "not enabled" hides a real
+    // access gap on a security page.
+    listDependabot.mockRejectedValue(httpError(403, "Resource not accessible by personal access token"));
+    const r = await run();
+
+    expect(r.sources.dependabot.status).toBe("forbidden");
+    expect(r.needs_scope).toBe(true);
   });
 
   it("marks a 404 source not_enabled without claiming a scope problem", async () => {

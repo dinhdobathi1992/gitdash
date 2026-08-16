@@ -1135,12 +1135,23 @@ function FeatureSecurity() {
           belief.
         </ProseP>
 
-        <Callout type="warning">
-          <strong>Requires the <Code>security_events</Code> scope</strong>, which GitDash does not
-          request by default — so an existing token will most likely be refused. Add it to a classic
-          PAT, or grant <em>Dependabot alerts</em>, <em>Code scanning alerts</em> and{" "}
-          <em>Secret scanning alerts</em> read access on a fine-grained PAT.
+        <Callout type="info">
+          <strong>A classic PAT with <Code>repo</Code> reads all three sources</strong> — no extra
+          scope is needed. Earlier versions of this page claimed <Code>security_events</Code> was
+          required and that most tokens would be refused; measured against the API, that is not the
+          case. On a <em>fine-grained</em> PAT the permissions are separate, so grant read access to{" "}
+          <em>Dependabot alerts</em>, <em>Code scanning alerts</em> and <em>Secret scanning
+          alerts</em>.
         </Callout>
+        <ProseP>
+          <strong>&ldquo;Not enabled&rdquo; is not a permission problem.</strong> GitHub answers with{" "}
+          <Code>403</Code> when a security feature is switched off for a repository, using the same
+          status code as a genuine permission failure — for example{" "}
+          <em>&ldquo;Code Security must be enabled for this repository to use code scanning&rdquo;</em>.
+          The two are told apart by the response body, so a source that is merely switched off is
+          labelled <strong>Not enabled for this repo</strong> and never prompts you to widen a token
+          that is already sufficient.
+        </ProseP>
 
         <Callout type="info">
           <strong>An unreadable source never looks like a clean one.</strong> Each source carries its
@@ -2735,7 +2746,7 @@ function APIReference() {
         {
           method: "GET",
           path: "/api/github/security-alerts",
-          description: "GitHub's own security findings: Dependabot, code scanning and secret scanning alerts. Returns { sources, alerts[], counts, total_open, oldest_open_days, partial, needs_scope } where each source carries its own status (ok | forbidden | not_enabled | error) plus 90-day fix count and mean time to remediate. Requires the security_events scope; a 403 on any source sets needs_scope rather than failing the request, so an unreadable source is never reported as a clean one.",
+          description: "GitHub's own security findings: Dependabot, code scanning and secret scanning alerts. Returns { sources, alerts[], counts, total_open, oldest_open_days, partial, needs_scope } where each source carries its own status (ok | forbidden | not_enabled | error) plus 90-day fix count and mean time to remediate. A classic PAT with repo reads all three; no security_events scope is required. A 403 is classified by its response body — a disabled feature becomes not_enabled, a genuine permission failure becomes forbidden and sets needs_scope — so an unreadable source is never reported as a clean one, and a switched-off one never prompts a pointless token change.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner" },
             { name: "repo", type: "string", optional: false, desc: "Repository name" },
@@ -3024,9 +3035,23 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
+      version: "4.2.7",
+      date: "2026-08-16",
+      badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "The security panel blamed your token for problems it had not caused. GitHub answers with 403 both when a token is insufficient and when a security feature is simply switched off for a repository — and every 403 was mapped to \"Token lacks permission\", which told people to regenerate a PAT that was already sufficient. A 403 is now classified by its response body, so \"Code Security must be enabled for this repository\" is reported as \"Not enabled for this repo\" and never prompts a token change that could not have helped. Anything genuinely ambiguous still reports a permission problem, because that fix is at least in your hands",
+          "The documented claim that reading security alerts requires the security_events scope was wrong. Measured against the API, a classic PAT with repo reads Dependabot, code scanning and secret scanning alerts. The panel warning and the Security documentation now say what is actually needed, and the fine-grained PAT permissions — which genuinely are separate — are named on their own",
+        ],
+        improved: [],
+      },
+    },
+    {
       version: "4.2.6",
       date: "2026-08-15",
-      badge: "latest",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [
@@ -3694,7 +3719,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.6"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.7"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3945,7 +3970,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.6"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.7"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
