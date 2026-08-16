@@ -181,7 +181,7 @@ export default function TeamInsightsPage() {
   const selfMerges = data?.contributors.reduce((s, c) => s + c.self_merge_count, 0) ?? 0;
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-8">
       <Breadcrumb items={[{ label: "Team Insights" }]} />
 
       {/* Page header */}

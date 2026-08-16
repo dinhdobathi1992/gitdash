@@ -401,7 +401,7 @@ export default function SecurityPage() {
   );
 
   return (
-    <div className="p-8 max-w-5xl space-y-6">
+    <div className="p-8 space-y-6">
       <RepoWorkflowBreadcrumb owner={owner} repo={repo} />
 
       {/* Header */}

@@ -6,6 +6,45 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.2.8] — 2026-08-16
+
+### Overview
+Layout fix, reported directly: a large band of empty space down the right-hand side of every
+page on a wide display.
+
+### Fixed
+
+#### One centred content container for the whole app
+- Each page declared its own cap and none of them centred:
+
+  | Page | Cap before |
+  |---|---|
+  | Security | `max-w-5xl` (1024px) |
+  | Issues, Contributor, Org Health | `max-w-6xl` (1152px) |
+  | Cost Analytics | `max-w-5xl` |
+  | Team Analytics, Team Insights | `max-w-7xl` (1280px) |
+  | Alerts, Reports, Org, Repo overview | none — full width |
+
+- A left-aligned cap puts every unused pixel in a single block on the right instead of splitting
+  it evenly. On a 2000px display the Security page ended around 1010px with almost as much blank
+  beside it as content, and sibling pages disagreed with each other by up to 256px.
+- The container now lives once in `AppShell` — centred, with a generous cap. Pages declare padding
+  and spacing only.
+- The cap is deliberately wide because this is a dashboard: the PR leaderboard alone is nine
+  columns, and narrowing those tables to a reading measure would trade one layout problem for
+  another.
+- Two exceptions kept on purpose: the contributor **print brief** keeps its narrow measure, and the
+  **documentation** keeps its prose width — both were already centred and both are reading
+  surfaces rather than dashboards.
+
+### Verification
+Captured in a real browser against a live standalone instance at 2000×1150, 1440×900, 834×1100 and
+390×844. Security and Team Analytics both span the full content area at 2000px; the laptop width
+sits below the cap and fills naturally; tablet and mobile are unchanged, with the sidebar still
+collapsing to the drawer and wide tables still scrolling inside their own container.
+
+---
+
 ## [4.2.7] — 2026-08-16
 
 ### Overview

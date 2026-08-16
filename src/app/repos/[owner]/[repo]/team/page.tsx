@@ -375,7 +375,7 @@ export default function TeamAnalyticsPage() {
   );
 
   return (
-    <div className="p-8 max-w-7xl space-y-6">
+    <div className="p-8 space-y-6">
       <RepoWorkflowBreadcrumb owner={owner} repo={repo} />
 
       {/* Header */}

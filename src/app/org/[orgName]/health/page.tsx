@@ -298,7 +298,7 @@ export default function OrgHealthScorecardPage({
   const total = repos.length;
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl">
+    <div className="p-8 space-y-6">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },

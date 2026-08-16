@@ -75,7 +75,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <span className="font-semibold text-white text-sm tracking-tight">GitDash</span>
         </header>
 
-        <main className="flex-1">{children}</main>
+        {/* One content container for the whole app (v4.2.8).
+
+            Pages previously each declared their own cap — max-w-5xl on
+            Security, max-w-6xl on Issues, max-w-7xl on Team Analytics, none at
+            all on Alerts and Reports — and none of them centred. Left-aligned
+            caps put every pixel of unused width in a single block on the right,
+            which on a wide monitor left the Security page ending around 1010px
+            with almost as much empty space beside it as content.
+
+            Centring here fixes the asymmetry once, and the cap is generous
+            because this is a dashboard: the PR leaderboard alone is nine
+            columns, and narrowing those tables to a reading measure would be
+            the wrong trade. */}
+        <main className="flex-1 min-w-0">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+        </main>
 
         {/* Footer — hidden on docs (it has its own) */}
         {!path.startsWith("/docs") && (

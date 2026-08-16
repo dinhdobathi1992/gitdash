@@ -3035,9 +3035,23 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.7",
+      version: "4.2.8",
       date: "2026-08-16",
       badge: "latest",
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "Pages left a large band of empty space down the right-hand side on wide screens. Every page declared its own width cap — max-w-5xl on Security, max-w-6xl on Issues and Org Health, max-w-7xl on Team Analytics, none at all on Alerts and Reports — and none of them centred, so all the unused width collected in one block on the right rather than splitting evenly. On a 2000px display the Security page ended around 1010px with almost as much blank beside it as content",
+          "The app now has a single centred content container, so every page agrees on width and stays centred at any viewport. The cap is deliberately generous because this is a dashboard — the PR leaderboard alone is nine columns, and narrowing those tables to a reading measure would trade one layout problem for another. The contributor print brief keeps its narrow measure, and the documentation keeps its prose width",
+        ],
+        improved: [],
+      },
+    },
+    {
+      version: "4.2.7",
+      date: "2026-08-16",
+      badge: null,
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
       changes: {
         added: [],
@@ -3719,7 +3733,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.7"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.8"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3970,7 +3984,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.7"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.8"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

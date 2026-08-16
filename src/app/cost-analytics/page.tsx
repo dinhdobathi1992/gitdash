@@ -283,7 +283,7 @@ export default function CostAnalyticsPage() {
   const isCurrentMonth = year === DEFAULT_YEAR && month === DEFAULT_MONTH;
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl space-y-5">
+    <div className="p-4 md:p-8 space-y-5">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },

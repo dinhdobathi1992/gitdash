@@ -38,7 +38,7 @@ export default function IssuesPage() {
   );
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-8 space-y-6">
       <RepoWorkflowBreadcrumb owner={owner} repo={repo} />
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
