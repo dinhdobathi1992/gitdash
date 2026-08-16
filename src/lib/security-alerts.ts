@@ -6,14 +6,15 @@
  * GitHub's own findings. This module adds those.
  *
  * ── Access is the hard part ───────────────────────────────────────────────
- * All three endpoints need the `security_events` scope, which GitDash has
- * never asked for — so most existing tokens will 403 here. That is not an
- * error state to bury: each source reports its own status so the UI can say
- * "your token can't read this, here's how to fix it" instead of showing an
- * empty list that looks like good news.
+ * Each source reports its own status so the UI can say why it has no data,
+ * instead of showing an empty list that looks like good news. An empty result
+ * and an inaccessible result must never look the same on a security page.
  *
- * An empty result and an inaccessible result must never look the same on a
- * security page.
+ * The original version of this file assumed the `security_events` scope was
+ * required and that "most existing tokens will 403 here". Measured against the
+ * real API (v4.2.7), that is wrong: a plain `repo` scope reads all three
+ * endpoints. Which matters, because it produced a mapping that blamed the
+ * token for every 403 — see `statusFromError`.
  */
 
 import { getOctokit } from "@/lib/github";
@@ -83,10 +84,39 @@ function normaliseSeverity(raw: string | null | undefined): AlertSeverity {
   }
 }
 
-/** Classify a failure so the UI can distinguish "can't read" from "nothing found". */
+/**
+ * GitHub returns 403 for a disabled *feature* as readily as for an
+ * insufficient token, and the two demand opposite responses from the reader.
+ *
+ * Measured on a real repository without Code Security:
+ *
+ *   403 {"message":"Code Security must be enabled for this repository
+ *        to use code scanning."}
+ *
+ * Nothing about that is a permission problem, but v4.2.6 and earlier mapped it
+ * to "forbidden" → "Token lacks permission" → `needs_scope: true`. The panel
+ * therefore told people to widen a token that was already sufficient, which
+ * sends them to rotate a PAT for a change that cannot possibly help.
+ *
+ * The message body is the only thing that separates the two cases, so match on
+ * it. Anything that does not name a disabled feature stays "forbidden": when
+ * in doubt, reporting a permission problem is the safer error, because the
+ * fix for it is at least under the reader's control.
+ */
+const FEATURE_DISABLED_PATTERN =
+  /must be enabled|not enabled|no.{0,12}(advanced security|code security)|disabled for/i;
+
 function statusFromError(e: unknown): SourceStatus {
-  const status = (e as { status?: number })?.status;
-  if (status === 403) return "forbidden";
+  const err = e as { status?: number; message?: string; response?: { data?: { message?: string } } };
+  const status = err?.status;
+
+  if (status === 403) {
+    // Octokit surfaces the API message on `.message`, but the raw body is kept
+    // on the response — check both rather than depending on one shape.
+    const message = `${err?.message ?? ""} ${err?.response?.data?.message ?? ""}`;
+    return FEATURE_DISABLED_PATTERN.test(message) ? "not_enabled" : "forbidden";
+  }
+
   // 404 here means the feature is off for this repo (or the repo is private
   // without Advanced Security) — not an error worth alarming anyone about.
   if (status === 404) return "not_enabled";

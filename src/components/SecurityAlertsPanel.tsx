@@ -99,10 +99,12 @@ export default function SecurityAlertsPanel({ owner, repo }: { owner: string; re
             <div className="space-y-1">
               <p className="font-semibold">Some sources could not be read — this is not an all-clear.</p>
               <p className="text-amber-200/80">
-                Reading security alerts needs the <code className="text-amber-100">security_events</code>{" "}
-                scope, which GitDash does not request by default. Regenerate your token with it
-                added (classic PAT), or grant <em>Dependabot alerts</em>, <em>Code scanning
-                alerts</em> and <em>Secret scanning alerts</em> read access on a fine-grained PAT.
+                A classic PAT with <code className="text-amber-100">repo</code> reads all three
+                sources, so this usually means the token is fine-grained or more narrowly scoped.
+                On a fine-grained PAT, grant read access to <em>Dependabot alerts</em>, <em>Code
+                scanning alerts</em> and <em>Secret scanning alerts</em>. Sources that are simply
+                switched off for the repository are labelled <em>Not enabled</em> below and need no
+                token change.
               </p>
             </div>
           </div>
