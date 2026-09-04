@@ -318,6 +318,14 @@ const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
       )`,
     ],
   },
+  {
+    version: 7,
+    name: "pr_facts_sync_cursor",
+    up: [
+      `ALTER TABLE sync_cursors ADD COLUMN IF NOT EXISTS pr_sync_cursor TIMESTAMPTZ`,
+      `ALTER TABLE sync_cursors ADD COLUMN IF NOT EXISTS pr_backfill_complete BOOLEAN NOT NULL DEFAULT FALSE`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -472,6 +480,34 @@ export async function listSyncedRepos(): Promise<{ repo: string; last_synced_at:
   return await getDb()`
     SELECT repo, last_synced_at FROM sync_cursors ORDER BY repo
   ` as { repo: string; last_synced_at: string | null }[];
+}
+
+// ── PR facts sync cursor ──────────────────────────────────────────────────────
+
+export async function getPrSyncCursor(repo: string): Promise<{ cursor: string | null; backfillComplete: boolean }> {
+  await ensureSchema();
+  const rows = await getDb()`
+    SELECT pr_sync_cursor, pr_backfill_complete
+    FROM sync_cursors
+    WHERE repo = ${repo}
+  ` as { pr_sync_cursor: string | null; pr_backfill_complete: boolean }[];
+  if (!rows.length) return { cursor: null, backfillComplete: false };
+  return { cursor: rows[0].pr_sync_cursor, backfillComplete: rows[0].pr_backfill_complete };
+}
+
+export async function updatePrSyncCursor(
+  repo: string,
+  cursor: string | null,
+  backfillComplete: boolean,
+): Promise<void> {
+  await ensureSchema();
+  // UPDATE-only: never creates a sync_cursors row. PR-facts sync only runs
+  // for repos already enrolled by updateSyncCursor (run-sync path).
+  await getDb()`
+    UPDATE sync_cursors
+    SET pr_sync_cursor = ${cursor}, pr_backfill_complete = ${backfillComplete}
+    WHERE repo = ${repo}
+  `;
 }
 
 // ── Historical queries ────────────────────────────────────────────────────────
@@ -761,6 +797,9 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
   }
 
   if (!rules.length) return 0;
+  // Check pr_backfill_complete once per repo — used to gate the 4 pr_facts-backed metrics
+  const prBackfillRow = await getPrSyncCursor(repoKey);
+  const prBackfillComplete = prBackfillRow.backfillComplete;
 
   let fired = 0;
 
@@ -843,6 +882,7 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
     // ── People-based metrics (pr_facts-backed) ───────────────────────────────
 
     } else if (rule.metric === "pr_throughput_drop") {
+      if (!prBackfillComplete) { /* value remains null — skip silently */ } else {
       const rows = await getDb()`
         SELECT
           COUNT(*) FILTER (
@@ -862,8 +902,10 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
         const drop = Math.round(((row.prior_count - row.current_count) / row.prior_count) * 100);
         value = Math.max(0, drop);
       }
+      }
 
     } else if (rule.metric === "review_response_p90") {
+      if (!prBackfillComplete) { /* value remains null — skip silently */ } else {
       // Time-to-first-review in hours from pr_facts
       const rows = await getDb()`
         SELECT
@@ -880,6 +922,7 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
       if (row?.p90_seconds !== null && row?.p90_seconds !== undefined) {
         sampleSize = row.total;
         value = Math.round(row.p90_seconds / 3600);
+      }
       }
 
     } else if (rule.metric === "afterhours_commit_pct") {
@@ -902,6 +945,7 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
       }
 
     } else if (rule.metric === "pr_abandon_rate") {
+      if (!prBackfillComplete) { /* value remains null — skip silently */ } else {
       // Closed-without-merge PRs from pr_facts
       const rows = await getDb()`
         SELECT
@@ -916,8 +960,10 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
         sampleSize = row.total;
         value = Math.round((row.abandoned / row.total) * 100);
       }
+      }
 
     } else if (rule.metric === "unreviewed_pr_age") {
+      if (!prBackfillComplete) { /* value remains null — skip silently */ } else {
       // Max age in days of open PRs without any review
       const rows = await getDb()`
         SELECT MAX(EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400)::int AS max_age_days,
@@ -929,6 +975,7 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
       ` as { max_age_days: number | null; total: number }[];
       sampleSize = rows[0]?.total ?? 0;
       value = rows[0]?.max_age_days ?? null;
+      }
 
     } else if (rule.metric === "anomaly_count") {
       // Statistical outliers (duration/queue-wait > 2 stddev from rolling

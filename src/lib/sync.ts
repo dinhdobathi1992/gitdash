@@ -11,15 +11,18 @@ import {
   evaluateAlertRulesForRepo,
   getPendingDigestEvents, markDigestSent,
   getLeadershipDigestRules,
-  type RunUpsertRow,
+  upsertPrFacts,
+  getPrSyncCursor, updatePrSyncCursor,
+  type RunUpsertRow, type PrFactUpsertRow,
 } from "@/lib/db";
-import { deliverDigestEmail, deliverLeadershipDigestEmail } from "@/lib/notifier";
+import { deliverDigestEmail, deliverLeadershipDigestEmail, deliverLeadershipDigestSlack } from "@/lib/notifier";
 import { generateJson } from "@/lib/ai";
 import { buildDigestSnapshot } from "@/lib/ai-snapshots";
 import { DIGEST_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import { parseDigestContent } from "@/lib/ai-schema";
 import { computeScorecard } from "@/lib/org-health-scorecard";
 import { generateLeadershipNarrative } from "@/lib/leadership-narrative";
+import { pLimitSettled } from "@/lib/concurrency";
 
 const MAX_PAGES = 5;
 const PER_PAGE = 100;
@@ -219,14 +222,22 @@ export async function sendWeeklyLeadershipDigests(
         console.warn(`[leadership-digest] AI summary threw for ${org}, sending without it:`, e);
       }
 
-      const result = await deliverLeadershipDigestEmail(rule.destination, {
-        ...narrative,
-        aiSummary,
-      });
+      let result: { ok: boolean; error?: string };
+      if (rule.channel === "slack") {
+        result = await deliverLeadershipDigestSlack(rule.destination, {
+          ...narrative,
+          aiSummary,
+        });
+      } else {
+        result = await deliverLeadershipDigestEmail(rule.destination, {
+          ...narrative,
+          aiSummary,
+        });
+      }
       if (result.ok) sent++;
       else {
         failures++;
-        console.error(`[leadership-digest] Delivery failed for ${rule.destination}: ${result.error}`);
+        console.error(`[leadership-digest] Delivery failed for ${rule.destination} (channel: ${rule.channel ?? "email"}): ${result.error}`);
       }
     } catch (e) {
       failures++;
@@ -235,4 +246,126 @@ export async function sendWeeklyLeadershipDigests(
   }
 
   return { rules_processed: rules.length, sent, failures };
+}
+
+export interface PrFactsSyncResult {
+  repo: string;
+  processed: number;
+  failed: number;
+  backfillComplete: boolean;
+  apiCallCount: number;
+}
+
+// Page cap: 10 pages × 100 PRs = 1,000 PRs max per run.
+// Large repos backfill incrementally across multiple cron runs.
+const PR_PAGE_CAP = 10;
+const PR_PER_PAGE = 100;
+const PR_CONCURRENCY = 5; // lower than github-dora.ts's 10 — cost visibility matters
+
+/**
+ * Fetches all PRs for a repo (paginated, mandatory per-PR detail) and upserts
+ * into pr_facts. Uses an UPDATE-only cursor so it cannot enroll new repos.
+ * Only sets pr_backfill_complete when the page loop exhausted naturally (not
+ * truncated by the cap) — a repo that hits the cap stays incomplete and
+ * resumes on the next scheduled run from where it left off.
+ */
+export async function fetchAndUpsertPrFacts(
+  octokit: Octokit,
+  owner: string,
+  repoName: string,
+): Promise<PrFactsSyncResult> {
+  const repoKey = `${owner}/${repoName}`;
+  const { cursor: lastCursor } = await getPrSyncCursor(repoKey);
+  let apiCallCount = 0;
+  let processed = 0;
+  let failed = 0;
+  let exhausted = false;
+  let oldestProcessedUpdatedAt: string | null = null;
+
+  for (let page = 1; page <= PR_PAGE_CAP; page++) {
+    const { data: prList } = await octokit.rest.pulls.list({
+      owner,
+      repo: repoName,
+      state: "all",
+      sort: "updated",
+      direction: "desc",
+      per_page: PR_PER_PAGE,
+      page,
+    });
+    apiCallCount++;
+
+    if (prList.length === 0) { exhausted = true; break; }
+
+    // Build per-PR detail tasks for ALL PRs in this page
+    const detailTasks = prList.map((pr) => async (): Promise<PrFactUpsertRow | null> => {
+      try {
+        const [reviewsRes, detailRes] = await Promise.all([
+          octokit.rest.pulls.listReviews({ owner, repo: repoName, pull_number: pr.number }),
+          octokit.rest.pulls.get({ owner, repo: repoName, pull_number: pr.number }),
+        ]);
+        apiCallCount += 2;
+        const reviews = reviewsRes.data;
+        const firstReview = reviews.length
+          ? reviews.reduce((min, r) => r.submitted_at && r.submitted_at < min ? r.submitted_at : min, reviews[0].submitted_at ?? "")
+          : null;
+        const approvedAt = reviews.find((r) => r.state === "APPROVED")?.submitted_at ?? null;
+        return {
+          repo: repoKey,
+          pr_number: pr.number,
+          author: pr.user?.login ?? null,
+          created_at: pr.created_at,
+          merged_at: pr.merged_at ?? null,
+          closed_at: pr.closed_at ?? null,
+          first_review_at: firstReview,
+          approved_at: approvedAt,
+          additions: detailRes.data.additions ?? null,
+          deletions: detailRes.data.deletions ?? null,
+          review_count: reviews.length,
+          state: pr.state,
+        };
+      } catch {
+        return null; // detail fetch failed — PR not upserted this run
+      }
+    });
+
+    const settled = await pLimitSettled(detailTasks, { concurrency: PR_CONCURRENCY });
+
+    const rows: PrFactUpsertRow[] = [];
+    for (const result of settled) {
+      if (result.status === "fulfilled" && result.value !== null) {
+        rows.push(result.value);
+      } else {
+        failed++;
+      }
+    }
+
+    if (rows.length > 0) {
+      await upsertPrFacts(rows);
+      processed += rows.length;
+      // Track oldest successfully processed PR's updated_at for cursor advancement
+      const oldest = prList
+        .filter((pr) => rows.some((r) => r.pr_number === pr.number))
+        .reduce((min, pr) => pr.updated_at < min ? pr.updated_at : min, prList[0].updated_at);
+      if (oldestProcessedUpdatedAt === null || oldest < oldestProcessedUpdatedAt) {
+        oldestProcessedUpdatedAt = oldest;
+      }
+    }
+
+    if (prList.length < PR_PER_PAGE) { exhausted = true; break; }
+
+    // Cursor-based incremental: stop if we've reached already-processed PRs
+    if (lastCursor) {
+      const lastPr = prList[prList.length - 1];
+      if (lastPr.updated_at <= lastCursor) { exhausted = true; break; }
+    }
+  }
+
+  // Advance cursor to oldest successfully-processed PR's updated_at
+  // Only mark complete if loop exhausted naturally (not page-capped)
+  const newCursor = oldestProcessedUpdatedAt ?? lastCursor;
+  const backfillComplete = exhausted;
+  await updatePrSyncCursor(repoKey, newCursor, backfillComplete);
+
+  console.log(`[pr-facts] ${repoKey}: processed=${processed} failed=${failed} apiCalls=${apiCallCount} complete=${backfillComplete}`);
+  return { repo: repoKey, processed, failed, backfillComplete, apiCallCount };
 }

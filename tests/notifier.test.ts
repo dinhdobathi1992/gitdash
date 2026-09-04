@@ -65,7 +65,7 @@ describe("dispatchAlert - slack channel", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", mockFetch);
 
-    const rule = makeRule({ channel: "slack", destination: "https://hooks.slack.com/test" });
+    const rule = makeRule({ channel: "slack", destination: "https://hooks.slack.com/services/T0/B0/test" });
     const payload = buildPayload(rule, "org/repo", 35);
     const result = await dispatchAlert(payload);
     expect(result.ok).toBe(true);
@@ -76,7 +76,7 @@ describe("dispatchAlert - slack channel", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 400 });
     vi.stubGlobal("fetch", mockFetch);
 
-    const rule = makeRule({ channel: "slack", destination: "https://hooks.slack.com/test" });
+    const rule = makeRule({ channel: "slack", destination: "https://hooks.slack.com/services/T0/B0/test" });
     const payload = buildPayload(rule, "org/repo", 35);
     const result = await dispatchAlert(payload);
     expect(result.ok).toBe(false);
@@ -215,5 +215,94 @@ describe("deliverLeadershipDigestEmail — HTML escaping", () => {
     const body = await capture(base);
     expect(body.html).not.toContain("AI summary");
     expect(body.text).not.toContain("AI summary");
+  });
+});
+
+// ── isAllowedSlackWebhook ─────────────────────────────────────────────────────
+
+describe("isAllowedSlackWebhook", () => {
+  it("allows hooks.slack.com/services/* URLs", async () => {
+    const { isAllowedSlackWebhook } = await import("../src/lib/notifier");
+    expect(isAllowedSlackWebhook("https://hooks.slack.com/services/ABC/DEF/xyz")).toBe(true);
+  });
+
+  it("rejects non-hooks.slack.com URLs", async () => {
+    const { isAllowedSlackWebhook } = await import("../src/lib/notifier");
+    expect(isAllowedSlackWebhook("https://evil.example.com/webhook")).toBe(false);
+    expect(isAllowedSlackWebhook("https://hooks.slack.com.evil.example.com/services/x")).toBe(false);
+    expect(isAllowedSlackWebhook("http://hooks.slack.com/services/x")).toBe(false); // HTTP not allowed
+    expect(isAllowedSlackWebhook("")).toBe(false);
+  });
+});
+
+// ── deliverSlack allowlist ────────────────────────────────────────────────────
+
+describe("deliverSlack with allowlist", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("rejects non-allowlisted URL without making a network call", async () => {
+    const { dispatchAlert } = await import("../src/lib/notifier");
+    const rule = makeRule({ channel: "slack", destination: "https://evil.example.com/hook" });
+    const payload = { rule, repo: "owner/repo", value: 50, metricLabel: "Failure Rate", metricUnit: "%", triggeredAt: new Date().toISOString() };
+    const result = await dispatchAlert(payload);
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toContain("allowed");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+});
+
+// ── deliverLeadershipDigestSlack ──────────────────────────────────────────────
+
+describe("deliverLeadershipDigestSlack", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  const VALID_URL = "https://hooks.slack.com/services/T0/B0/abcdef";
+  const narrative = {
+    subject: "Weekly Digest",
+    summary_line: "3 repos healthy.",
+    highlights: ["Fast deploys", "Low failure rate"],
+    concerns: ["Flaky workflow"],
+  };
+
+  it("rejects non-allowlisted URL without a network call", async () => {
+    const { deliverLeadershipDigestSlack } = await import("../src/lib/notifier");
+    const result = await deliverLeadershipDigestSlack("https://evil.com/hook", narrative);
+    expect(result.ok).toBe(false);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("posts to allowed URL and returns ok on success", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    const { deliverLeadershipDigestSlack } = await import("../src/lib/notifier");
+    const result = await deliverLeadershipDigestSlack(VALID_URL, narrative);
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
+    const [calledUrl] = vi.mocked(fetch).mock.calls[0];
+    expect(calledUrl).toBe(VALID_URL);
+  });
+
+  it("returns ok:false when webhook returns non-200", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("bad", { status: 400 }));
+    const { deliverLeadershipDigestSlack } = await import("../src/lib/notifier");
+    const result = await deliverLeadershipDigestSlack(VALID_URL, narrative);
+    expect(result.ok).toBe(false);
+  });
+
+  it("truncates highlights/concerns to 10 + N more", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    const { deliverLeadershipDigestSlack } = await import("../src/lib/notifier");
+    const longNarrative = {
+      ...narrative,
+      highlights: Array.from({ length: 15 }, (_, i) => `highlight ${i + 1}`),
+      concerns: [],
+    };
+    await deliverLeadershipDigestSlack(VALID_URL, longNarrative);
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+    const highlightBlock = body.blocks.find((b: { type: string; text?: { text: string } }) =>
+      b.type === "section" && b.text?.text?.includes("Highlights")
+    );
+    expect(highlightBlock?.text?.text).toContain("+5 more");
   });
 });

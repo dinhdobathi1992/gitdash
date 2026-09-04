@@ -12,8 +12,15 @@ export type FeatureFlags = {
   healthScorecard: boolean;
   workloadRisk: boolean;
   aiInsights: boolean;
+  githubIssueFromAnomaly: boolean;
 };
 
+/**
+ * Convention: new flags default false until proven stable.
+ * Write-capable flags (those that push data to external services) must also
+ * set `writes: true` on their FlagDef in settings/page.tsx to be excluded
+ * from bulk Enable/Disable-all actions.
+ */
 export const DEFAULT_FLAGS: FeatureFlags = {
   dora: true,
   prLifecycle: true,
@@ -28,6 +35,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   healthScorecard: true,
   workloadRisk: true,
   aiInsights: true,
+  githubIssueFromAnomaly: false,
 };
 
 export const STORAGE_KEY = "gitdash:feature-flags";

@@ -14,6 +14,7 @@ import {
   updateAlertRule, deleteAlertRule, getRecentAlertEvents,
 } from "@/lib/db";
 import { safeError } from "@/lib/validation";
+import { isAllowedSlackWebhook } from "@/lib/notifier";
 
 export async function GET(req: NextRequest) {
   const token = await getTokenFromSession();
@@ -81,6 +82,15 @@ export async function POST(req: NextRequest) {
   }
   if (metric === "leadership_digest" && !destination) {
     return NextResponse.json({ error: "leadership_digest requires a destination email address" }, { status: 400 });
+  }
+  // Phase 2: enforce Slack allowlist at creation time for leadership_digest rules
+  if (metric === "leadership_digest" && channel === "slack") {
+    if (!isAllowedSlackWebhook(destination ?? "")) {
+      return NextResponse.json(
+        { error: "Slack destination must be a hooks.slack.com/services/* webhook URL" },
+        { status: 400 },
+      );
+    }
   }
 
   try {

@@ -237,11 +237,13 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
               const next = e.target.value;
               setMetric(next);
               if (next === "leadership_digest") {
-                setChannel("email");
+                // Default channel for leadership_digest is email, but allow switching to slack
+                setChannel((prev) => prev === "slack" ? "slack" : "email");
                 setThreshold("0");
                 setWindowHours("168");
-                setScope((s) => s.includes("/") ? "" : s); // repo-shaped scope doesn't apply here
+                setScope((s) => s.includes("/") ? "" : s);
               } else if (metric === "leadership_digest") {
+                // Leaving leadership_digest: reset to browser defaults
                 setChannel("browser");
                 setThreshold("20");
               }
@@ -269,6 +271,7 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           )}
         </div>
 
+        {/* Threshold and window — hidden for leadership_digest */}
         {!isLeadershipDigest && (
           <>
             <div>
@@ -297,27 +300,42 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
             </div>
+          </>
+        )}
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Channel</label>
-              <select
-                value={channel}
-                onChange={(e) => setChannel(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
-              >
+        {/* Channel selector — visible for all metrics including leadership_digest */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Channel</label>
+          <select
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
+          >
+            {isLeadershipDigest ? (
+              <>
+                <option value="email">Email</option>
+                <option value="slack">Slack</option>
+              </>
+            ) : (
+              <>
                 <option value="browser">Browser</option>
                 <option value="slack">Slack</option>
                 <option value="email">Email</option>
                 <option value="digest">Daily Digest (email)</option>
-              </select>
-              {channel === "digest" && (
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Bundled into one email per day instead of a real-time notification per event.
-                </p>
-              )}
-            </div>
-          </>
-        )}
+              </>
+            )}
+          </select>
+          {channel === "digest" && !isLeadershipDigest && (
+            <p className="text-[11px] text-slate-500 mt-1">
+              Bundled into one email per day instead of a real-time notification per event.
+            </p>
+          )}
+          {isLeadershipDigest && channel === "slack" && (
+            <p className="text-[11px] text-slate-500 mt-1">
+              Destination must be a hooks.slack.com/services/* webhook URL.
+            </p>
+          )}
+        </div>
 
         {(needsDestination || isLeadershipDigest) && (
           <div>
@@ -326,7 +344,7 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             </label>
             <input
               required={isLeadershipDigest}
-              placeholder={channel === "slack" ? "https://hooks.slack.com/…" : "you@example.com"}
+              placeholder={channel === "slack" ? "https://hooks.slack.com/services/…" : "you@example.com"}
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
               className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"

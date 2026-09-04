@@ -130,6 +130,7 @@ type FlagDef = {
   label: string;
   description: string;
   affects: string;
+  writes?: boolean;
 };
 
 const FLAG_DEFS: FlagDef[] = [
@@ -146,6 +147,7 @@ const FLAG_DEFS: FlagDef[] = [
   { key: "healthScorecard", label: "Team Health Scorecard", description: "Org-wide ranked view combining DORA tier and bus-factor risk per repo, worst-first.", affects: "Organization Overview" },
   { key: "workloadRisk", label: "Workload Risk Radar", description: "Flags sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload per person.", affects: "Repository Team" },
   { key: "aiInsights", label: "AI Insights", description: "LLM-generated analysis of the metrics already on screen. Requires AI provider keys configured on the server — the surfaces stay hidden without them.", affects: "Repository Overview, Organization Health" },
+  { key: "githubIssueFromAnomaly", label: "File Anomaly as GitHub Issue", description: "Adds a 'File as issue' button to the anomaly card on workflow-detail pages. This is a write capability — it creates issues in the repo on your behalf using your GitHub token. Individual toggle only; excluded from bulk Enable/Disable-all.", affects: "Workflow Detail", writes: true },
 ];
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -304,13 +306,13 @@ export default function SettingsPage() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => FLAG_DEFS.forEach((d) => setFlag(d.key, true))}
+            onClick={() => FLAG_DEFS.filter((d) => !d.writes).forEach((d) => setFlag(d.key, true))}
               className="text-xs px-2.5 py-1 rounded-lg text-violet-400 hover:bg-violet-500/10 border border-violet-500/20 transition-colors"
             >
               Enable all
             </button>
             <button
-              onClick={() => FLAG_DEFS.forEach((d) => setFlag(d.key, false))}
+            onClick={() => FLAG_DEFS.filter((d) => !d.writes).forEach((d) => setFlag(d.key, false))}
               className="text-xs px-2.5 py-1 rounded-lg text-slate-400 hover:bg-slate-700/60 border border-slate-700 transition-colors"
             >
               Disable all

@@ -74,10 +74,20 @@ export async function deliverBrowser(_payload: AlertPayload): Promise<DeliveryRe
 
 // ── Slack delivery ────────────────────────────────────────────────────────────
 
+/** Allowlist for Slack webhook destinations. Only hooks.slack.com is permitted.
+ * Enforced at delivery time (not just creation time) so existing DB rows also get checked.
+ */
+export function isAllowedSlackWebhook(url: string): boolean {
+  return url.startsWith("https://hooks.slack.com/services/");
+}
+
 export async function deliverSlack(payload: AlertPayload): Promise<DeliveryResult> {
   const { rule, repo, value, metricLabel, metricUnit, triggeredAt } = payload;
   if (!rule.destination) {
     return { ok: false, error: "No Slack webhook URL configured" };
+  }
+  if (!isAllowedSlackWebhook(rule.destination)) {
+    return { ok: false, error: "Destination is not an allowed Slack webhook URL" };
   }
 
   const text =
@@ -96,6 +106,7 @@ export async function deliverSlack(payload: AlertPayload): Promise<DeliveryResul
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
       return { ok: false, error: `Slack webhook returned ${res.status}` };
@@ -447,6 +458,82 @@ export async function deliverLeadershipDigestEmail(
     `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}`;
 
   return sendEmail(to, narrative.subject, html, text);
+}
+
+/**
+ * Deliver the Weekly Leadership Digest to a Slack webhook.
+ * Enforces the same allowlist as deliverSlack and uses a 5 s timeout.
+ * Truncates highlights/concerns to top 10 to stay under Slack payload limits.
+ */
+export async function deliverLeadershipDigestSlack(
+  webhookUrl: string,
+  narrative: LeadershipDigestEmailInput,
+): Promise<DeliveryResult> {
+  if (!isAllowedSlackWebhook(webhookUrl)) {
+    return { ok: false, error: "Destination is not an allowed Slack webhook URL" };
+  }
+
+  const truncate = (items: string[], limit = 10) => {
+    if (items.length <= limit) return items;
+    return [...items.slice(0, limit), `+${items.length - limit} more`];
+  };
+
+  const highlights = truncate(narrative.highlights);
+  const concerns = truncate(narrative.concerns);
+
+  const highlightText = highlights.length
+    ? highlights.map((h) => `• ${h}`).join("\n")
+    : "_None this week._";
+  const concernText = concerns.length
+    ? concerns.map((c) => `• ${c}`).join("\n")
+    : "_None this week._";
+
+  const aiBlock = narrative.aiSummary
+    ? [{
+        type: "section",
+        text: { type: "mrkdwn", text: `*AI summary*\n${narrative.aiSummary}\n_Generated from this week's metrics — verify against the figures below._` },
+      }]
+    : [];
+
+  const blocks = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "GitDash Weekly Leadership Digest" },
+    },
+    ...aiBlock,
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: narrative.summary_line },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Highlights*\n${highlightText}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Needs attention*\n${concernText}` },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "Sent by GitDash. To stop receiving this, delete the Weekly Leadership Digest rule in the Alerts page." }],
+    },
+  ];
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blocks }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      return { ok: false, error: `Slack webhook returned ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 }
 
 // ── Test send (v4.1.3) ────────────────────────────────────────────────────────

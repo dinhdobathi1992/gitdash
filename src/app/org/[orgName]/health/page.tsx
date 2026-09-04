@@ -13,6 +13,7 @@ import {
   Building2, ShieldCheck, TrendingUp, TrendingDown, Minus,
   ExternalLink, AlertTriangle, ChevronRight, Info, Loader2,
 } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
 import { cn } from "@/lib/utils";
 
 type Band = RepoScorecardEntry["risk_band"];
@@ -396,6 +397,20 @@ export default function OrgHealthScorecardPage({
                       ))}
                     </select>
                   </div>
+                  <ExportButton
+                    data={data}
+                    filenameBase={`org-health-${orgName}`}
+                    csvRows={() =>
+                      repos.map((r) => ({
+                        repo: r.repo,
+                        risk_band: r.risk_band,
+                        composite_score: r.composite_score,
+                        dora_level: r.dora_level,
+                        overall_bus_factor: r.overall_bus_factor,
+                        critical_modules: r.critical_modules,
+                      }))
+                    }
+                  />
                 </div>
               </div>
 

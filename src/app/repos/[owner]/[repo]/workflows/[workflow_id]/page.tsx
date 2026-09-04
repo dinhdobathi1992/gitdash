@@ -22,8 +22,8 @@ import {
 import {
   CheckCircle, Clock, Activity, Calendar, GitCommit, User,
   ExternalLink, AlertCircle, RefreshCw, Timer, Zap, TrendingUp,
-  TrendingDown, GitPullRequest, RotateCcw, Shield, Cpu, FlameKindling,
   ChevronDown, Download, ArrowUpDown, BarChart3, X, Lightbulb,
+  TrendingDown, GitPullRequest, GitPullRequestClosed, RotateCcw, Shield, Cpu, FlameKindling,
 } from "lucide-react";
 import {
   calculateDoraMetrics,
@@ -54,6 +54,7 @@ import {
 } from "@/lib/anomaly";
 import { MetricTooltip } from "@/components/MetricTooltip";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
+import { ExportButton } from "@/components/ExportButton";
 
 // ── shared disabled-feature placeholder ──────────────────────────────────────
 function DisabledFeature({ label, settingsHref }: { label: string; settingsHref: string }) {
@@ -916,6 +917,11 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
     const reran = runs.filter(r => (r.run_attempt ?? 1) > 1).length;
     return runs.length ? Math.round(reran / runs.length * 100) : 0;
   }, [runs]);
+  const { flags } = useFeatureFlags();
+  const [issueModal, setIssueModal] = useState<{ title: string; body: string } | null>(null);
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
+  const [issueFiled, setIssueFiled] = useState<{ url: string; number: number } | null>(null);
+  const [issueError, setIssueError] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
@@ -1013,6 +1019,52 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
               })}
           </div>
 
+          {flags.githubIssueFromAnomaly && (
+            <div className="mt-4">
+              {issueFiled ? (
+                <div className="flex items-center gap-2 text-sm text-green-400">
+                  <CheckCircle className="w-4 h-4" />
+                  Issue filed:{" "}
+                  <a href={issueFiled.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-green-300">
+                    #{issueFiled.number}
+                  </a>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const entries = Array.from(anomalyMap.values()).filter((e) => e.hasAnomaly);
+                    if (!entries.length) return;
+                    const worst = entries.sort((a, b) => Math.abs(b.worstZ) - Math.abs(a.worstZ))[0];
+                    const title = `[GitDash] Anomaly in workflow run #${worst.runNumber ?? worst.runId}`;
+                    const body = [
+                      `## Anomaly detected in run #${worst.runNumber ?? worst.runId}`,
+                      ``,
+                      `Repository: \`${owner}/${repo}\`  Workflow ID: ${workflowId}`,
+                      ``,
+                      ...worst.anomalies.map((a) =>
+                        `- **${a.metric === "duration" ? "Duration" : "Queue Wait"}**: ${
+                          (a.value_ms / 60000).toFixed(1)
+                        } min (${Math.abs(a.zScore).toFixed(1)}σ ${a.isHigh ? "above" : "below"} baseline ${
+                          (a.mean_ms / 60000).toFixed(1)
+                        } min)`,
+                      ),
+                      ``,
+                      `_Filed via GitDash anomaly detection._`,
+                    ].join("\n");
+                    setIssueModal({ title, body });
+                    setIssueError(null);
+                    setIssueFiled(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 rounded-lg transition-colors bg-slate-800/40 hover:bg-slate-700/60"
+                >
+                  <GitPullRequestClosed className="w-3.5 h-3.5" />
+                  File as GitHub issue
+                </button>
+              )}
+            </div>
+          )}
+
           {/*
             One explanation per metric, not per run: the AI reads the pattern
             across outliers (baseline, timing, concurrent workflow changes),
@@ -1054,6 +1106,81 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
             <RootCauseHypotheses owner={owner} repo={repo} workflowId={workflowId} />
           </div>
         </ChartCard>
+      )}
+
+      {/* Issue creation confirmation modal */}
+      {issueModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <GitPullRequestClosed className="w-4 h-4 text-violet-400" />
+              File as GitHub Issue
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Title</label>
+                <input
+                  value={issueModal.title}
+                  onChange={(e) => setIssueModal({ ...issueModal, title: e.target.value })}
+                  maxLength={256}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Body</label>
+                <textarea
+                  value={issueModal.body}
+                  onChange={(e) => setIssueModal({ ...issueModal, body: e.target.value })}
+                  rows={8}
+                  maxLength={10000}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 resize-none font-mono"
+                />
+              </div>
+            </div>
+            {issueError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" /> {issueError}
+              </p>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setIssueModal(null); setIssueError(null); }}
+                className="px-3 py-1.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={issueSubmitting || !issueModal.title.trim()}
+                onClick={async () => {
+                  setIssueSubmitting(true);
+                  try {
+                    const res = await fetch("/api/github/create-issue", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ owner, repo, title: issueModal.title, body: issueModal.body }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                      setIssueError(data.error ?? "Failed to create issue");
+                    } else {
+                      setIssueFiled({ url: data.issue_url, number: data.issue_number });
+                      setIssueModal(null);
+                    }
+                  } catch {
+                    setIssueError("Network error — please try again");
+                  } finally {
+                    setIssueSubmitting(false);
+                  }
+                }}
+                className="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {issueSubmitting ? "Filing\u2026" : "Create Issue"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1709,6 +1836,20 @@ function DoraTab({ runs }: { runs: WorkflowRun[] }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <ExportButton
+          data={dora}
+          filenameBase={`dora-metrics`}
+          csvRows={() =>
+            metrics.map((m) => ({
+              metric: m.label,
+              value: m.value,
+              level: m.level,
+              detail: m.sub,
+            }))
+          }
+        />
+      </div>
       {/* Overall DORA level */}
       <div className={cn(
         "rounded-xl border p-5 flex items-center justify-between",

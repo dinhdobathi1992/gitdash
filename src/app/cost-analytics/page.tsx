@@ -29,6 +29,7 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ExportButton } from "@/components/ExportButton";
 
 // ── Month navigation helpers ─────────────────────────────────────────────────
 
@@ -694,11 +695,29 @@ export default function CostAnalyticsPage() {
                 {isPersonal ? data.login || "your account" : data.login}
               </p>
             </div>
-            <div className="ml-auto text-right">
-              <p className="text-xs text-slate-500 uppercase tracking-wider">Period</p>
-              <p className="text-sm font-medium text-slate-300">
-                {MONTH_NAMES[data.period.month - 1]} {data.period.year}
-              </p>
+            <div className="ml-auto text-right flex items-center gap-3">
+              <ExportButton
+                data={data}
+                filenameBase={`cost-analytics-${data.period.year}-${String(data.period.month).padStart(2, "0")}`}
+                csvRows={() =>
+                  (data.skus ?? []).map((sku) => ({
+                    sku: sku.sku,
+                    label: sku.label,
+                    minutes: sku.minutes,
+                    unit_type: sku.unit_type,
+                    price_per_unit: sku.price_per_unit,
+                    gross_amount: sku.gross_amount,
+                    discount_amount: sku.discount_amount,
+                    net_amount: sku.net_amount,
+                  }))
+                }
+              />
+              <div className="text-right">
+                <p className="text-xs text-slate-500 uppercase tracking-wider">Period</p>
+                <p className="text-sm font-medium text-slate-300">
+                  {MONTH_NAMES[data.period.month - 1]} {data.period.year}
+                </p>
+              </div>
             </div>
           </div>
 
