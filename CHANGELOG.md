@@ -5,6 +5,107 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [4.2.9] — 2026-09-04
+
+### Overview
+
+Five independent, additive features closing the most-requested gaps in the alert engine,
+delivery layer, and analytics export surface. Every change is non-breaking: DB migrations
+are additive-only, new write-capable features default off behind flags, and all failure
+paths degrade silently to a no-op rather than blocking existing workflows.
+
+### Added
+
+#### PR Facts Sync — alert engine now has real people-metrics data (Phase 1)
+
+Four of the eight alert rule metrics (`pr_throughput_drop`, `review_response_p90`,
+`pr_abandon_rate`, `unreviewed_pr_age`) read from `pr_facts` but the table had zero callers
+— the rules silently never fired. Fixed with a complete dedicated sync path:
+
+- **New cron route** `GET /api/cron/sync-pr-facts` — own Vercel Cron schedule (`17 4 * * *`,
+  offset from the run-sync cron at `17 3 * * *`), own `maxDuration`, `CRON_SECRET` bearer auth.
+  Structurally impossible for a slow PR-fetch to delay `sendPendingDigests` or digest delivery.
+- **Paginated fetch** — up to 10 pages × 100 PRs per run. Mandatory per-PR detail
+  (`listReviews` + `pulls.get`) at bounded concurrency (5, lower than DORA's 10). Large repos
+  backfill incrementally across runs; the cursor only advances past fully-processed PRs.
+- **Backfill mute** — `pr_backfill_complete` column on `sync_cursors` (additive migration v7).
+  The 4 gated metrics skip evaluation entirely until the flag flips `true`. No alert storm on
+  first backfill.
+- **UPDATE-only cursor** — `updatePrSyncCursor` never inserts a new `sync_cursors` row, so
+  PR-facts sync cannot enroll a repo that hasn't been run-synced first.
+- **pglite test harness** — `@electric-sql/pglite` dev dependency + `tests/setup/pglite.ts`
+  provides a real disposable Postgres instance. Migration replay idempotency, all four metric
+  SQL queries, and the no-NULL-overwrite guarantee are verified against actual SQL, not mocks.
+
+#### Slack Digest Delivery (Phase 2)
+
+Weekly Leadership Digest now delivers to Slack in addition to email:
+
+- `deliverLeadershipDigestSlack` in `notifier.ts` — Slack Blocks format, highlights and concerns
+  truncated to top 10 with "+N more" suffix to stay within payload limits.
+- **SSRF guard** — `isAllowedSlackWebhook(url)` enforces `https://hooks.slack.com/services/*`
+  at delivery time. A non-allowlisted URL is rejected before any network call is made. The same
+  guard is applied at rule-creation time in `POST /api/alerts`.
+- **Hang guard** — `AbortSignal.timeout(5000)` added to both `deliverLeadershipDigestSlack`
+  and the existing `deliverSlack` (per-metric alert rules), closing a pre-existing unbounded-hang
+  risk in the latter.
+- **Alert form** — channel selector now renders for `leadership_digest` rules (email / Slack),
+  while threshold and window remain hidden. Switching metrics preserves an existing Slack
+  selection rather than forcing it back to email.
+
+#### Metrics CSV/JSON Export (Phase 3)
+
+Managers can now export dashboard data without a BI tool or an API key:
+
+- New `ExportButton` component — dropdown offering JSON (always) and CSV (when a `csvRows`
+  callback is provided). Client-side only: serialises the SWR-cached data already on the page,
+  zero new API routes.
+- **Formula-injection guard** — cells whose value starts with `=`, `+`, `-`, `@`, tab, or
+  carriage return are prefixed with `'` before CSV serialisation so Excel/Sheets render them as
+  literal text (prevents DDE-prompt vectors via e.g. a workflow named `=HYPERLINK(...)`).
+- Wired into three pages:
+  - **DORA tab** (workflow detail) — 4 rows, one per DORA metric with value, level, and benchmark
+  - **Cost Analytics** — one row per Actions SKU with minutes, price, and net cost
+  - **Org Health Scorecard** — one row per repo with risk band, composite score, and bus-factor data
+
+#### Flag-Gated Rollout Convention (Phase 4)
+
+Establishes a documented, enforced convention so future write-capable features never silently
+arm themselves:
+
+- `githubIssueFromAnomaly` flag added to `FeatureFlags`, defaults `false`.
+- Convention comment above `DEFAULT_FLAGS`: new entries default false; write-capable entries must
+  set `writes: true` on their `FlagDef`.
+- `writes?: boolean` field added to `FlagDef` type in Settings.
+- **Bulk toggle exclusion** — "Enable all" and "Disable all" on the Settings page filter out
+  `writes: true` flags. A single click can no longer silently arm GitHub-write capabilities.
+
+#### Anomaly → GitHub Issue (Phase 5)
+
+One-click "File as GitHub issue" from an anomaly detection card:
+
+- New `POST /api/github/create-issue` — uses the logged-in user's own session token (GitHub's
+  own permission model is the real backstop), rate-limited to 5 creations per hour per IP.
+  Explicit status-mapped responses for GitHub 401/403/404/410/422; unmapped errors fall through
+  to `safeError` with no stack trace leak.
+- **Confirmation modal** in the workflow-detail ReliabilityTab — editable title (≤256 chars)
+  and body (≤10,000 chars) pre-filled from the anomaly stats. Submit button disabled on click to
+  prevent duplicate issues. Success state shows the returned issue URL.
+- Gated on `flags.githubIssueFromAnomaly` (defaults false per Phase 4) and excluded from bulk
+  Enable-all — users who never opt in are completely unaffected.
+- Works identically whether `aiInsights` is on or off — the button lives on the parent
+  workflow-detail page, which always has the raw anomaly stats regardless of AI state.
+
+### Technical
+
+- Test suite: **380 tests** across 24 files, all passing. 4 new test files:
+  `tests/sync-pr-facts.test.ts` (pglite-backed), `tests/api-github-create-issue.test.ts`,
+  `tests/export-button.test.ts`, `tests/settings-flag-bulk-toggle.test.ts`.
+- TypeScript and ESLint both clean across all new code.
+- `vercel.json` gains a second cron entry for the PR-facts route.
+
+---
+
 
 ## [4.2.8] — 2026-08-16
 

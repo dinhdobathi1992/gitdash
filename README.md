@@ -54,9 +54,12 @@ https://github.com/user-attachments/assets/8cf2625a-3a88-4494-a703-07cb5181c11a
 | **Workflow Intelligence** | Deep-dive into success rates, queue wait times, run duration trends, and cost estimation across all GitHub Actions. |
 | **Team & Contributor Insights** | CI delivery metrics, reviewer load balances, 52-week activity heatmaps, and PR lifecycle funnels. |
 | **Cost Analytics** | Track GitHub Actions spend month-over-month to identify expensive workflows and optimize CI budgets. |
+| **Metrics Export** | Download any dashboard view as CSV or JSON in one click — DORA metrics, cost breakdown by SKU, and org health scores. Formula-injection safe. |
+| **Alert Rules & Slack Delivery** | Fire alerts on CI and people-based metrics (PR throughput, review response time, abandon rate, unreviewed PR age). Deliver to browser, email, daily digest, or **Slack** webhook. |
 | **Enterprise-Grade Security** | AES-256-GCM encrypted sessions, zero browser token exposure, and workflow configuration static analysis. |
-| **DB-Backed Reporting** | Persist historical data beyond GitHub's 90-day retention and evaluate advanced alerting rules. |
+| **DB-Backed Reporting** | Persist historical data beyond GitHub's 90-day retention and evaluate advanced alerting rules backed by real PR-facts data. |
 | **AI Insights** *(optional)* | Plain-English analysis of your metrics via Gemini or Qwen. Entirely opt-in — hidden unless you configure a provider key, and only aggregate metrics and names are ever sent. |
+| **Anomaly → GitHub Issue** | One-click "File as issue" from any anomaly detection card. Confirmation modal, rate-limited, uses your own GitHub token. Off by default. |
 
 ---
 
