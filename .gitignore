@@ -54,6 +54,6 @@ k8s/secret.yaml
 .cursor
 .claude
 
-# Generated HTML plan viewers (plan.md is the source of truth)
-plans/**/plan.html
-plans/**/assets/plan-template.html
+# Local planning and design working files (kept on disk, not published)
+/plans/
+/design/
