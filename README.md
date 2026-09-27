@@ -258,6 +258,14 @@ The app refuses to start in organization mode without `DATABASE_URL` and a valid
 Note that some orgs forbid classic PATs with a lifetime over 366 days; GitHub then refuses the
 membership check and sign-in is denied (the server log shows GitHub's reason).
 
+**When sign-in is refused with `GITDASH_ALLOWED_ORGS` set**, GitHub declined to confirm membership:
+
+- **Org restricts OAuth Apps** — "Continue with GitHub" fails for everyone until an org owner approves the
+  GitDash OAuth App (org settings → Third-party access). Unapproved, it cannot read the org's private repos either.
+- **Fine-grained PAT created under the user** — the resource owner must be the **org**, with *Members: read*;
+  if the org requires token approval, an owner must approve it first.
+- A new group grant can take up to a minute to reach `/pending` (group lookups are cached for 60 s).
+
 This model gates **GitDash features**, not GitHub itself: data fetched with a user's own token is
 still limited by what that token can see on GitHub. Data GitDash serves from its own database
 (`/api/db/*`) is only returned for repos/orgs the user's token can see.
@@ -463,7 +471,7 @@ pnpm exec tsc --noEmit  # type-check without emitting
 
 ## 📚 Documentation
 
-GitDash ships with comprehensive **built-in documentation** accessible at the [`/docs`](https://gitdash.vercel.app/docs) route in the running application.
+GitDash ships with comprehensive **built-in documentation** accessible at the [`/docs`](https://www.gitdash.info/docs) route in the running application.
 
 The docs cover:
 
@@ -482,7 +490,7 @@ For the original DORA Metrics integration plan (now implemented, kept for refere
 
 ## 📋 Changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md).
+See [`CHANGELOG.md`](CHANGELOG.md). Upgrade notes for the current release: [`docs/releases/v4.5.1.md`](docs/releases/v4.5.1.md).
 
 ---
 

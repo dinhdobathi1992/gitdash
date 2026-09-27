@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [4.5.1] - 2026-09-27
+
+First published release of the 4.5 line: it ships everything in [4.5.0](https://github.com/dinhdobathi1992/gitdash/blob/main/CHANGELOG.md#450---2026-09-27) (redesign,
+GitHub API caching, organization-mode permissions) plus the changes below. Full notes:
+[`docs/releases/v4.5.1.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.5.1.md).
+
+### Changed
+- **Waiting-for-access page (`/pending`) redesigned** to match the sign-in screen: pending status,
+  a three-step progress list, a "Send this to your admin" box with the GitHub login and numeric id
+  (one-click copy), a live next-check countdown and a **Check now** button. It still moves on by
+  itself once a group is granted (within about a minute — group lookups are cached for 60 s).
+- The version badge in the sidebar, sign-in and pending pages shows the full version (`v4.5.1`).
+- Helm chart `0.7.0`, `appVersion` `4.5.1` (the chart was still at `4.2.8`; 4.5.0 added
+  `adminGithubIds`, `allowedOrgs`, `rbacEnforce` and `secret.databaseUrl`).
+
+### Fixed
+- `/docs` FAQ raised a hydration error (a list rendered inside a paragraph).
+
+### Docs
+- Sign-in troubleshooting for organization mode: orgs with OAuth App access restrictions must
+  approve the GitDash OAuth App, and fine-grained PATs must use the org as resource owner.
+- In-app Release Notes caught up with 4.2.9, 4.5.0 and 4.5.1.
+
+---
 ## [4.5.0] - 2026-09-27
 
 ### Added
