@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alerts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1180px; display: flex; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="width: 232px; flex-shrink: 0; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D">
+<dc-import name="Sidebar" active="alerts" hint-size="232px,960px"></dc-import>
+</div>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 12px; height: 56px; flex-shrink: 0; padding: 0 40px; box-shadow: inset 0 -1px 0 #1E242D">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; font-size: 13px; color: #A3A9B4">
+<span>ADI</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span aria-current="page" style="color: #EDEAE3; font-weight: 500">Alerts</span>
+</nav>
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 8px 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #7A818D; font-family: inherit; font-size: 13px; cursor: pointer; text-align: left">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="flex-grow: 1">Search repos, workflows, people</span>
+<kbd style="padding: 2px 6px; border-radius: 5px; border: 1px solid #2A313C; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">⌘K</kbd>
+</button>
+<span style="font-size: 12px; color: #7A818D; padding-left: 8px">Synced 2 min ago</span>
+<button type="button" aria-label="Refresh data" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #A3A9B4; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+</button>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 28px; padding: 32px 40px 40px">
+
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em">Alerts</h1>
+<p style="margin: 0; font-size: 14px; color: #A3A9B4">3 firing now · {{activeCount}} of 6 rules active · delivered to Slack, email and this browser</p>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 8px; background: linear-gradient(180deg, #8163FF 0%, #6440F5 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 20px -8px rgba(109,74,255,0.75); color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M12 5v14M5 12h14"></path></svg>
+New rule
+</button>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start">
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+
+<section aria-labelledby="firing-title" style="display: flex; flex-direction: column; gap: 12px">
+<h2 id="firing-title" style="margin: 0; font-size: 15px; font-weight: 600">Firing now</h2>
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+
+<div style="display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 14px; padding: 16px 20px">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(255,107,107,0.12); color: #FF8A8A">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Failure rate is 33% on <span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace">tesda-backend</span></span>
+<span style="font-size: 13px; color: #A3A9B4">Rule: above 20% in 24 hours · sent to Slack #ci-alerts · firing for 18 min</span>
+</span>
+<span style="display: flex; gap: 8px">
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">Mute 1h</button>
+<a href="Workflow.dc.html" style="display: flex; align-items: center; height: 32px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; background: #1C2230; color: #EDEAE3; font-size: 13px; text-decoration: none">Investigate</a>
+</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 14px; padding: 16px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(245,181,68,0.12); color: #F5B544">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">p95 duration is 14m 10s on <span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace">n8n</span></span>
+<span style="font-size: 13px; color: #A3A9B4">Rule: above 12 min · emailed platform team · firing for 2 h</span>
+</span>
+<span style="display: flex; gap: 8px">
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">Mute 1h</button>
+<a href="Repo.dc.html" style="display: flex; align-items: center; height: 32px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; background: #1C2230; color: #EDEAE3; font-size: 13px; text-decoration: none">Investigate</a>
+</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 14px; padding: 16px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(245,181,68,0.12); color: #F5B544">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Queue wait p95 is 6m 40s on <span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace">adi-k8s-helm</span></span>
+<span style="font-size: 13px; color: #A3A9B4">Rule: above 5 min · sent to Slack #infra · firing for 3 h</span>
+</span>
+<span style="display: flex; gap: 8px">
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">Mute 1h</button>
+<a href="Repo.dc.html" style="display: flex; align-items: center; height: 32px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; background: #1C2230; color: #EDEAE3; font-size: 13px; text-decoration: none">Investigate</a>
+</span>
+</div>
+
+</div>
+</section>
+
+<section aria-labelledby="rules-title" style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 id="rules-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Rules</h2>
+<a href="#" style="font-size: 13px; font-weight: 500; text-decoration: none">Delivery history →</a>
+</div>
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 44px minmax(0, 1fr) 180px 60px; align-items: center; column-gap: 14px; padding: 14px 20px; box-shadow: {{r.line}}">
+<button type="button" role="switch" aria-checked="{{r.on}}" aria-label="{{r.toggleLabel}}" onClick="{{r.toggle}}" style="position: relative; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; cursor: pointer; background: {{r.track}}">
+<span aria-hidden="true" style="position: absolute; top: 2px; width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF; left: {{r.knob}}px"></span>
+</button>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 14px; font-weight: 500; color: {{r.fg}}">{{r.title}}</span>
+<span style="font-size: 13px; color: #7A818D">{{r.scope}}</span>
+</span>
+<span style="font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.channel}}</span>
+<a href="#" style="font-size: 13px; font-weight: 500; text-decoration: none; justify-self: end">Edit</a>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+
+<form aria-labelledby="new-title" style="display: flex; flex-direction: column; gap: 18px; padding: 22px; border-radius: 12px; border: 1px solid #2F2A55; background: #14131E">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="new-title" style="margin: 0; font-size: 16px; font-weight: 600">New alert rule</h2>
+<span style="font-size: 13px; color: #A3A9B4">Get told when a number crosses a line you set.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="rule-scope" style="font-size: 13px; font-weight: 500">Watch</label>
+<select id="rule-scope" style="height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 14px"><option>All repositories</option><option>tesda-backend</option><option>tesda-frontend</option><option>n8n</option></select>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="rule-metric" style="font-size: 13px; font-weight: 500">Metric</label>
+<select id="rule-metric" style="height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 14px">
+<optgroup label="CI"><option>Failure rate</option><option>Duration p95</option><option>Queue wait p95</option><option>Consecutive failures</option><option>Statistical anomalies</option></optgroup>
+<optgroup label="People"><option>PR throughput drop</option><option>Review response p90</option><option>Unreviewed PR age</option><option>After-hours commits</option></optgroup>
+<optgroup label="Leadership"><option>Weekly leadership digest</option></optgroup>
+</select>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="rule-threshold" style="font-size: 13px; font-weight: 500">Goes above</label>
+<div style="display: flex; align-items: center; height: 38px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217">
+<input id="rule-threshold" type="number" value="20" style="flex-grow: 1; min-width: 0; border: 0; outline: none; background: transparent; color: #EDEAE3; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 14px">
+<span style="font-size: 13px; color: #7A818D">%</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="rule-window" style="font-size: 13px; font-weight: 500">Within</label>
+<select id="rule-window" style="height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 14px"><option>24 hours</option><option>1 hour</option><option>7 days</option></select>
+</div>
+</div>
+
+<fieldset style="display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0">
+<legend style="padding: 0 0 6px; font-size: 13px; font-weight: 500">Send to</legend>
+<div role="group" aria-label="Channel" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: 9px; background: #0F1217; border: 1px solid #2A313C">
+<sc-for list="{{channels}}" as="ch" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{ch.on}}" onClick="{{ch.pick}}" style="height: 32px; border: 0; border-radius: 6px; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; background: {{ch.bg}}; color: {{ch.fg}}">{{ch.label}}</button>
+</sc-for>
+</div>
+</fieldset>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="rule-dest" style="font-size: 13px; font-weight: 500">{{destLabel}}</label>
+<input id="rule-dest" type="text" value="{{destValue}}" style="height: 38px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 14px">
+</div>
+
+<div style="padding: 12px 14px; border-radius: 8px; background: #1A1830; font-size: 13px; line-height: 20px; color: #D3C7FF">{{preview}}</div>
+
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" style="height: 38px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #B9A6FF; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">Send a test</button>
+<span style="flex-grow: 1"></span>
+<button type="button" style="height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid #2A313C; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">Cancel</button>
+<button type="submit" style="height: 38px; padding: 0 16px; border: 0; border-radius: 8px; background: linear-gradient(180deg, #8163FF 0%, #6440F5 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 20px -8px rgba(109,74,255,0.75); color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Create rule</button>
+</div>
+</form>
+
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { channel: 'Slack', off: { 4: true } };
+  }
+  renderVals() {
+    const list = [
+      ['Failure rate above 20% in 24 hours', 'All repositories', 'Slack · #ci-alerts'],
+      ['Duration p95 above 12 min', 'n8n', 'Email · platform team'],
+      ['Queue wait p95 above 5 min', 'All repositories', 'Slack · #infra'],
+      ['Pull request unreviewed for 2 days', 'tesda-frontend', 'Browser'],
+      ['After-hours commits above 30%', 'All repositories', 'Email · team leads'],
+      ['Weekly leadership digest', 'Mondays 09:00 · whole organization', 'Email · leadership list']
+    ];
+    const off = this.state.off;
+    const rules = list.map(([title, scope, channel], i) => {
+      const on = !off[i];
+      return {
+        title, scope, channel, on,
+        toggleLabel: (on ? 'Turn off: ' : 'Turn on: ') + title,
+        track: on ? '#6D4AFF' : '#2A313C',
+        knob: on ? 18 : 2,
+        fg: on ? '#EDEAE3' : '#7A818D',
+        line: i === 0 ? 'none' : 'inset 0 1px 0 #1E242D',
+        toggle: () => this.setState({ off: { ...off, [i]: on } })
+      };
+    });
+    const DEST = {
+      Slack: ['Slack channel', '#ci-alerts', 'in #ci-alerts'],
+      Email: ['Email address', 'platform@adi.example', 'by email to platform@adi.example'],
+      Browser: ['Who gets it', 'Everyone who can see this repository', 'in the browser of everyone who can see it']
+    };
+    const channels = ['Slack', 'Email', 'Browser'].map((label) => {
+      const on = label === this.state.channel;
+      return { label, on, bg: on ? '#2A2350' : 'transparent', fg: on ? '#EDEAE3' : '#A3A9B4', pick: () => this.setState({ channel: label }) };
+    });
+    const d = DEST[this.state.channel];
+    return {
+      rules, channels,
+      activeCount: rules.filter((r) => r.on).length,
+      destLabel: d[0],
+      destValue: d[1],
+      preview: 'You will be alerted ' + d[2] + ' when the failure rate on any repository goes above 20% within 24 hours.'
+    };
+  }
+}
+</script>
+</body>
+</html>

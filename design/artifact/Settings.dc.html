@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings: access by group</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1500px; display: flex; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="width: 232px; flex-shrink: 0; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D">
+<dc-import name="Sidebar" active="settings" hint-size="232px,960px"></dc-import>
+</div>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 12px; height: 56px; flex-shrink: 0; padding: 0 40px; box-shadow: inset 0 -1px 0 #1E242D">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; font-size: 13px; color: #A3A9B4">
+<span>ADI</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span>Settings</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span aria-current="page" style="color: #EDEAE3; font-weight: 500">Access by group</span>
+</nav>
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 8px 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #7A818D; font-family: inherit; font-size: 13px; cursor: pointer; text-align: left">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="flex-grow: 1">Search repos, workflows, people</span>
+<kbd style="padding: 2px 6px; border-radius: 5px; border: 1px solid #2A313C; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">⌘K</kbd>
+</button>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 28px; padding: 32px 40px 40px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em">Settings</h1>
+<p style="margin: 0; font-size: 14px; color: #A3A9B4">Organization mode · you're an admin, so you can change who sees what</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start">
+
+<nav aria-label="Settings sections" style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 10px 6px; font-size: 12px; font-weight: 500; color: #7A818D">Organization</span>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">General</a>
+<a href="Settings.dc.html" aria-current="page" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #EDEAE3; background: #1C2230; text-decoration: none">Access by group</a>
+<a href="#" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none"><span style="flex-grow: 1">Members</span><span style="display: flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: rgba(245,181,68,0.16); color: #F5B544; font-size: 12px; font-weight: 600">2</span></a>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">AI provider</a>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">Email and digests</a>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">Caching and data</a>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">Audit log</a>
+<span style="padding: 16px 10px 6px; font-size: 12px; font-weight: 500; color: #7A818D">You</span>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">My features</a>
+<a href="#" style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: #A3A9B4; text-decoration: none">Notifications</a>
+</nav>
+
+<div style="display: flex; flex-direction: column; gap: 28px; min-width: 0">
+
+<section aria-labelledby="matrix-title" style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+<h2 id="matrix-title" style="margin: 0; font-size: 18px; line-height: 24px; font-weight: 600">Access by group</h2>
+<p style="margin: 0; font-size: 14px; line-height: 21px; color: #A3A9B4; max-width: 640px">People see only the features their group grants. Anyone can hide a granted feature for themselves under My features. Changes save immediately and are recorded in the audit log.</p>
+</div>
+<span style="font-size: 12px; color: #7A818D">Saved · {{changes}}</span>
+</div>
+
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85); overflow: hidden">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(5, 104px); align-items: center; height: 56px; padding: 0 20px; background: #10141A">
+<span style="font-size: 12px; font-weight: 500; color: #7A818D">Feature</span>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+<span style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<span style="font-size: 13px; font-weight: 600">{{g.name}}</span>
+<span style="font-size: 12px; color: #7A818D">{{g.count}}</span>
+</span>
+</sc-for>
+</div>
+<sc-for list="{{sections}}" as="s" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; height: 32px; padding: 0 20px; box-shadow: inset 0 1px 0 #1E242D; background: #111419; font-size: 12px; font-weight: 600; color: #A3A9B4">{{s.name}}</div>
+<sc-for list="{{s.rows}}" as="f" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(5, 104px); align-items: center; min-height: 44px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; flex-direction: column; gap: 1px; padding: 6px 0">
+<span style="font-size: 14px">{{f.name}}</span>
+<span style="font-size: 12px; color: #7A818D">{{f.desc}}</span>
+</span>
+<sc-for list="{{f.cells}}" as="c" hint-placeholder-count="5">
+<label style="display: flex; align-items: center; justify-content: center; height: 44px; cursor: pointer">
+<input type="checkbox" checked="{{c.on}}" disabled="{{c.locked}}" onChange="{{c.toggle}}" aria-label="{{c.label}}" style="width: 18px; height: 18px; margin: 0; accent-color: #7C5CFF; cursor: pointer">
+</label>
+</sc-for>
+</div>
+</sc-for>
+</sc-for>
+</div>
+<span style="font-size: 12px; color: #7A818D">Admins always have every feature. Repositories and workflows are visible to every group.</span>
+</section>
+
+<section aria-labelledby="members-title" style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<h2 id="members-title" style="margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; flex-grow: 1">Waiting for access</h2>
+<a href="#" style="font-size: 13px; font-weight: 500; text-decoration: none">All 24 members →</a>
+</div>
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 180px 140px 190px; align-items: center; column-gap: 16px; padding: 14px 20px">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; font-size: 12px; font-weight: 600">AN</span>
+<span style="display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 14px; font-weight: 500">An Hoang</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">anhoang · signed in with a token</span>
+</span>
+</span>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #7A818D">Group
+<select style="height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 13px"><option>Choose a group</option><option>DevOps</option><option>Security</option><option>Developer</option><option>PM</option><option>Admin</option></select>
+</label>
+<span style="font-size: 13px; color: #A3A9B4">Asked 2 h ago</span>
+<span style="display: flex; gap: 8px; justify-content: flex-end">
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2A313C; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">Decline</button>
+<button type="button" style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: linear-gradient(180deg, #8163FF 0%, #6440F5 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 20px -8px rgba(109,74,255,0.75); color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Approve</button>
+</span>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 180px 140px 190px; align-items: center; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; font-size: 12px; font-weight: 600">PQ</span>
+<span style="display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 14px; font-weight: 500">Phuong Quach</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">pquach · signed in with GitHub</span>
+</span>
+</span>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #7A818D">Group
+<select style="height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid #2A313C; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 13px"><option>PM</option><option>DevOps</option><option>Security</option><option>Developer</option><option>Admin</option></select>
+</label>
+<span style="font-size: 13px; color: #A3A9B4">Asked 1 d ago</span>
+<span style="display: flex; gap: 8px; justify-content: flex-end">
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2A313C; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">Decline</button>
+<button type="button" style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: linear-gradient(180deg, #8163FF 0%, #6440F5 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 20px -8px rgba(109,74,255,0.75); color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Approve</button>
+</span>
+</div>
+</div>
+</section>
+
+</div>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      grants: {
+        devops: ['dora', 'prLifecycle', 'healthScorecard', 'performanceTab', 'reliabilityTab', 'anomalyDetection', 'runnerUtilization', 'costAnalytics', 'securityScan', 'aiInsights', 'githubIssueFromAnomaly'],
+        security: ['dora', 'reliabilityTab', 'anomalyDetection', 'securityScan', 'aiInsights'],
+        dev: ['dora', 'prLifecycle', 'performanceTab', 'reliabilityTab', 'anomalyDetection', 'reviewBottleneck', 'aiInsights'],
+        pm: ['dora', 'prLifecycle', 'healthScorecard', 'busFactor', 'reviewBottleneck', 'workloadRisk', 'costAnalytics']
+      },
+      changes: 0
+    };
+  }
+  renderVals() {
+    const groups = [
+      { id: 'admin', name: 'Admin', count: '2 people' },
+      { id: 'devops', name: 'DevOps', count: '4 people' },
+      { id: 'security', name: 'Security', count: '2 people' },
+      { id: 'dev', name: 'Developer', count: '13 people' },
+      { id: 'pm', name: 'PM', count: '3 people' }
+    ];
+    const catalog = [
+      ['Delivery', [
+        ['dora', 'DORA metrics', 'Deploy frequency, lead time, failure rate, restore time'],
+        ['prLifecycle', 'Pull request lifecycle', 'Open PR health, review times, abandon rate'],
+        ['healthScorecard', 'Health scorecard', 'Org-wide team health grades']
+      ]],
+      ['Reliability', [
+        ['performanceTab', 'Workflow performance', 'Duration trends, job breakdown, queue wait'],
+        ['reliabilityTab', 'Workflow reliability', 'Flaky branches, failure streaks, recovery time'],
+        ['anomalyDetection', 'Anomaly detection', 'Runs that fall outside the normal range'],
+        ['runnerUtilization', 'Runner utilization', 'Self-hosted runner load and queueing']
+      ]],
+      ['People', [
+        ['busFactor', 'Bus factor', 'Knowledge concentration by repository'],
+        ['reviewBottleneck', 'Review bottlenecks', 'Who reviews whom, and where it stalls'],
+        ['workloadRisk', 'Workload risk', 'After-hours and overload signals per person']
+      ]],
+      ['Money and security', [
+        ['costAnalytics', 'Cost', 'Actions billing, projections, savings'],
+        ['securityScan', 'Security alerts', 'Dependabot, code scanning and secret alerts']
+      ]],
+      ['AI', [
+        ['aiInsights', 'AI summaries and hypotheses', 'Uses the organization’s AI provider key'],
+        ['githubIssueFromAnomaly', 'Open issues from anomalies', 'Creates a GitHub issue from an anomaly']
+      ]]
+    ];
+    const grants = this.state.grants;
+    const sections = catalog.map(([name, rows]) => ({
+      name,
+      rows: rows.map(([key, fname, desc]) => ({
+        name: fname,
+        desc,
+        cells: groups.map((g) => {
+          const locked = g.id === 'admin';
+          const on = locked || (grants[g.id] || []).includes(key);
+          return {
+            on, locked,
+            label: g.name + ': ' + fname,
+            toggle: () => {
+              if (locked) return;
+              const cur = grants[g.id] || [];
+              const next = on ? cur.filter((k) => k !== key) : cur.concat(key);
+              this.setState({ grants: { ...grants, [g.id]: next }, changes: this.state.changes + 1 });
+            }
+          };
+        })
+      }))
+    }));
+    const n = this.state.changes;
+    return { groups, sections, changes: n === 0 ? 'no unsaved changes' : n + (n === 1 ? ' change' : ' changes') + ' recorded' };
+  }
+}
+</script>
+</body>
+</html>

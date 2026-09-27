@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team insights</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1360px; display: flex; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="width: 232px; flex-shrink: 0; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D">
+<dc-import name="Sidebar" active="team" hint-size="232px,960px"></dc-import>
+</div>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 12px; height: 56px; flex-shrink: 0; padding: 0 40px; box-shadow: inset 0 -1px 0 #1E242D">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; font-size: 13px; color: #A3A9B4">
+<span>ADI</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span aria-current="page" style="color: #EDEAE3; font-weight: 500">Team insights</span>
+</nav>
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 8px 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #7A818D; font-family: inherit; font-size: 13px; cursor: pointer; text-align: left">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="flex-grow: 1">Search repos, workflows, people</span>
+<kbd style="padding: 2px 6px; border-radius: 5px; border: 1px solid #2A313C; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">⌘K</kbd>
+</button>
+<span style="font-size: 12px; color: #7A818D; padding-left: 8px">Synced 2 min ago</span>
+<button type="button" aria-label="Refresh data" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #A3A9B4; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+</button>
+<a href="Alerts.dc.html" aria-label="Alerts, 3 firing" style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; color: #A3A9B4">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+<span aria-hidden="true" style="position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 4px; background: #FF6B6B; box-shadow: 0 0 0 2px #0B0D11"></span>
+</a>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 28px; padding: 32px 40px 40px">
+
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em">Team insights</h1>
+<p style="margin: 0; font-size: 14px; color: #A3A9B4">26 contributors · 412 pull requests across 42 repositories · last 30 days</p>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #A3A9B4">Repositories
+<select style="height: 36px; padding: 0 8px; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-family: inherit; font-size: 13px"><option>All 42</option><option>Pinned 3</option><option>tesda-backend</option><option>tesda-frontend</option></select>
+</label>
+<div role="group" aria-label="Time range" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #13171D; border: 1px solid #1E242D">
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">7d</button>
+<button type="button" aria-pressed="true" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: #232A36; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500">30d</button>
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">90d</button>
+</div>
+</div>
+
+<section aria-label="Team numbers" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px">
+<span style="font-size: 13px; color: #A3A9B4">Pull requests merged</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">356</span>
+<span style="font-size: 12px; color: #A3A9B4">of 412 opened · 86%</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Median cycle time</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">21h</span>
+<span style="font-size: 12px; color: #5BE0A0">↓ 4h faster</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Reviews given</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">1,108</span>
+<span style="font-size: 12px; color: #A3A9B4">3.1 per merged PR</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Review bus factor</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600; color: #F5B544">3</span>
+<span style="font-size: 12px; color: #F5B544">3 people do 60% of reviews</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Merged without review</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">14</span>
+<span style="font-size: 12px; color: #A3A9B4">4% of merges</span>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px">
+
+<section aria-labelledby="matrix-title" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; align-items: flex-start; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+<h2 id="matrix-title" style="margin: 0; font-size: 15px; font-weight: 600">Who reviews whom</h2>
+<span style="font-size: 13px; color: #7A818D">Reviews given, by reviewer (columns) and author (rows)</span>
+</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7A818D">0
+<span aria-hidden="true" style="display: flex; gap: 2px"><span style="width: 14px; height: 10px; border-radius: 2px; background: #1A1F27"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #2E2660"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #4B3B99"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #7C5CFF"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #B9A6FF"></span></span>
+40+</span>
+</div>
+<div role="img" aria-label="Review matrix: Lan, Minh and Thi review most pull requests; Khoa and Trang rarely review others." style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; font-size: 12px; color: #7A818D">
+<span></span>
+<sc-for list="{{people}}" as="p" hint-placeholder-count="6"><span style="text-align: center">{{p}}</span></sc-for>
+</div>
+<sc-for list="{{matrix}}" as="row" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">{{row.name}}</span>
+<sc-for list="{{row.cells}}" as="c" hint-placeholder-count="6">
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: {{c.bg}}; color: {{c.fg}}">{{c.v}}</span>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="risk-title" style="display: flex; flex-direction: column; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px">
+<h2 id="risk-title" style="margin: 0; font-size: 15px; font-weight: 600">Workload to watch</h2>
+<span style="font-size: 13px; color: #7A818D">People whose load or hours are out of their usual range</span>
+</div>
+<sc-for list="{{risks}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; color: #EDEAE3; font-size: 12px; font-weight: 600">{{k.ini}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">{{k.name}}</span>
+<span style="font-size: 13px; color: #A3A9B4">{{k.why}}</span>
+</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: {{k.bg}}; color: {{k.fg}}">{{k.level}}</span>
+</div>
+</sc-for>
+</section>
+
+</div>
+
+<section aria-labelledby="people-title" style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px">
+<h2 id="people-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Contributors</h2>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: #A3A9B4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+Export
+</button>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 38px; padding: 0 20px; background: #10141A; box-shadow: inset 0 1px 0 #1E242D; font-size: 12px; font-weight: 500; color: #7A818D">
+<span>Contributor</span><span>Merged</span><span>Reviews</span><span>Cycle time</span><span>First review in</span><span>After hours</span><span>Most active in</span>
+</div>
+<sc-for list="{{contributors}}" as="u" hint-placeholder-count="7">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">{{u.ini}}</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">{{u.name}}</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">{{u.login}}</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">{{u.merged}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">{{u.reviews}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">{{u.cycle}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">{{u.resp}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: {{u.ahC}}">{{u.ah}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{u.repo}}</span>
+</div>
+</sc-for>
+</section>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const people = ['Lan', 'Minh', 'Thi', 'Huy', 'Trang', 'Khoa'];
+    const grid = [
+      [0, 38, 21, 9, 2, 1],
+      [34, 0, 26, 6, 3, 0],
+      [29, 31, 0, 12, 1, 2],
+      [18, 22, 14, 0, 4, 0],
+      [24, 12, 19, 5, 0, 1],
+      [11, 16, 9, 3, 0, 0]
+    ];
+    const shade = (v) => (v === 0 ? '#1A1F27' : v < 8 ? '#2E2660' : v < 18 ? '#4B3B99' : v < 30 ? '#7C5CFF' : '#B9A6FF');
+    const matrix = grid.map((row, i) => ({
+      name: people[i],
+      cells: row.map((v, j) => ({
+        v: i === j ? '' : String(v),
+        bg: i === j ? 'transparent' : shade(v),
+        fg: v >= 30 ? '#14102B' : '#EDEAE3'
+      }))
+    }));
+    const LV = {
+      High: { fg: '#FF8A8A', bg: 'rgba(255,107,107,0.12)' },
+      Watch: { fg: '#F5B544', bg: 'rgba(245,181,68,0.14)' }
+    };
+    const risks = [
+      ['MN', 'Minh', '38% of commits after 20:00 · 9 open PRs', 'High'],
+      ['LN', 'Lan', 'Reviewed 71 PRs — twice the team median', 'Watch'],
+      ['TH', 'Thi', 'Weekend commits on 4 of the last 4 weekends', 'Watch'],
+      ['KH', 'Khoa', '3 PRs open for more than 5 days', 'Watch']
+    ].map(([ini, name, why, level]) => ({ ini, name, why, level, fg: LV[level].fg, bg: LV[level].bg }));
+    const contributors = [
+      ['LN', 'Lan Pham', 'lanpham', 48, 71, '18h', '1h 40m', 12, 'tesda-backend'],
+      ['MN', 'Minh Tran', 'minhtran', 44, 58, '22h', '2h 05m', 38, 'tesda-frontend'],
+      ['TH', 'Thi', 'dinhdobathi1992', 39, 64, '16h', '55m', 24, 'adi-k8s-helm'],
+      ['HY', 'Huy Le', 'huyle', 31, 27, '26h', '3h 30m', 8, 'n8n'],
+      ['TR', 'Trang Vo', 'trangvo', 27, 19, '19h', '4h 10m', 6, 'tesda-frontend'],
+      ['KH', 'Khoa Nguyen', 'khoa-ng', 22, 11, '41h', '6h 45m', 15, 'tf-adi-infra-aws'],
+      ['BO', 'dependabot', 'dependabot[bot]', 64, 0, '2h', '—', 0, 'many']
+    ].map(([ini, name, login, merged, reviews, cycle, resp, ah, repo]) => ({
+      ini, name, login, merged, reviews, cycle, resp, repo,
+      ah: ah + '%',
+      ahC: ah >= 30 ? '#FF8A8A' : ah >= 20 ? '#F5B544' : '#A3A9B4'
+    }));
+    return { people, matrix, risks, contributors };
+  }
+}
+</script>
+</body>
+</html>

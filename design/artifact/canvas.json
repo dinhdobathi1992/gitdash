@@ -1,0 +1,151 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Alerts.dc.html": {
+      "h": 1180,
+      "is_interactive": true,
+      "title": "Alerts + new rule",
+      "w": 1440,
+      "x": 3040,
+      "y": 2060
+    },
+    "Cost.dc.html": {
+      "h": 1260,
+      "is_interactive": true,
+      "title": "Cost",
+      "w": 1440,
+      "x": 1520,
+      "y": 2060
+    },
+    "Login.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Sign in",
+      "w": 1440,
+      "x": 0,
+      "y": 4060
+    },
+    "Main.dc.html": {
+      "h": 1380,
+      "is_interactive": true,
+      "title": "Repositories (home)",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Mobile.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · repositories",
+      "w": 390,
+      "x": 1520,
+      "y": 4060
+    },
+    "MobileRepo.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · repository",
+      "w": 390,
+      "x": 1990,
+      "y": 4060
+    },
+    "Repo.dc.html": {
+      "h": 1500,
+      "is_interactive": true,
+      "title": "Repository overview",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Settings.dc.html": {
+      "h": 1500,
+      "is_interactive": true,
+      "title": "Settings · access by group",
+      "w": 1440,
+      "x": 4560,
+      "y": 2060
+    },
+    "Sidebar.dc.html": {
+      "h": 960,
+      "is_interactive": true,
+      "title": "Sidebar (shared)",
+      "w": 232,
+      "x": 2460,
+      "y": 4060
+    },
+    "System.dc.html": {
+      "h": 1400,
+      "title": "Design system",
+      "w": 1440,
+      "x": 2772,
+      "y": 4060
+    },
+    "Team.dc.html": {
+      "h": 1360,
+      "is_interactive": true,
+      "title": "Team insights",
+      "w": 1440,
+      "x": 0,
+      "y": 2060
+    },
+    "Workflow.dc.html": {
+      "h": 1600,
+      "is_interactive": true,
+      "title": "Workflow detail",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-26T19:06:34Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "row1": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Monitor: fleet → repository → workflow",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 6000,
+      "text": "Analyze and configure",
+      "w": 240,
+      "x": 0,
+      "y": 1760
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 4212,
+      "text": "Sign-in, phone, shared shell and system",
+      "w": 240,
+      "x": 0,
+      "y": 3760
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Repo.dc.html",
+    "Workflow.dc.html",
+    "Team.dc.html",
+    "Cost.dc.html",
+    "Alerts.dc.html",
+    "Settings.dc.html",
+    "Login.dc.html",
+    "Mobile.dc.html",
+    "MobileRepo.dc.html",
+    "Sidebar.dc.html",
+    "System.dc.html"
+  ],
+  "pages": [],
+  "title": "GitDash Redesign"
+}

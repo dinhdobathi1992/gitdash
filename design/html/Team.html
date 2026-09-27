@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Team insights · GitDash design</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</head>
+<body>
+
+
+<div style="width: 1440px; height: 1360px; display: flex; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="width: 232px; flex-shrink: 0; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D">
+
+
+<nav aria-label="Primary" style="width: 232px; height: 960px; box-sizing: border-box; padding: 16px 12px; display: flex; flex-direction: column; gap: 22px; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+<svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" style="filter: drop-shadow(0 0 8px rgba(164,139,255,0.45))">
+<rect x="0" y="0" width="28" height="28" rx="7" fill="#161B23"></rect>
+<rect x="6" y="15" width="3" height="7" rx="1" fill="#4FD1E8"></rect>
+<rect x="10.5" y="12" width="3" height="10" rx="1" fill="#74B6F4"></rect>
+<rect x="15" y="9" width="3" height="13" rx="1" fill="#8E9BFA"></rect>
+<rect x="19.5" y="6" width="3" height="16" rx="1" fill="#A48BFF"></rect>
+</svg>
+<span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em; flex-grow: 1">GitDash</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">v4.3</span>
+</div>
+
+<button type="button" aria-label="Switch organization, current: ADI" style="display: flex; align-items: center; gap: 10px; width: 100%; height: 48px; padding: 0 10px; border-radius: 10px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-family: inherit; cursor: pointer; text-align: left">
+<span style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 7px; background: #2A2350; color: #C9B8FF; font-size: 12px; font-weight: 600">AD</span>
+<span style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 600">ADI</span>
+<span style="font-size: 12px; color: #8E95A1">Org · 42 repos</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: #7A818D; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+</button>
+
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 10px 6px; font-size: 12px; font-weight: 500; color: #7A818D">Monitor</span>
+<a href="Main.dc.html" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+<span style="flex-grow: 1">Repositories</span>
+</a>
+<a href="Alerts.dc.html" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+<span style="flex-grow: 1">Alerts</span>
+<span style="display: flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: rgba(255,107,107,0.16); color: #FF9C9C; font-size: 12px; font-weight: 600">3</span>
+</a>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 10px 6px; font-size: 12px; font-weight: 500; color: #7A818D">Analyze</span>
+<a href="Team.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: linear-gradient(90deg, rgba(124,92,255,0.22) 0%, rgba(124,92,255,0.05) 100%); color: #EDEAE3">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #A48BFF"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+<span style="flex-grow: 1">Team insights</span>
+</a>
+<a href="Cost.dc.html" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><circle cx="12" cy="12" r="9"></circle><path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5"></path><path d="M12 6v2M12 16v2"></path></svg>
+<span style="flex-grow: 1">Cost</span>
+</a>
+<a href="#" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><path d="M3 3v18h18"></path><path d="M8 17v-6"></path><path d="M13 17V7"></path><path d="M18 17v-4"></path></svg>
+<span style="flex-grow: 1">Reports</span>
+</a>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 10px 6px; font-size: 12px; font-weight: 500; color: #7A818D">Pinned</span>
+<a href="Repo.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #A3A9B4; font-size: 13px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">
+<span aria-hidden="true" style="width: 8px; height: 8px; flex-shrink: 0; border-radius: 4px; background: #FF6B6B"></span>
+<span style="flex-grow: 1">tesda-backend</span>
+<span style="font-family: Geist, system-ui, sans-serif; font-size: 12px; color: #FF9C9C">Failing</span>
+</a>
+<a href="Repo.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #A3A9B4; font-size: 13px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">
+<span aria-hidden="true" style="width: 8px; height: 8px; flex-shrink: 0; border-radius: 4px; background: #F5B544"></span>
+<span style="flex-grow: 1">n8n</span>
+</a>
+<a href="Repo.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #A3A9B4; font-size: 13px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">
+<span aria-hidden="true" style="width: 8px; height: 8px; flex-shrink: 0; border-radius: 4px; background: #3DD68C"></span>
+<span style="flex-grow: 1">gitdash</span>
+</a>
+</div>
+
+<div style="flex-grow: 1"></div>
+
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="#" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"></path><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"></path></svg>
+<span style="flex-grow: 1">Docs</span>
+</a>
+<a href="Settings.dc.html" aria-current="false" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; background: transparent; color: #A3A9B4">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; color: #7A818D"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="15" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+<span style="flex-grow: 1">Settings</span>
+</a>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid #1E242D">
+<div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 12px">
+<span style="color: #A3A9B4">GitHub API budget</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; color: #EDEAE3">68%</span>
+</div>
+<div style="height: 4px; border-radius: 2px; background: #1E242D">
+<div style="width: 68%; height: 4px; border-radius: 2px; background: #4FD1E8"></div>
+</div>
+<span style="font-size: 12px; color: #7A818D">3,412 of 5,000 left · resets 14:32</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 2px 0 6px">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #173338; color: #7FE3F2; font-size: 12px; font-weight: 600">TD</span>
+<span style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0">
+<span style="font-size: 13px; font-weight: 500">Thi</span>
+<span style="font-size: 12px; color: #7A818D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Admin · DevOps</span>
+</span>
+<button type="button" aria-label="Sign out" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #7A818D; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>
+</button>
+</div>
+
+</nav>
+
+</div>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 12px; height: 56px; flex-shrink: 0; padding: 0 40px; box-shadow: inset 0 -1px 0 #1E242D">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; font-size: 13px; color: #A3A9B4">
+<span>ADI</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span aria-current="page" style="color: #EDEAE3; font-weight: 500">Team insights</span>
+</nav>
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 8px 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #7A818D; font-family: inherit; font-size: 13px; cursor: pointer; text-align: left">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="flex-grow: 1">Search repos, workflows, people</span>
+<kbd style="padding: 2px 6px; border-radius: 5px; border: 1px solid #2A313C; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">⌘K</kbd>
+</button>
+<span style="font-size: 12px; color: #7A818D; padding-left: 8px">Synced 2 min ago</span>
+<button type="button" aria-label="Refresh data" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #A3A9B4; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+</button>
+<a href="Alerts.dc.html" aria-label="Alerts, 3 firing" style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; color: #A3A9B4">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+<span aria-hidden="true" style="position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 4px; background: #FF6B6B; box-shadow: 0 0 0 2px #0B0D11"></span>
+</a>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 28px; padding: 32px 40px 40px">
+
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em">Team insights</h1>
+<p style="margin: 0; font-size: 14px; color: #A3A9B4">26 contributors · 412 pull requests across 42 repositories · last 30 days</p>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #A3A9B4">Repositories
+<select style="height: 36px; padding: 0 8px; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-family: inherit; font-size: 13px"><option>All 42</option><option>Pinned 3</option><option>tesda-backend</option><option>tesda-frontend</option></select>
+</label>
+<div role="group" aria-label="Time range" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #13171D; border: 1px solid #1E242D">
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">7d</button>
+<button type="button" aria-pressed="true" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: #232A36; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500">30d</button>
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">90d</button>
+</div>
+</div>
+
+<section aria-label="Team numbers" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px">
+<span style="font-size: 13px; color: #A3A9B4">Pull requests merged</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">356</span>
+<span style="font-size: 12px; color: #A3A9B4">of 412 opened · 86%</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Median cycle time</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">21h</span>
+<span style="font-size: 12px; color: #5BE0A0">↓ 4h faster</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Reviews given</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">1,108</span>
+<span style="font-size: 12px; color: #A3A9B4">3.1 per merged PR</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Review bus factor</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600; color: #F5B544">3</span>
+<span style="font-size: 12px; color: #F5B544">3 people do 60% of reviews</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Merged without review</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600">14</span>
+<span style="font-size: 12px; color: #A3A9B4">4% of merges</span>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px">
+
+<section aria-labelledby="matrix-title" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; align-items: flex-start; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+<h2 id="matrix-title" style="margin: 0; font-size: 15px; font-weight: 600">Who reviews whom</h2>
+<span style="font-size: 13px; color: #7A818D">Reviews given, by reviewer (columns) and author (rows)</span>
+</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7A818D">0
+<span aria-hidden="true" style="display: flex; gap: 2px"><span style="width: 14px; height: 10px; border-radius: 2px; background: #1A1F27"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #2E2660"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #4B3B99"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #7C5CFF"></span><span style="width: 14px; height: 10px; border-radius: 2px; background: #B9A6FF"></span></span>
+40+</span>
+</div>
+<div role="img" aria-label="Review matrix: Lan, Minh and Thi review most pull requests; Khoa and Trang rarely review others." style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; font-size: 12px; color: #7A818D">
+<span></span>
+<span style="text-align: center">Lan</span><span style="text-align: center">Minh</span><span style="text-align: center">Thi</span><span style="text-align: center">Huy</span><span style="text-align: center">Trang</span><span style="text-align: center">Khoa</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Lan</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #B9A6FF; color: #14102B">38</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">21</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">9</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">2</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">1</span>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Minh</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #B9A6FF; color: #14102B">34</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">26</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">6</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">3</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #1A1F27; color: #EDEAE3">0</span>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Thi</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">29</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #B9A6FF; color: #14102B">31</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">12</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">1</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">2</span>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Huy</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">18</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">22</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">14</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">4</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #1A1F27; color: #EDEAE3">0</span>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Trang</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">24</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">12</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #7C5CFF; color: #EDEAE3">19</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">5</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">1</span>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 72px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center">
+<span style="font-size: 12px; color: #A3A9B4">Khoa</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">11</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">16</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #4B3B99; color: #EDEAE3">9</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #2E2660; color: #EDEAE3">3</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: #1A1F27; color: #EDEAE3">0</span>
+
+<span style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 4px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; background: transparent; color: #EDEAE3"></span>
+
+</div>
+
+</div>
+</section>
+
+<section aria-labelledby="risk-title" style="display: flex; flex-direction: column; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px">
+<h2 id="risk-title" style="margin: 0; font-size: 15px; font-weight: 600">Workload to watch</h2>
+<span style="font-size: 13px; color: #7A818D">People whose load or hours are out of their usual range</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; color: #EDEAE3; font-size: 12px; font-weight: 600">MN</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Minh</span>
+<span style="font-size: 13px; color: #A3A9B4">38% of commits after 20:00 · 9 open PRs</span>
+</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(255,107,107,0.12); color: #FF8A8A">High</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; color: #EDEAE3; font-size: 12px; font-weight: 600">LN</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Lan</span>
+<span style="font-size: 13px; color: #A3A9B4">Reviewed 71 PRs — twice the team median</span>
+</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(245,181,68,0.14); color: #F5B544">Watch</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; color: #EDEAE3; font-size: 12px; font-weight: 600">TH</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Thi</span>
+<span style="font-size: 13px; color: #A3A9B4">Weekend commits on 4 of the last 4 weekends</span>
+</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(245,181,68,0.14); color: #F5B544">Watch</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 16px; background: #1C2230; color: #EDEAE3; font-size: 12px; font-weight: 600">KH</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+<span style="font-size: 14px; font-weight: 500">Khoa</span>
+<span style="font-size: 13px; color: #A3A9B4">3 PRs open for more than 5 days</span>
+</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(245,181,68,0.14); color: #F5B544">Watch</span>
+</div>
+
+</section>
+
+</div>
+
+<section aria-labelledby="people-title" style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px">
+<h2 id="people-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Contributors</h2>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #EDEAE3; font-family: inherit; font-size: 13px; cursor: pointer">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: #A3A9B4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+Export
+</button>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 38px; padding: 0 20px; background: #10141A; box-shadow: inset 0 1px 0 #1E242D; font-size: 12px; font-weight: 500; color: #7A818D">
+<span>Contributor</span><span>Merged</span><span>Reviews</span><span>Cycle time</span><span>First review in</span><span>After hours</span><span>Most active in</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">LN</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Lan Pham</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">lanpham</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">48</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">71</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">18h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">1h 40m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">12%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">tesda-backend</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">MN</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Minh Tran</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">minhtran</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">44</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">58</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">22h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">2h 05m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #FF8A8A">38%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">tesda-frontend</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">TH</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Thi</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">dinhdobathi1992</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">39</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">64</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">16h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">55m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #F5B544">24%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">adi-k8s-helm</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">HY</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Huy Le</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">huyle</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">31</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">27</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">26h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">3h 30m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">8%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">n8n</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">TR</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Trang Vo</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">trangvo</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">27</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">19</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">19h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">4h 10m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">6%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">tesda-frontend</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">KH</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">Khoa Nguyen</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">khoa-ng</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">22</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">11</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">41h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">6h 45m</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">15%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">tf-adi-infra-aws</span>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 120px 130px 110px 150px; align-items: center; column-gap: 16px; height: 56px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<span style="display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 15px; background: #1C2230; font-size: 12px; font-weight: 600">BO</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<a href="#" style="font-size: 14px; font-weight: 500; color: #EDEAE3; text-decoration: none">dependabot</a>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">dependabot[bot]</span>
+</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">64</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">0</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">2h</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">—</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">0%</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">many</span>
+</div>
+
+</section>
+
+</main>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

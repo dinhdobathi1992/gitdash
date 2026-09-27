@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workflow detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1600px; display: flex; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="width: 232px; flex-shrink: 0; background: #0F1217; box-shadow: inset -1px 0 0 #1E242D">
+<dc-import name="Sidebar" active="repos" hint-size="232px,960px"></dc-import>
+</div>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 12px; height: 56px; flex-shrink: 0; padding: 0 40px; box-shadow: inset 0 -1px 0 #1E242D">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; font-size: 13px; color: #A3A9B4">
+<span>ADI</span>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<a href="Main.dc.html" style="color: #A3A9B4; text-decoration: none">Repositories</a>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<a href="Repo.dc.html" style="color: #A3A9B4; text-decoration: none; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">tesda-backend</a>
+<span aria-hidden="true" style="color: #4B525E">/</span>
+<span aria-current="page" style="color: #EDEAE3; font-weight: 500; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">deploy-prod</span>
+</nav>
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 8px 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #7A818D; font-family: inherit; font-size: 13px; cursor: pointer; text-align: left">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="flex-grow: 1">Search repos, workflows, people</span>
+<kbd style="padding: 2px 6px; border-radius: 5px; border: 1px solid #2A313C; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">⌘K</kbd>
+</button>
+<span style="font-size: 12px; color: #7A818D; padding-left: 8px">Synced 2 min ago</span>
+<button type="button" aria-label="Refresh data" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #A3A9B4; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+</button>
+<a href="Alerts.dc.html" aria-label="Alerts, 3 firing" style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; color: #A3A9B4">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+<span aria-hidden="true" style="position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 4px; background: #FF6B6B; box-shadow: 0 0 0 2px #0B0D11"></span>
+</a>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 22px; padding: 28px 40px 0; box-shadow: inset 0 -1px 0 #1E242D">
+<div style="display: flex; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1">
+<h1 style="margin: 0; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em">deploy-prod</h1>
+<div style="display: flex; align-items: center; gap: 14px; font-size: 13px; color: #A3A9B4">
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; font-size: 12px; font-weight: 500; background: rgba(255,107,107,0.12); color: #FF8A8A"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 3px; background: #FF8A8A"></span>Failing · 3 in a row</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace">.github/workflows/deploy-prod.yml</span>
+<span>On push to main</span>
+<span>84 runs in 30 days</span>
+</div>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: #A3A9B4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+Export CSV
+</button>
+<a href="https://github.com" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-size: 13px; font-weight: 500; text-decoration: none">
+Open in GitHub
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: #A3A9B4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+</a>
+</div>
+<nav aria-label="Workflow sections" style="display: flex; gap: 4px">
+<a href="Workflow.dc.html" aria-current="page" style="display: flex; align-items: center; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #EDEAE3; box-shadow: inset 0 -2px 0 #A48BFF">Overview</a>
+<a href="#" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #A3A9B4">Runs <span style="font-size: 12px; color: #7A818D">84</span></a>
+<a href="#" style="display: flex; align-items: center; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #A3A9B4">Performance</a>
+<a href="#" style="display: flex; align-items: center; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #A3A9B4">Reliability</a>
+</nav>
+</div>
+
+<main style="display: flex; flex-direction: column; gap: 24px; padding: 28px 40px 40px">
+
+<section aria-label="Key numbers" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px">
+<span style="font-size: 13px; color: #A3A9B4">Success rate</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600; color: #FF8A8A">71.4%</span>
+<span style="font-size: 12px; color: #FF9C9C">↓ 12 pts</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Avg duration</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600">8m 12s</span>
+<span style="font-size: 12px; color: #F5B544">↑ 1m 06s</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">p95 queue wait</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600">1m 04s</span>
+<span style="font-size: 12px; color: #A3A9B4">No change</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Time to recover</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600">2h 10m</span>
+<span style="font-size: 12px; color: #F5B544">↑ 25m</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Re-run rate</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600">14%</span>
+<span style="font-size: 12px; color: #A3A9B4">12 of 84 runs</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; box-shadow: inset 1px 0 0 #1E242D">
+<span style="font-size: 13px; color: #A3A9B4">Dev time lost</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 24px; line-height: 30px; font-weight: 600">3h 51m</span>
+<span style="font-size: 12px; color: #A3A9B4">in failed runs</span>
+</div>
+</section>
+
+<section aria-labelledby="hist-title" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; align-items: flex-start; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+<h2 id="hist-title" style="margin: 0; font-size: 15px; font-weight: 600">Last 40 runs</h2>
+<span style="font-size: 13px; color: #7A818D">Bar height is duration; colour is outcome</span>
+</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A3A9B4"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2px; background: #3DD68C"></span>Success</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A3A9B4"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2px; background: #FF6B6B"></span>Failure</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A3A9B4"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2px; background: #4B525E"></span>Cancelled</span>
+</div>
+<div style="display: flex; gap: 12px">
+<div style="display: flex; flex-direction: column; justify-content: space-between; height: 180px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #7A818D; text-align: right; width: 30px">
+<span>12m</span><span>8m</span><span>4m</span><span>0</span>
+</div>
+<div style="position: relative; flex-grow: 1; height: 180px; box-shadow: inset 0 -1px 0 #232A34">
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 30px; height: 0; border-top: 1px dashed #4B3B99"></div>
+<span style="position: absolute; right: 0; top: 12px; font-size: 11px; color: #B9A6FF; font-family: 'Geist Mono', ui-monospace, Menlo, monospace">p95 · 9m 48s</span>
+<div role="img" aria-label="Bar chart of the last 40 runs. The last three runs failed, each taking close to 10 minutes." style="position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 5px">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="40">
+<span style="flex-grow: 1; border-radius: 3px 3px 0 0; height: {{b.h}}px; background: {{b.c}}"></span>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between; padding-left: 42px; font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #7A818D">
+<span>Sep 13</span><span>Sep 17</span><span>Sep 21</span><span>Sep 24</span><span>Today</span>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px">
+
+<section aria-labelledby="why-title" style="display: flex; flex-direction: column; gap: 4px; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; align-items: center; gap: 10px; padding-bottom: 12px">
+<h2 id="why-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Why it's failing</h2>
+<span style="font-size: 12px; color: #7A818D">AI hypotheses from 8 failed runs</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 14px; font-weight: 500; flex-grow: 1">The migration locks the courses table during deploy</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(255,107,107,0.12); color: #FF8A8A">Likely</span>
+</div>
+<span style="font-size: 13px; line-height: 20px; color: #A3A9B4">migrate-db hit its 5-minute timeout in 6 of 8 failures since Sep 24, each time waiting on a lock.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 0; box-shadow: inset 0 1px 0 #1E242D">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 14px; font-weight: 500; flex-grow: 1">The API pod's readiness probe is flaky</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(245,181,68,0.14); color: #F5B544">Possible</span>
+</div>
+<span style="font-size: 13px; line-height: 20px; color: #A3A9B4">Two failures show a Helm rollout timeout while the pods reported healthy seconds later.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 0 0; box-shadow: inset 0 1px 0 #1E242D">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 14px; font-weight: 500; flex-grow: 1">A runner is short on disk</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(163,169,180,0.12); color: #A3A9B4">Unlikely</span>
+</div>
+<span style="font-size: 13px; line-height: 20px; color: #A3A9B4">Both failures on one self-hosted runner logged less than 2 GB free; the other seven did not.</span>
+</div>
+</section>
+
+<section aria-labelledby="jobs-title" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: flex; align-items: center; gap: 12px">
+<h2 id="jobs-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Where the time goes</h2>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A3A9B4"><span aria-hidden="true" style="width: 12px; height: 8px; border-radius: 2px; background: #2E3A4A"></span>p50</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A3A9B4"><span aria-hidden="true" style="width: 2px; height: 12px; background: #EDEAE3"></span>p95</span>
+</div>
+<sc-for list="{{jobs}}" as="j" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 64px; align-items: center; column-gap: 14px">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: {{j.nameC}}">{{j.name}}</span>
+<div style="position: relative; height: 14px; border-radius: 3px; background: #10141A">
+<div style="height: 14px; border-radius: 3px; width: {{j.p50}}%; background: {{j.barC}}"></div>
+<div aria-hidden="true" style="position: absolute; top: -3px; width: 2px; height: 20px; background: #EDEAE3; left: {{j.p95}}%"></div>
+</div>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4; text-align: right">{{j.label}}</span>
+</div>
+</sc-for>
+<span style="font-size: 12px; line-height: 18px; color: #7A818D; padding-top: 4px">migrate-db is 48% of the p95 run and the only step whose time is growing.</span>
+</section>
+
+</div>
+
+<section aria-labelledby="runs-title" style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px">
+<h2 id="runs-title" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Recent runs</h2>
+<label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #A3A9B4">Outcome
+<select style="height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid #232A34; background: #0F1217; color: #EDEAE3; font-family: inherit; font-size: 13px"><option>All</option><option>Failures</option><option>Success</option><option>Cancelled</option></select>
+</label>
+</div>
+<div style="display: grid; grid-template-columns: 70px 110px minmax(0, 1fr) 120px 100px 90px 110px; align-items: center; column-gap: 16px; height: 38px; padding: 0 20px; background: #10141A; box-shadow: inset 0 1px 0 #1E242D; font-size: 12px; font-weight: 500; color: #7A818D">
+<span>Run</span><span>Outcome</span><span>Commit</span><span>Branch</span><span>Author</span><span>Duration</span><span>Started</span>
+</div>
+<sc-for list="{{runs}}" as="r" hint-placeholder-count="7">
+<div style="display: grid; grid-template-columns: 70px 110px minmax(0, 1fr) 120px 100px 90px 110px; align-items: center; column-gap: 16px; height: 54px; padding: 0 20px; box-shadow: inset 0 1px 0 #1A1F27">
+<a href="#" style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; text-decoration: none">{{r.id}}</a>
+<span style="display: inline-flex; align-items: center; gap: 6px; justify-self: start; height: 24px; padding: 0 9px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{r.sBg}}; color: {{r.sFg}}"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 3px; background: {{r.sFg}}"></span>{{r.status}}</span>
+<span style="display: flex; align-items: baseline; gap: 10px; min-width: 0">
+<span style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.msg}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D; flex-shrink: 0">{{r.sha}}</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">{{r.branch}}</span>
+<span style="font-size: 13px; color: #A3A9B4">{{r.who}}</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #A3A9B4">{{r.dur}}</span>
+<span style="font-size: 13px; color: #A3A9B4">{{r.when}}</span>
+</div>
+</sc-for>
+</section>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const C = { S: '#3DD68C', F: '#FF6B6B', X: '#4B525E' };
+    const hist = 'SSSSFSSSSSSXSSSSSSFSSSSSSSSFFSFFFSXSSFFF';
+    const mins = (s, i) => (s === 'X' ? 1.2 : s === 'F' ? 9.6 + (i % 3) * 0.2 : 6.9 + (i % 5) * 0.15 + i * 0.03);
+    const bars = hist.split('').map((s, i) => ({ c: C[s], h: Math.round((mins(s, i) / 12) * 180) }));
+    const ST = {
+      Failure: { fg: '#FF8A8A', bg: 'rgba(255,107,107,0.12)' },
+      Success: { fg: '#5BE0A0', bg: 'rgba(61,214,140,0.12)' },
+      Cancelled: { fg: '#A3A9B4', bg: 'rgba(163,169,180,0.10)' }
+    };
+    const runs = [
+      ['#1284', 'Failure', 'fix: raise migration lock timeout', 'a91f3c2', 'main', 'thi', '9m 48s', '18 min ago'],
+      ['#1283', 'Failure', 'feat: export courses to SCORM', '4be21d0', 'main', 'lan', '10m 02s', '2 h ago'],
+      ['#1282', 'Failure', 'chore: bump prisma to 6.4', '77c0e19', 'main', 'dependabot', '9m 11s', '5 h ago'],
+      ['#1281', 'Success', 'fix: trim trailing slash in OAuth callback', '1d3a8b4', 'main', 'minh', '7m 36s', '1 d ago'],
+      ['#1280', 'Success', 'feat: learner progress endpoint', 'c02e7aa', 'main', 'thi', '7m 58s', '1 d ago'],
+      ['#1279', 'Cancelled', 'docs: update deploy runbook', 'e8b1f60', 'main', 'huy', '1m 12s', '2 d ago'],
+      ['#1278', 'Success', 'fix: guard missing org on login', '5fa0b93', 'main', 'lan', '8m 04s', '2 d ago']
+    ].map(([id, status, msg, sha, branch, who, dur, when]) => ({ id, status, msg, sha, branch, who, dur, when, sFg: ST[status].fg, sBg: ST[status].bg }));
+    const jobs = [
+      ['checkout', 2, 3, '12s', false],
+      ['setup-node', 5, 8, '34s', false],
+      ['install', 16, 22, '1m 48s', false],
+      ['build', 20, 27, '2m 10s', false],
+      ['migrate-db', 34, 80, '4m 42s', true],
+      ['deploy', 12, 17, '1m 20s', false]
+    ].map(([name, p50, p95, label, hot]) => ({ name, p50, p95, label, barC: hot ? '#8A3A40' : '#2E3A4A', nameC: hot ? '#FF8A8A' : '#EDEAE3' }));
+    return { bars, runs, jobs };
+  }
+}
+</script>
+</body>
+</html>

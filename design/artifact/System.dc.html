@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GitDash design system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0B0D11}
+a{color:#B9A6FF}a:hover{color:#D3C7FF}
+:focus-visible{outline:2px solid #A48BFF;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1400px; box-sizing: border-box; display: flex; flex-direction: column; gap: 48px; padding: 64px 72px; background: radial-gradient(900px 480px at 78% -8%, rgba(124,92,255,0.13), transparent 70%), radial-gradient(700px 420px at 28% -12%, rgba(79,209,232,0.07), transparent 70%), #0B0D11; font-family: Geist, system-ui, sans-serif; color: #EDEAE3">
+
+<div style="display: flex; align-items: flex-end; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #B9A6FF">GitDash · Graphite console</span>
+<h1 style="margin: 0; font-size: 44px; line-height: 50px; font-weight: 600; letter-spacing: -0.03em">Design system</h1>
+</div>
+<span style="font-size: 13px; color: #7A818D">Geist + Geist Mono · 4 px base · dark first</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px">
+<sc-for list="{{palettes}}" as="p" hint-placeholder-count="4">
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #A3A9B4">{{p.name}}</h2>
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1E242D; overflow: hidden">
+<sc-for list="{{p.items}}" as="c" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 12px; background: #10141A; box-shadow: inset 0 -1px 0 #1A1F27">
+<span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); background: {{c.hex}}"></span>
+<span style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0">
+<span style="font-size: 13px; font-weight: 500">{{c.name}}</span>
+<span style="font-size: 12px; color: #7A818D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.use}}</span>
+</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">{{c.hex}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px">
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #A3A9B4">Type</h2>
+<div style="display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 16px 20px">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Page · 28/34 600</span>
+<span style="font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em">Repositories</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Section · 18/24 600</span>
+<span style="font-size: 18px; line-height: 24px; font-weight: 600">Access by group</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Card · 15/20 600</span>
+<span style="font-size: 15px; line-height: 20px; font-weight: 600">Needs attention</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Body · 14/21 400</span>
+<span style="font-size: 14px; line-height: 21px">Three failures in a row, each one stops in the migrate-db step.</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Meta · 13/18 400</span>
+<span style="font-size: 13px; line-height: 18px; color: #A3A9B4">42 repositories · last 30 days</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Caption · 12/16 min</span>
+<span style="font-size: 12px; line-height: 16px; color: #7A818D">Nothing in the product goes below 12 px.</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 16px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Figure · Mono 26 600</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em">93.4% · 11m 42s</span>
+</div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: baseline; column-gap: 16px; padding: 14px 20px; box-shadow: inset 0 1px 0 #1E242D">
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #7A818D">Identifier · Mono 13</span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 13px">adi/tesda-backend › deploy-prod › migrate-db</span>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #A3A9B4">Components</h2>
+<div style="display: flex; flex-direction: column; gap: 22px; padding: 22px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Buttons · 36–38 px, one primary per view</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<button type="button" style="height: 38px; padding: 0 16px; border: 0; border-radius: 8px; background: linear-gradient(180deg, #8163FF 0%, #6440F5 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 20px -8px rgba(109,74,255,0.75); color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600">Create rule</button>
+<button type="button" style="height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid #232A34; background: #13171D; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500">Open in GitHub</button>
+<button type="button" style="height: 38px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #B9A6FF; font-family: inherit; font-size: 13px; font-weight: 500">Send a test</button>
+<button type="button" aria-label="Refresh data" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #232A34; background: transparent; color: #A3A9B4">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Run status · dot + word, never colour alone</span>
+<div style="display: flex; align-items: center; gap: 8px">
+<sc-for list="{{pills}}" as="s" hint-placeholder-count="5">
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{s.bg}}; color: {{s.fg}}"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 3px; background: {{s.fg}}"></span>{{s.label}}</span>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">DORA rating</span>
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(61,214,140,0.12); color: #5BE0A0">Elite</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(79,209,232,0.12); color: #6FDBEE">High</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(245,181,68,0.14); color: #F5B544">Medium</span>
+<span style="height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 22px; background: rgba(255,107,107,0.12); color: #FF8A8A">Low</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Run strip · last 10, oldest first</span>
+<div style="display: flex; align-items: center; gap: 3px">
+<span style="width: 8px; height: 18px; border-radius: 2px; background: #3DD68C"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #3DD68C"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #3DD68C"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #FF6B6B"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #3DD68C"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #4B525E"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #3DD68C"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #FF6B6B"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #FF6B6B"></span><span style="width: 8px; height: 18px; border-radius: 2px; background: #4FD1E8"></span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Segmented control</span>
+<div role="group" aria-label="Time range" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #0F1217; border: 1px solid #1E242D; align-self: flex-start">
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">7d</button>
+<button type="button" aria-pressed="true" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: #232A36; color: #EDEAE3; font-family: inherit; font-size: 13px; font-weight: 500">30d</button>
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #A3A9B4; font-family: inherit; font-size: 13px; font-weight: 500">90d</button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Switch</span>
+<div style="display: flex; align-items: center; gap: 12px">
+<button type="button" role="switch" aria-checked="true" aria-label="Example switch, on" style="position: relative; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: #6D4AFF"><span aria-hidden="true" style="position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF"></span></button>
+<button type="button" role="switch" aria-checked="false" aria-label="Example switch, off" style="position: relative; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: #2A313C"><span aria-hidden="true" style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF"></span></button>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; color: #7A818D">Tabs · the only way into a repo's sub-pages</span>
+<div style="display: flex; gap: 4px; box-shadow: inset 0 -1px 0 #1E242D">
+<span style="display: flex; align-items: center; height: 38px; padding: 0 12px; font-size: 14px; font-weight: 500; box-shadow: inset 0 -2px 0 #A48BFF">Overview</span>
+<span style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; font-size: 14px; font-weight: 500; color: #A3A9B4">Workflows <span style="font-size: 12px; color: #7A818D">12</span></span>
+<span style="display: flex; align-items: center; height: 38px; padding: 0 12px; font-size: 14px; font-weight: 500; color: #A3A9B4">Pull requests</span>
+<span style="display: flex; align-items: center; height: 38px; padding: 0 12px; font-size: 14px; font-weight: 500; color: #A3A9B4">Security</span>
+</div>
+</div>
+
+</div>
+</section>
+
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #A3A9B4">Spacing and radius</h2>
+<div style="display: flex; align-items: flex-end; gap: 28px; padding: 22px; border-radius: 12px; border: 1px solid #1F2530; background: linear-gradient(180deg, #161B23 0%, #12161C 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px -20px rgba(0,0,0,0.85)">
+<sc-for list="{{spaces}}" as="s" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span style="background: #4B3B99; width: {{s}}px; height: {{s}}px"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">{{s}}</span>
+</div>
+</sc-for>
+<span style="flex-grow: 1"></span>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><span style="width: 48px; height: 48px; border-radius: 6px; border: 1px solid #4B525E"></span><span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">6 · chip</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><span style="width: 48px; height: 48px; border-radius: 8px; border: 1px solid #4B525E"></span><span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">8 · control</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><span style="width: 48px; height: 48px; border-radius: 12px; border: 1px solid #4B525E"></span><span style="font-family: 'Geist Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #A3A9B4">12 · card</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const palettes = [
+      { name: 'Surfaces', items: [
+        { name: 'Ground', hex: '#0B0D11', use: 'Page background' },
+        { name: 'Panel', hex: '#0F1217', use: 'Sidebar, inputs' },
+        { name: 'Surface', hex: '#13171D', use: 'Cards, tables' },
+        { name: 'Raised', hex: '#1C2230', use: 'Selected nav, active row' },
+        { name: 'Line', hex: '#1E242D', use: 'Card borders, dividers' }
+      ] },
+      { name: 'Text', items: [
+        { name: 'Primary', hex: '#EDEAE3', use: 'Headings, values' },
+        { name: 'Secondary', hex: '#A3A9B4', use: 'Labels, meta' },
+        { name: 'Tertiary', hex: '#7A818D', use: 'Captions, axes' },
+        { name: 'Disabled', hex: '#4B525E', use: 'Disabled, cancelled' },
+        { name: 'Control line', hex: '#232A34', use: 'Button and input borders' }
+      ] },
+      { name: 'Brand', items: [
+        { name: 'Violet', hex: '#A48BFF', use: 'Focus, active marks, links' },
+        { name: 'Violet fill', hex: '#6D4AFF', use: 'Primary button (5.2:1 with white)' },
+        { name: 'Violet tint', hex: '#221C45', use: 'Selected chip' },
+        { name: 'Cyan', hex: '#4FD1E8', use: 'Data series, running' },
+        { name: 'Cyan tint', hex: '#173338', use: 'Avatar, info fill' }
+      ] },
+      { name: 'Status', items: [
+        { name: 'Pass', hex: '#3DD68C', use: 'Success, faster, Elite' },
+        { name: 'Fail', hex: '#FF6B6B', use: 'Failure, regression, Low' },
+        { name: 'Warn', hex: '#F5B544', use: 'Slower, at risk, Medium' },
+        { name: 'Running', hex: '#4FD1E8', use: 'In progress, High' },
+        { name: 'Neutral', hex: '#4B525E', use: 'Cancelled, skipped' }
+      ] }
+    ];
+    const pills = [
+      { label: 'Passing', fg: '#5BE0A0', bg: 'rgba(61,214,140,0.12)' },
+      { label: 'Failing', fg: '#FF8A8A', bg: 'rgba(255,107,107,0.12)' },
+      { label: 'Running', fg: '#6FDBEE', bg: 'rgba(79,209,232,0.12)' },
+      { label: 'Queued', fg: '#F5B544', bg: 'rgba(245,181,68,0.14)' },
+      { label: 'No recent runs', fg: '#A3A9B4', bg: 'rgba(163,169,180,0.10)' }
+    ];
+    return { palettes, pills, spaces: [4, 8, 12, 16, 20, 24, 32, 40] };
+  }
+}
+</script>
+</body>
+</html>
