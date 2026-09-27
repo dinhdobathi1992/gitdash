@@ -19,6 +19,8 @@ import { getEmailSettings, saveEmailSettings, type EmailProvider } from "@/lib/d
 import { resolveEmailProvider, invalidateEmailProviderCache } from "@/lib/notifier";
 import { seal, maskHint } from "@/lib/secret-box";
 import { safeError } from "@/lib/validation";
+import { noStoreHeaders } from "@/lib/http-cache";
+import { requireAccess } from "@/lib/permissions";
 
 export const maxDuration = 60;
 
@@ -46,6 +48,8 @@ export interface EmailSettingsResponse {
 }
 
 export async function GET() {
+  const denied = await requireAccess(null, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -64,7 +68,7 @@ export async function GET() {
       effective_source: resolved?.source ?? "none",
       db_available: true,
     };
-    return NextResponse.json(body, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(body, { headers: noStoreHeaders() });
   } catch {
     // No DATABASE_URL — the section still renders, read-only, explaining that
     // env vars are the only option on this deployment.
@@ -79,11 +83,13 @@ export async function GET() {
       effective_source: resolved?.source ?? "none",
       db_available: false,
     };
-    return NextResponse.json(body, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(body, { headers: noStoreHeaders() });
   }
 }
 
 export async function PUT(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

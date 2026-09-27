@@ -14,6 +14,8 @@ import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { requireAccess } from "@/lib/permissions";
 
 const TITLE_MAX = 256;
 const BODY_MAX = 10_000;
@@ -27,6 +29,9 @@ const KNOWN_ERRORS: Record<number, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  labelGitHubRoute("github/create-issue");
+  const denied = await requireAccess(req, "flag:githubIssueFromAnomaly");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

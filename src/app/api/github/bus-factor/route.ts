@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
-import { withCache, hashKey } from "@/lib/cache";
+import { withCache, hashKey, partialAwareTtl } from "@/lib/cache";
 import { computeBusFactor, type BusFactorResponse } from "@/lib/bus-factor";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export type { ModuleOwnership, BusFactorResponse } from "@/lib/bus-factor";
 
 const CACHE_TTL = 600; // 10 minutes
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/bus-factor");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -28,14 +32,15 @@ export async function GET(req: NextRequest) {
     // Route-level cache: token-scoped (result reflects this user's repo access)
     // and coalesced, so concurrent cold requests share one computation.
     const response = await withCache<BusFactorResponse>(
-      `bus-factor:${hashKey(token)}:${owner}/${repo}`,
+      `github/bus-factor:${hashKey(token)}:${owner}/${repo}`,
       CACHE_TTL,
       () => computeBusFactor(getOctokit(token), owner, repo),
+      { shared: true, ttlFor: partialAwareTtl(CACHE_TTL) },
     );
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=600`,
+        ...gatedCacheHeaders(),
       },
     });
   } catch (e) {

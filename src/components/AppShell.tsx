@@ -1,34 +1,48 @@
 "use client";
 
-import { Suspense, useState } from "react";
+/**
+ * App shell — design contract §4.1–4.2.
+ *   ≥ 1024: fixed 232 px sidebar + top bar + centred content (max 1600).
+ *   640–1023: sidebar becomes a slide-over drawer; top bar keeps search + alerts.
+ *   < 640: compact top bar + bottom tab bar; "More" opens the drawer.
+ * The footer is gone: the version lives in the sidebar, repo links in Docs.
+ */
+
+import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import CommandPalette from "@/components/CommandPalette";
+import TopBar from "@/components/shell/TopBar";
+import MobileTabBar from "@/components/shell/MobileTabBar";
 
-const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo"];
+const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo", "/pending"];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   if (FULL_PAGE_ROUTES.some((r) => path === r || path.startsWith(r + "/"))) {
     return <>{children}</>;
   }
 
   return (
-    // `items-stretch` makes all direct flex children fill the full row height
-    <div className="flex items-stretch min-h-screen bg-[#0f1117]">
-
+    <div className="flex items-stretch min-h-screen bg-ground">
       {/* Global ⌘K. Rendered inside the shell so it is absent from the
           full-page auth routes, where there is nothing to navigate to. */}
       <Suspense fallback={null}>
         <CommandPalette />
       </Suspense>
 
-
       {/* Desktop sidebar — sticky, full viewport height, scrolls internally */}
-      <div className="hidden md:block md:w-60 shrink-0 bg-[#0d1117] border-r border-slate-800">
+      <div className="hidden lg:block w-[232px] shrink-0 bg-panel">
         <div className="sticky top-0 h-screen overflow-y-auto">
           <Suspense fallback={null}>
             <Sidebar />
@@ -36,20 +50,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Mobile backdrop */}
+      {/* Drawer (< 1024) */}
       {drawerOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true"
         />
       )}
-
-      {/* Mobile drawer */}
       <div
         className={[
-          "fixed top-0 left-0 z-50 h-full w-72 transform transition-transform duration-200 md:hidden",
-          drawerOpen ? "translate-x-0" : "-translate-x-full",
+          "fixed top-0 left-0 z-50 h-full w-[280px] overflow-y-auto bg-panel transform transition-transform duration-200 lg:hidden",
+          drawerOpen ? "translate-x-0" : "-translate-x-full invisible",
         ].join(" ")}
         role="dialog"
         aria-modal="true"
@@ -60,66 +72,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </Suspense>
       </div>
 
-      {/* Main content — scrolls independently */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 h-12 px-4 bg-[#0d1117]/95 border-b border-slate-800 backdrop-blur-sm md:hidden">
-          <button
-            onClick={() => setDrawerOpen((o) => !o)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            aria-label={drawerOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={drawerOpen}
-          >
-            {drawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-          <span className="font-semibold text-white text-sm tracking-tight">GitDash</span>
-        </header>
+      <div className="flex-1 flex flex-col min-w-0 page-glow">
+        <Suspense fallback={<div className="h-14 border-b border-line" />}>
+          <TopBar onOpenMenu={() => setDrawerOpen(true)} />
+        </Suspense>
 
-        {/* One content container for the whole app (v4.2.8).
-
-            Pages previously each declared their own cap — max-w-5xl on
-            Security, max-w-6xl on Issues, max-w-7xl on Team Analytics, none at
-            all on Alerts and Reports — and none of them centred. Left-aligned
-            caps put every pixel of unused width in a single block on the right,
-            which on a wide monitor left the Security page ending around 1010px
-            with almost as much empty space beside it as content.
-
-            Centring here fixes the asymmetry once, and the cap is generous
-            because this is a dashboard: the PR leaderboard alone is nine
-            columns, and narrowing those tables to a reading measure would be
-            the wrong trade. */}
+        {/* One centred content container for the whole app (v4.2.8): a
+            generous cap because tables like the PR leaderboard are wide. */}
         <main className="flex-1 min-w-0">
           <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
-
-        {/* Footer — hidden on docs (it has its own) */}
-        {!path.startsWith("/docs") && (
-          <footer className="py-8 text-center">
-            <p className="text-sm text-slate-600">
-              GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "3.1.0"} — GitHub Actions Dashboard
-            </p>
-            <p className="text-sm text-slate-600 mt-1">
-              <a
-                href="https://github.com/dinhdobathi1992/gitdash"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-slate-400 transition-colors"
-              >
-                Open source on GitHub
-              </a>
-              <span className="mx-1.5">·</span>
-              <a
-                href="https://github.com/dinhdobathi1992/gitdash/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-slate-400 transition-colors"
-              >
-                Report an issue
-              </a>
-            </p>
-          </footer>
-        )}
       </div>
+
+      <Suspense fallback={null}>
+        <MobileTabBar onMore={() => setDrawerOpen(true)} />
+      </Suspense>
     </div>
   );
 }

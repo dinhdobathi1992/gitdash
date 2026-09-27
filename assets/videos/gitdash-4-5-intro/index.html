@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<!--
+  GitDash 4.5 — introduction video (motion-video skill, glass keynote style
+  re-skinned in the GitDash "Graphite console" palette).
+  Storyboard and facts: docs/intro-video-prompt.md. All data shown is sample data
+  with neutral names. Timing comes from window.TIMING (scripts/draft-timing.mjs
+  for the silent cut; scripts/build-timeline.mjs once voice and music exist).
+-->
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>GitDash 4.5 — introduction</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Regular.ttf") format("truetype"); font-weight: 400; font-display: block; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Medium.ttf") format("truetype"); font-weight: 500; font-display: block; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: block; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Bold.ttf") format("truetype"); font-weight: 700; font-display: block; }
+      @font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Regular.ttf") format("truetype"); font-weight: 400; font-display: block; }
+      @font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Medium.ttf") format("truetype"); font-weight: 500; font-display: block; }
+      @font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: block; }
+      :root {
+        --bg: #0B0D11; --panel: #0F1217; --surface: #13171D; --raised: #1C2230;
+        --line: #1E242D; --control: #232A34; --strong: #2A313C;
+        --fg: #EDEAE3; --muted: #A3A9B4; --faint: #7A818D;
+        --brand: #6D4AFF; --brand-fg: #A48BFF; --link: #B9A6FF; --accent: #4FD1E8;
+        --pass: #3DD68C; --fail: #FF6B6B; --warn: #F5B544; --run: #4FD1E8; --neutral: #626A77;
+        --pass-t: #5BE0A0; --fail-t: #FF8A8A; --run-t: #6FDBEE;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--fg); font-family: "Geist", sans-serif; }
+      .layer { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+      .abs { position: absolute; }
+      .mono { font-family: "Geist Mono", monospace; }
+      .scene { opacity: 0; visibility: hidden; }
+      .hl .w { display: inline-block; }
+      .draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
+
+      /* atmosphere */
+      #orbs .orb { position: absolute; border-radius: 50%; }
+      #o1 { width: 1300px; height: 900px; left: 900px; top: -420px; background: radial-gradient(closest-side, rgba(124,92,255,0.26), transparent); }
+      #o2 { width: 1100px; height: 800px; left: -300px; top: -380px; background: radial-gradient(closest-side, rgba(79,209,232,0.13), transparent); }
+      #o3 { width: 1200px; height: 900px; left: 500px; top: 560px; background: radial-gradient(closest-side, rgba(124,92,255,0.10), transparent); }
+      #grid { background-image: radial-gradient(rgba(255,255,255,0.07) 1.5px, transparent 1.5px); background-size: 36px 36px; -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), transparent 75%); opacity: 0.5; }
+      #flash { background: #fff; opacity: 0; pointer-events: none; }
+      #fade { background: #000; opacity: 1; pointer-events: none; }
+      #wipe { left: -900px; top: -300px; width: 500px; height: 1700px; background: linear-gradient(90deg, transparent, rgba(185,166,255,0.10), transparent); transform: rotate(18deg); opacity: 0; }
+
+      /* type */
+      .kicker { left: 120px; top: 92px; display: flex; align-items: center; gap: 14px; font: 500 22px/1 "Geist Mono"; color: var(--muted); letter-spacing: 0.02em; }
+      .kicker b { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 32px; padding: 0 10px; border-radius: 8px; background: linear-gradient(180deg, #8163FF, #6440F5); color: #fff; font-weight: 600; font-size: 18px; }
+      .h1 { left: 120px; top: 140px; font: 600 72px/1.05 "Geist"; letter-spacing: -0.035em; color: var(--fg); white-space: nowrap; }
+      .h1 em { font-style: normal; color: var(--link); }
+      .sub { left: 122px; top: 232px; font: 400 26px/1.4 "Geist"; color: var(--muted); }
+
+      /* glass card */
+      .card { position: absolute; border-radius: 20px; border: 1.5px solid var(--line); background: linear-gradient(180deg, rgba(22,27,35,0.96), rgba(18,22,28,0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 40px 80px -40px rgba(0,0,0,0.9); overflow: hidden; }
+      .ct { font: 600 24px/1 "Geist"; color: var(--fg); }
+      .cm { font: 400 18px/1.3 "Geist"; color: var(--muted); }
+      .pill { display: inline-flex; align-items: center; gap: 9px; height: 34px; padding: 0 14px; border-radius: 17px; font: 500 18px/1 "Geist"; white-space: nowrap; }
+      .pill i { width: 9px; height: 9px; border-radius: 50%; }
+      .p-fail { background: rgba(255,107,107,0.12); color: var(--fail-t); } .p-fail i { background: var(--fail); }
+      .p-pass { background: rgba(61,214,140,0.12); color: var(--pass-t); } .p-pass i { background: var(--pass); }
+      .p-run { background: rgba(79,209,232,0.12); color: var(--run-t); } .p-run i { background: var(--run); }
+      .p-warn { background: rgba(245,181,68,0.14); color: var(--warn); } .p-warn i { background: var(--warn); }
+      .chip { display: inline-flex; align-items: center; height: 30px; padding: 0 11px; border-radius: 7px; font: 600 17px/1 "Geist"; }
+      .sq { display: inline-block; width: 12px; height: 28px; border-radius: 3px; margin-right: 5px; }
+      .ibox { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; font: 600 24px/1 "Geist"; }
+
+      /* HUD */
+      #hud { right: 120px; top: 92px; display: flex; align-items: center; gap: 14px; font: 500 20px/1 "Geist Mono"; color: var(--muted); opacity: 0; }
+      #hud .seg { width: 34px; height: 5px; border-radius: 3px; background: var(--strong); }
+      #hud .seg.on { background: var(--brand-fg); }
+
+      /* captions: bottom band only */
+      .cap { position: absolute; left: 0; width: 1920px; bottom: 40px; display: flex; justify-content: center; }
+      .cap-box { max-width: 1500px; padding: 12px 28px; border-radius: 18px; background: rgba(11,13,17,0.78); border: 1px solid rgba(255,255,255,0.06); font: 600 38px/1.3 "Geist"; text-align: center; }
+      .cw { color: rgba(237,234,227,0.45); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="90" data-width="1920" data-height="1080">
+      <div id="bg" class="layer"></div>
+      <div id="orbs" class="layer"><div id="o1" class="orb"></div><div id="o2" class="orb"></div><div id="o3" class="orb"></div></div>
+      <div id="grid" class="layer"></div>
+      <div id="pulse" class="layer">
+        <div id="stage" class="layer">
+
+          <!-- 01 cover -->
+          <section id="sc01" class="scene layer">
+            <div class="abs" id="logo" style="left: 810px; top: 250px; width: 300px; height: 300px">
+              <svg viewBox="0 0 28 28" width="300" height="300" style="filter: drop-shadow(0 0 40px rgba(164,139,255,0.45))">
+                <rect x="0" y="0" width="28" height="28" rx="7" fill="#161B23" />
+                <rect class="lb" x="6" y="15" width="3" height="7" rx="1" fill="#4FD1E8" />
+                <rect class="lb" x="10.5" y="12" width="3" height="10" rx="1" fill="#74B6F4" />
+                <rect class="lb" x="15" y="9" width="3" height="13" rx="1" fill="#8E9BFA" />
+                <rect class="lb" x="19.5" y="6" width="3" height="16" rx="1" fill="#A48BFF" />
+              </svg>
+            </div>
+            <div class="abs" id="brand" style="left: 0; width: 1920px; top: 590px; text-align: center">
+              <span style="font: 600 64px/1 Geist; letter-spacing: -0.03em">GitDash</span>
+              <span class="mono" id="ver" style="display: inline-block; margin-left: 18px; padding: 8px 16px; border-radius: 22px; border: 1.5px solid var(--control); background: var(--surface); font-size: 30px; color: var(--muted); vertical-align: 12px">v4.5</span>
+            </div>
+            <div class="abs" id="tag" style="left: 0; width: 1920px; top: 700px; text-align: center; font: 600 76px/1 Geist; letter-spacing: -0.04em">
+              <span id="tag1">Everything metrics,</span> <span id="tag2" style="color: var(--link)">measured.</span>
+            </div>
+          </section>
+
+          <!-- 02 monitor -->
+          <section id="sc02" class="scene layer">
+            <div class="abs kicker"><b>01</b>MONITOR</div>
+            <div class="abs h1 hl">What's wrong, first.</div>
+            <div class="card" id="kpi" style="left: 120px; top: 290px; width: 1680px; height: 190px; display: grid; grid-template-columns: repeat(4, 1fr)"></div>
+            <div class="abs ct" style="left: 120px; top: 530px">Needs attention <span class="mono" style="margin-left: 10px; padding: 3px 11px; border-radius: 14px; background: var(--raised); font-size: 19px">3</span></div>
+            <div class="card" id="att" style="left: 120px; top: 580px; width: 1680px; height: 300px"></div>
+          </section>
+
+          <!-- 03 repository table -->
+          <section id="sc03" class="scene layer">
+            <div class="abs kicker"><b>02</b>REPOSITORIES</div>
+            <div class="abs h1 hl">Every repo, at a glance.</div>
+            <div class="abs" id="chips" style="left: 120px; top: 260px; display: flex; gap: 12px"></div>
+            <div class="card" id="table" style="left: 120px; top: 320px; width: 1680px; height: 560px"></div>
+            <div class="card" id="palette" data-layout-allow-overlap style="left: 560px; top: 380px; width: 800px; height: 300px; box-shadow: 0 50px 120px -30px rgba(0,0,0,0.95); border-color: var(--control)">
+              <div style="display: flex; align-items: center; gap: 16px; height: 76px; padding: 0 28px; border-bottom: 1.5px solid var(--line)">
+                <span style="font: 400 26px Geist; color: var(--faint)">⌕</span>
+                <span id="ptype" class="mono" style="font-size: 26px; color: var(--fg)">api</span>
+                <span style="margin-left: auto" class="chip mono">⌘K</span>
+              </div>
+              <div style="padding: 14px 16px" id="presults"></div>
+            </div>
+          </section>
+
+          <!-- 04 repository overview -->
+          <section id="sc04" class="scene layer">
+            <div class="abs kicker"><b>03</b>REPOSITORY</div>
+            <div class="abs h1 hl">DORA, per repository.</div>
+            <div class="abs" id="tabs" style="left: 120px; top: 250px; width: 1680px; height: 54px; border-bottom: 1.5px solid var(--line); display: flex; gap: 36px; font: 500 22px/54px Geist; color: var(--muted)"></div>
+            <div class="abs" id="tabline" style="left: 120px; top: 300px; height: 3px; width: 100px; background: var(--brand-fg); border-radius: 2px"></div>
+            <div class="abs" id="dora" style="left: 120px; top: 340px; width: 1680px; height: 230px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px"></div>
+            <div class="card" style="left: 120px; top: 600px; width: 1080px; height: 290px">
+              <div class="abs ct" style="left: 28px; top: 26px">Run duration</div>
+              <div class="abs cm" style="left: 28px; top: 60px">Daily p50 and p95 across all workflows</div>
+              <svg class="abs" style="left: 28px; top: 96px" width="1024" height="170" viewBox="0 0 1024 170">
+                <path id="p95area" d="" fill="#A48BFF" fill-opacity="0.12" />
+                <path id="p95" class="draw" pathLength="1" d="" fill="none" stroke="#A48BFF" stroke-width="3" stroke-linejoin="round" />
+                <path id="p50" class="draw" pathLength="1" d="" fill="none" stroke="#4FD1E8" stroke-width="3" stroke-linejoin="round" />
+                <circle id="peak" r="7" fill="#A48BFF" stroke="#13171D" stroke-width="4" />
+              </svg>
+              <div class="abs mono" id="peaklbl" style="padding: 6px 12px; border-radius: 8px; background: var(--raised); font-size: 17px">Sep 24 · 18m 20s</div>
+            </div>
+            <div class="card" style="left: 1220px; top: 600px; width: 580px; height: 290px">
+              <div class="abs ct" style="left: 28px; top: 26px">Jobs that fail most</div>
+              <div id="jobs" class="abs" style="left: 28px; top: 80px; width: 524px"></div>
+            </div>
+          </section>
+
+          <!-- 05 workflow -->
+          <section id="sc05" class="scene layer">
+            <div class="abs kicker"><b>04</b>WORKFLOW</div>
+            <div class="abs h1 hl">Why it fails. Where time goes.</div>
+            <div class="card" style="left: 120px; top: 270px; width: 1680px; height: 290px">
+              <div class="abs ct" style="left: 28px; top: 26px">Last 40 runs</div>
+              <div class="abs cm" style="left: 28px; top: 60px">Bar height is duration; colour is outcome</div>
+              <div class="abs" id="bars" style="left: 28px; top: 110px; width: 1624px; height: 150px; display: flex; align-items: flex-end; gap: 8px"></div>
+              <div class="abs" id="p95line" style="left: 28px; top: 132px; width: 1624px; border-top: 2px dashed #4B3B99"></div>
+              <div class="abs" style="right: 28px; top: 30px; display: flex; align-items: center; gap: 10px; font: 500 17px 'Geist Mono'; color: var(--brand-fg)"><span style="width: 34px; border-top: 2px dashed #4B3B99"></span>p95 · 9m 48s</div>
+            </div>
+            <div class="card" id="why" style="left: 120px; top: 580px; width: 860px; height: 330px">
+              <div class="abs ct" style="left: 28px; top: 26px">Why it's failing</div>
+              <div class="abs cm" style="right: 28px; top: 30px">AI hypotheses from 8 failed runs</div>
+              <div id="hyp" class="abs" style="left: 28px; top: 70px; width: 804px"></div>
+            </div>
+            <div class="card" style="left: 1000px; top: 580px; width: 800px; height: 330px">
+              <div class="abs ct" style="left: 28px; top: 26px">Where the time goes</div>
+              <div id="jt" class="abs" style="left: 28px; top: 80px; width: 744px"></div>
+            </div>
+          </section>
+
+          <!-- 06 team -->
+          <section id="sc06" class="scene layer">
+            <div class="abs kicker"><b>05</b>TEAM INSIGHTS</div>
+            <div class="abs h1 hl">Healthy teams, not just fast ones.</div>
+            <div class="card" style="left: 120px; top: 270px; width: 520px; height: 620px">
+              <div class="abs cm" style="left: 32px; top: 36px; font-size: 22px">Review bus factor</div>
+              <div class="abs mono" id="bus" style="left: 32px; top: 104px; font-size: 180px; font-weight: 600; color: var(--warn); line-height: 1">2</div>
+              <div class="abs" style="left: 32px; top: 290px; font: 500 28px/1.3 Geist; color: var(--warn); width: 460px">people do 72% of reviews</div>
+              <div class="abs cm" style="left: 32px; top: 400px; font-size: 20px; width: 456px">The fewest reviewers who together give half of all reviews. Two is a risk: one holiday and pull requests wait.</div>
+            </div>
+            <div class="card" style="left: 660px; top: 270px; width: 600px; height: 620px">
+              <div class="abs ct" style="left: 28px; top: 26px">Who reviews whom</div>
+              <div id="heat" class="abs" style="left: 28px; top: 90px"></div>
+            </div>
+            <div class="card" style="left: 1280px; top: 270px; width: 520px; height: 620px">
+              <div class="abs ct" style="left: 28px; top: 26px">Workload to watch</div>
+              <div id="work" class="abs" style="left: 28px; top: 80px; width: 464px"></div>
+            </div>
+          </section>
+
+          <!-- 07 cost -->
+          <section id="sc07" class="scene layer">
+            <div class="abs kicker"><b>06</b>COST</div>
+            <div class="abs h1 hl">Spend, explained.</div>
+            <div class="card" id="costkpi" style="left: 120px; top: 270px; width: 1680px; height: 170px; display: grid; grid-template-columns: repeat(4, 1fr)"></div>
+            <div class="card" style="left: 120px; top: 460px; width: 1040px; height: 430px">
+              <div class="abs ct" style="left: 28px; top: 26px">Daily spend by runner</div>
+              <div class="abs cm" style="left: 28px; top: 60px">Faded bars are the projection for the rest of the month</div>
+              <div class="abs" style="right: 28px; top: 28px; display: flex; gap: 20px; font: 400 18px Geist; color: var(--muted)">
+                <span><span class="sq" style="height: 12px; background: #4FD1E8"></span>Linux</span>
+                <span><span class="sq" style="height: 12px; background: #A48BFF"></span>macOS</span>
+                <span><span class="sq" style="height: 12px; background: #F5B544"></span>Windows</span>
+              </div>
+              <div class="abs" id="spend" style="left: 28px; top: 110px; width: 984px; height: 290px; display: flex; align-items: flex-end; gap: 8px"></div>
+            </div>
+            <div class="card" style="left: 1180px; top: 460px; width: 620px; height: 430px">
+              <div class="abs ct" style="left: 28px; top: 26px">Ways to spend less</div>
+              <div id="save" class="abs" style="left: 28px; top: 80px; width: 564px"></div>
+            </div>
+          </section>
+
+          <!-- 08 alerts -->
+          <section id="sc08" class="scene layer">
+            <div class="abs kicker"><b>07</b>ALERTS</div>
+            <div class="abs h1 hl">Alerts in plain language.</div>
+            <div class="card" style="left: 120px; top: 280px; width: 1000px; height: 600px">
+              <div class="abs ct" style="left: 32px; top: 30px; font-size: 28px">New alert rule</div>
+              <div class="abs cm" style="left: 32px; top: 90px">Metric</div>
+              <div class="abs" style="left: 32px; top: 120px; width: 440px; height: 56px; border-radius: 10px; background: var(--panel); border: 1.5px solid var(--strong); font: 400 22px/56px Geist; padding: 0 18px">Failure rate</div>
+              <div class="abs cm" style="left: 500px; top: 90px">Goes above · within</div>
+              <div class="abs mono" style="left: 500px; top: 120px; width: 468px; height: 56px; border-radius: 10px; background: var(--panel); border: 1.5px solid var(--strong); font-size: 22px; line-height: 56px; padding: 0 18px">20 %  ·  24 hours</div>
+              <div class="abs cm" style="left: 32px; top: 206px">Send to</div>
+              <div class="abs" id="chan" style="left: 32px; top: 236px; width: 936px; height: 60px; border-radius: 12px; background: var(--surface); border: 1.5px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); padding: 5px; gap: 4px"></div>
+              <div class="abs" style="left: 32px; top: 330px; width: 936px; min-height: 120px; padding: 22px 26px; border-radius: 12px; background: rgba(34,28,69,0.6); border: 1.5px solid rgba(164,139,255,0.25); font: 400 26px/1.45 Geist; color: #E6DEFF" id="preview"></div>
+              <div class="abs" style="right: 32px; bottom: 32px; display: flex; gap: 14px">
+                <span class="pill" style="height: 52px; border-radius: 10px; border: 1.5px solid var(--control); padding: 0 22px; font-weight: 600">Send a test</span>
+                <span class="pill" style="height: 52px; border-radius: 10px; background: linear-gradient(180deg, #8163FF, #6440F5); color: #fff; padding: 0 22px; font-weight: 600">Create rule</span>
+              </div>
+            </div>
+            <div class="abs ct" style="left: 1160px; top: 280px">Firing now</div>
+            <div class="card" id="firing" style="left: 1160px; top: 330px; width: 640px; height: 360px"></div>
+          </section>
+
+          <!-- 09 montage -->
+          <section id="sc09" class="scene layer">
+            <div class="abs kicker"><b>08</b>AND THERE'S MORE</div>
+            <div class="abs h1 hl">Built for the whole organization.</div>
+            <div class="abs" id="tiles" style="left: 120px; top: 270px; width: 1680px; height: 620px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px"></div>
+          </section>
+
+          <!-- 10 outro -->
+          <section id="sc10" class="scene layer">
+            <div class="abs" style="left: 860px; top: 190px; width: 200px; height: 200px">
+              <svg viewBox="0 0 28 28" width="200" height="200" style="filter: drop-shadow(0 0 30px rgba(164,139,255,0.45))">
+                <rect x="0" y="0" width="28" height="28" rx="7" fill="#161B23" />
+                <rect x="6" y="15" width="3" height="7" rx="1" fill="#4FD1E8" /><rect x="10.5" y="12" width="3" height="10" rx="1" fill="#74B6F4" />
+                <rect x="15" y="9" width="3" height="13" rx="1" fill="#8E9BFA" /><rect x="19.5" y="6" width="3" height="16" rx="1" fill="#A48BFF" />
+              </svg>
+            </div>
+            <div class="abs" id="otag" style="left: 0; width: 1920px; top: 430px; text-align: center; font: 600 92px/1.05 Geist; letter-spacing: -0.045em">Everything metrics,<br><span style="color: var(--link)">measured.</span></div>
+            <div class="abs" id="ochips" style="left: 0; width: 1920px; top: 680px; display: flex; justify-content: center; gap: 16px"></div>
+            <div class="abs mono" id="ourl" style="left: 0; width: 1920px; top: 780px; text-align: center; font-size: 26px; color: var(--muted)">Open source · Self-hosted · v4.5 · github.com/dinhdobathi1992/gitdash</div>
+          </section>
+
+        </div>
+      </div>
+      <div id="wipe" class="abs"></div>
+      <div id="hud" class="abs"><span id="hudn">01 / 08</span><span id="hudsegs" style="display: flex; gap: 6px"></span></div>
+      <div id="captions" class="layer"></div>
+      <div id="flash" class="layer"></div>
+      <div id="fade" class="layer"></div>
+      <audio id="mix" src="assets/audio/mix.m4a" data-start="0" data-duration="90" data-track-index="10" data-volume="1"></audio>
+    </div>
+
+    <script>/*TIMING:BEGIN*/window.TIMING={"duration":90,"fps":30,"beat0":0,"beatLen":0.5,"kick":[[8,164]],"drops":[12],"outroBeat":164,"scenes":{"s01-cover":{"start":0,"end":7.5,"lines":[{"on":1.2,"off":4.337,"words":[["your",1.2,1.569],["ci",1.569,1.815],["already",1.815,2.369],["knows",2.369,2.799],["how",2.799,3.107],["your",3.107,3.476],["team",3.476,3.845],["ships",3.845,4.337]]},{"on":4.787,"off":6.356,"words":[["gitdash",4.787,5.243],["makes",5.243,5.597],["it",5.597,5.799],["readable",5.799,6.356]]}]},"s02-monitor":{"start":7.5,"end":17,"lines":[{"on":8.1,"off":13.198,"words":[["open",8.1,8.473],["gitdash",8.473,9.095],["and",9.095,9.406],["the",9.406,9.716],["first",9.716,10.152],["thing",10.152,10.587],["you",10.587,10.898],["see",10.898,11.209],["is",11.209,11.457],["what's",11.457,11.955],["wrong",11.955,12.39],["right",12.39,12.825],["now",12.825,13.198]]},{"on":13.648,"off":14.825,"words":[["then",13.648,13.93],["everything",13.93,14.495],["else",14.495,14.825]]}]},"s03-table":{"start":17,"end":27,"lines":[{"on":17.6,"off":21.914,"words":[["every",17.6,17.977],["repository",17.977,18.678],["status",18.678,19.164],["success",19.164,19.649],["rate",19.649,20.026],["the",20.026,20.296],["last",20.296,20.62],["ten",20.62,20.889],["runs",20.889,21.267],["p95",21.267,21.536],["time",21.536,21.914]]},{"on":22.364,"off":25.501,"words":[["filter",22.364,22.896],["sort",22.896,23.252],["and",23.252,23.548],["pin",23.548,23.903],["all",23.903,24.199],["from",24.199,24.554],["the",24.554,24.85],["keyboard",24.85,25.501]]}]},"s04-repo":{"start":27,"end":38.5,"lines":[{"on":27.6,"off":32.698,"words":[["each",27.6,27.94],["repository",27.94,28.62],["gets",28.62,28.959],["dora",28.959,29.299],["metrics",29.299,29.866],["run",29.866,30.149],["duration",30.149,30.715],["and",30.715,30.999],["the",30.999,31.282],["jobs",31.282,31.622],["that",31.622,31.962],["fail",31.962,32.302],["most",32.302,32.698]]},{"on":33.148,"off":37.462,"words":[["plus",33.148,33.48],["tabs",33.48,33.812],["for",33.812,34.088],["pull",34.088,34.42],["requests",34.42,35.028],["issues",35.028,35.526],["security",35.526,36.079],["and",36.079,36.356],["the",36.356,36.632],["audit",36.632,37.019],["trail",37.019,37.462]]}]},"s05-workflow":{"start":38.5,"end":48,"lines":[{"on":39.1,"off":44.59,"words":[["drill",39.1,39.569],["into",39.569,39.97],["a",39.97,40.171],["workflow",40.171,40.841],["to",40.841,41.109],["see",41.109,41.443],["why",41.443,41.778],["it",41.778,42.046],["fails",42.046,42.582],["and",42.582,42.916],["where",42.916,43.385],["the",43.385,43.72],["time",43.72,44.122],["goes",44.122,44.59]]}]},"s06-team":{"start":48,"end":57,"lines":[{"on":48.6,"off":52.522,"words":[["see",48.6,48.893],["review",48.893,49.361],["load",49.361,49.771],["bus",49.771,50.063],["factor",50.063,50.59],["and",50.59,50.883],["who's",50.883,51.292],["working",51.292,51.819],["too",51.819,52.112],["late",52.112,52.522]]},{"on":52.972,"off":54.932,"words":[["before",52.972,53.384],["it",53.384,53.591],["becomes",53.591,54.055],["a",54.055,54.21],["resignation",54.21,54.932]]}]},"s07-cost":{"start":57,"end":64.5,"lines":[{"on":57.6,"off":62.306,"words":[["real",57.6,57.91],["actions",57.91,58.376],["billing",58.376,58.893],["a",58.893,59.048],["month-end",59.048,59.617],["projection",59.617,60.289],["and",60.289,60.548],["concrete",60.548,61.065],["ways",61.065,61.375],["to",61.375,61.582],["spend",61.582,61.944],["less",61.944,62.306]]}]},"s08-alerts":{"start":64.5,"end":72.5,"lines":[{"on":65.1,"off":70.59,"words":[["alerts",65.1,65.572],["in",65.572,65.808],["plain",65.808,66.222],["language",66.222,66.871],["sent",66.871,67.225],["to",67.225,67.461],["slack",67.461,67.934],["email",67.934,68.406],["the",68.406,68.701],["browser",68.701,69.232],["or",69.232,69.469],["a",69.469,69.646],["daily",69.646,70.059],["digest",70.059,70.59]]}]},"s09-montage":{"start":72.5,"end":82.5,"lines":[{"on":73.1,"off":77.022,"words":[["group",73.1,73.461],["permissions",73.461,74.132],["and",74.132,74.39],["audit",74.39,74.751],["logs",74.751,75.112],["a",75.112,75.267],["phone",75.267,75.628],["layout",75.628,76.093],["org",76.093,76.351],["scorecards",76.351,77.022]]},{"on":77.472,"off":80.217,"words":[["one-to-one",77.472,78.06],["prep",78.06,78.403],["and",78.403,78.648],["a",78.648,78.795],["weekly",78.795,79.187],["leadership",79.187,79.775],["digest",79.775,80.217]]}]},"s10-outro":{"start":82.5,"end":90,"lines":[{"on":83.3,"off":84.869,"words":[["gitdash",83.3,83.665],["everything",83.665,84.103],["metrics",84.103,84.467],["measured",84.467,84.869]]},{"on":85.319,"off":87.279,"words":[["open",85.319,85.599],["source",85.599,86.019],["on",86.019,86.206],["your",86.206,86.486],["infrastructure",86.486,87.279]]}]}},"captions":[{"start":1.2,"words":[["Your",1.2],["CI",1.569],["already",1.815],["knows",2.369],["how",2.799],["your",3.107],["team",3.476],["ships.",3.845]],"end":4.787},{"start":4.787,"words":[["GitDash",4.787],["makes",5.243],["it",5.597],["readable.",5.799]],"end":6.856},{"start":8.1,"words":[["Open",8.1],["GitDash,",8.473],["and",9.095],["the",9.406],["first",9.716],["thing",10.152],["you",10.587],["see",10.898],["is",11.209]],"end":11.457},{"start":11.457,"words":[["what's",11.457],["wrong",11.955],["right",12.39],["now.",12.825]],"end":13.648},{"start":13.648,"words":[["Then",13.648],["everything",13.93],["else.",14.495]],"end":15.325},{"start":17.6,"words":[["Every",17.6],["repository:",17.977],["status,",18.678],["success",19.164],["rate,",19.649]],"end":20.026},{"start":20.026,"words":[["the",20.026],["last",20.296],["ten",20.62],["runs,",20.889]],"end":21.267},{"start":21.267,"words":[["p95",21.267],["time.",21.536]],"end":22.364},{"start":22.364,"words":[["Filter,",22.364],["sort",22.896],["and",23.252],["pin,",23.548]],"end":23.903},{"start":23.903,"words":[["all",23.903],["from",24.199],["the",24.554],["keyboard.",24.85]],"end":26.001},{"start":27.6,"words":[["Each",27.6],["repository",27.94],["gets",28.62],["DORA",28.959],["metrics,",29.299]],"end":29.866},{"start":29.866,"words":[["run",29.866],["duration",30.149],["and",30.715],["the",30.999],["jobs",31.282],["that",31.622],["fail",31.962],["most.",32.302]],"end":33.148},{"start":33.148,"words":[["Plus",33.148],["tabs",33.48],["for",33.812],["pull",34.088],["requests,",34.42]],"end":35.028},{"start":35.028,"words":[["issues,",35.028],["security",35.526],["and",36.079],["the",36.356],["audit",36.632],["trail.",37.019]],"end":37.962},{"start":39.1,"words":[["Drill",39.1],["into",39.569],["a",39.97],["workflow",40.171],["to",40.841],["see",41.109],["why",41.443],["it",41.778],["fails,",42.046]],"end":42.582},{"start":42.582,"words":[["and",42.582],["where",42.916],["the",43.385],["time",43.72],["goes.",44.122]],"end":45.09},{"start":48.6,"words":[["See",48.6],["review",48.893],["load,",49.361],["bus",49.771],["factor,",50.063]],"end":50.59},{"start":50.59,"words":[["and",50.59],["who's",50.883],["working",51.292],["too",51.819],["late,",52.112]],"end":52.972},{"start":52.972,"words":[["before",52.972],["it",53.384],["becomes",53.591],["a",54.055],["resignation.",54.21]],"end":55.432},{"start":57.6,"words":[["Real",57.6],["Actions",57.91],["billing,",58.376],["a",58.893],["month-end",59.048],["projection,",59.617]],"end":60.289},{"start":60.289,"words":[["and",60.289],["concrete",60.548],["ways",61.065],["to",61.375],["spend",61.582],["less.",61.944]],"end":62.806},{"start":65.1,"words":[["Alerts",65.1],["in",65.572],["plain",65.808],["language,",66.222]],"end":66.871},{"start":66.871,"words":[["sent",66.871],["to",67.225],["Slack,",67.461],["email,",67.934]],"end":68.406},{"start":68.406,"words":[["the",68.406],["browser",68.701],["or",69.232],["a",69.469],["daily",69.646],["digest.",70.059]],"end":71.09},{"start":73.1,"words":[["Group",73.1],["permissions",73.461],["and",74.132],["audit",74.39],["logs.",74.751]],"end":75.112},{"start":75.112,"words":[["A",75.112],["phone",75.267],["layout.",75.628],["Org",76.093],["scorecards,",76.351]],"end":77.472},{"start":77.472,"words":[["one-to-one",77.472],["prep,",78.06],["and",78.403],["a",78.648],["weekly",78.795],["leadership",79.187],["digest.",79.775]],"end":80.717},{"start":83.3,"words":[["GitDash.",83.3],["Everything",83.665],["metrics,",84.103],["measured.",84.467]],"end":85.319},{"start":85.319,"words":[["Open",85.319],["source,",85.599],["on",86.019],["your",86.206],["infrastructure.",86.486]],"end":87.779}],"sfx":[],"env":[]};/*TIMING:END*/</script>
+    <script>
+      (() => {
+        const T = window.TIMING;
+        const tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["main"] = tl;
+
+        const $ = (s, r = document) => r.querySelector(s);
+        const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+        const SC = T.scenes;
+        const B = (n) => T.beat0 + T.beatLen * n;
+        const isKick = (n) => T.kick.some(([a, b]) => n >= a && n < b);
+        const hit = (sid, word, nth) => {
+          const h = SC[sid].lines.flatMap((l) => l.words).filter((w) => w[0] === word)[nth - 1];
+          if (!h) console.warn(`[timing] "${word}" #${nth} missing in ${sid}`);
+          return h;
+        };
+        const W = (sid, word, nth = 1) => (hit(sid, word, nth) || [0, SC[sid].start])[1];
+        const rng = (seed) => () => {
+          seed = (seed + 0x6d2b79f5) | 0;
+          let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+        const h = (tag, style, html = "", cls = "") => `<${tag} class="${cls}" style="${style}">${html}</${tag}>`;
+
+        // ================= build all DOM before any tween =================
+        $$(".hl").forEach((el) => {
+          // Wrap each word in a span with DOM nodes (text stays text, never parsed as HTML).
+          const words = el.textContent.trim().split(/\s+/);
+          el.replaceChildren(...words.flatMap((w, i) => {
+            const span = document.createElement("span");
+            span.className = "w";
+            span.textContent = w;
+            return i ? [document.createTextNode(" "), span] : [span];
+          }));
+        });
+        // accent the last phrase of each headline in the link colour
+        [["#sc02", 1], ["#sc03", 3], ["#sc04", 2], ["#sc05", 3], ["#sc06", 4], ["#sc07", 1], ["#sc08", 2], ["#sc09", 1]].forEach(([s, n]) => $$(`${s} .hl .w`).slice(-n).forEach((w) => (w.style.color = "var(--link)")));
+
+        // 02 KPI strip + attention list
+        const spark = (vals, color, w = 150, hgt = 50) => {
+          const mn = Math.min(...vals), mx = Math.max(...vals), sp = mx - mn || 1;
+          const pts = vals.map((v, i) => [(i / (vals.length - 1)) * w, 4 + (1 - (v - mn) / sp) * (hgt - 8)]);
+          const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+          return `<svg width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}"><path d="${d} L${w},${hgt} L0,${hgt} Z" fill="${color}" fill-opacity="0.12"/><path class="draw sp" pathLength="1" d="${d}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+        };
+        const r1 = rng(7);
+        const series = (n, base, drift) => Array.from({ length: n }, (_, i) => base + drift * i + (r1() - 0.5) * base * 0.25);
+        const KPIS = [
+          ["Workflow runs", 12480, "", "↑ 8.1% vs prior 30d", "var(--muted)", "#4FD1E8", series(14, 40, 2)],
+          ["Success rate", 93.4, "%", "↓ 1.2 pts vs prior 30d", "var(--fail-t)", "#FF6B6B", series(14, 60, -1)],
+          ["p95 run duration", 0, "11m 42s", "↑ 48s slower", "var(--warn)", "#F5B544", series(14, 30, 1.4)],
+          ["p95 queue wait", 0, "38s", "↓ 12s faster", "var(--pass-t)", "#3DD68C", series(14, 50, -1.5)],
+        ];
+        $("#kpi").innerHTML = KPIS.map(([l, v, u, d, dc, sc, sv], i) =>
+          h("div", `position: relative; padding: 30px 32px; ${i ? "border-left: 1.5px solid var(--line);" : ""}`,
+            h("div", "font: 400 20px Geist; color: var(--muted)", l) +
+            h("div", "margin-top: 14px; font: 600 50px/1 'Geist Mono'; letter-spacing: -0.02em", v ? `<span class="odo" data-v="${v}" data-dec="${String(v).includes(".") ? 1 : 0}">0</span>${u}` : u) +
+            h("div", `margin-top: 14px; font: 500 18px Geist; color: ${dc}`, d) +
+            h("div", "position: absolute; right: 28px; bottom: 30px", spark(sv, sc)))).join("");
+        const ATT = [
+          ["fail", "✕", "deploy-prod is failing on main", "3 failures in a row · each one stops in the migrate-db step", "api-service", "18 min ago"],
+          ["warn", "◷", "build is 57% slower than usual", "p95 of 14m 10s against a 9m 02s baseline", "web-app", "2 h ago"],
+          ["warn", "≡", "Jobs are queueing for runners", "p95 queue wait of 6m 40s on self-hosted runners", "infra-terraform", "3 h ago"],
+        ];
+        const tint = { fail: "background: rgba(255,107,107,0.12); color: var(--fail-t)", warn: "background: rgba(245,181,68,0.14); color: var(--warn)", run: "background: rgba(79,209,232,0.12); color: var(--run-t)", pass: "background: rgba(61,214,140,0.12); color: var(--pass-t)" };
+        $("#att").innerHTML = ATT.map(([k, ic, t, r, repo, ago], i) =>
+          h("div", `display: flex; align-items: center; gap: 24px; height: 100px; padding: 0 30px; ${i ? "border-top: 1.5px solid var(--line);" : ""}`,
+            h("div", tint[k], ic, "ibox") +
+            h("div", "flex: 1", h("div", "font: 600 25px Geist", t) + h("div", "margin-top: 6px; font: 400 19px Geist; color: var(--muted)", r)) +
+            h("div", "width: 280px; font: 400 21px 'Geist Mono'; color: var(--muted)", repo) +
+            h("div", "width: 150px; font: 400 19px Geist; color: var(--faint)", ago), "att")).join("");
+
+        // 03 chips, table, palette
+        $("#chips").innerHTML = [["All", 42, true], ["Failing", 2, false], ["Running", 1, false], ["Pinned", 3, false]].map(([l, n, on]) =>
+          h("span", `display: inline-flex; align-items: center; gap: 9px; height: 44px; padding: 0 18px; border-radius: 22px; font: 500 20px Geist; border: 1.5px solid ${on ? "rgba(164,139,255,0.6)" : "var(--control)"}; background: ${on ? "#221C45" : "transparent"}; color: ${on ? "#D3C7FF" : "var(--muted)"}`, `${l} <span class="mono">${n}</span>`, "fchip")).join("");
+        const REPOS = [
+          ["api-service", "TypeScript", "fail", "Failing", 71, "..x...x.xx", "8m 12s", "18 min ago"],
+          ["infra-terraform", "HCL", "fail", "Failing", 64, ".x...x..xx", "6m 03s", "6 h ago"],
+          ["web-app", "TypeScript", "run", "Running", 96, ".........r", "4m 40s", "Running now"],
+          ["worker-queue", "Go", "pass", "Passing", 92, "..x.......", "14m 10s", "1 h ago"],
+          ["helm-charts", "Helm", "pass", "Passing", 98, "..........", "1m 52s", "3 h ago"],
+          ["docs-site", "MDX", "pass", "Passing", 100, "..........", "48s", "5 h ago"],
+        ];
+        const hdr = ["", "Repository", "Status", "Success · 30d", "Last 10 runs", "p95", "Last run"];
+        const cols = "70px 380px 200px 300px 260px 170px 1fr";
+        $("#table").innerHTML =
+          h("div", `display: grid; grid-template-columns: ${cols}; align-items: center; height: 58px; padding: 0 28px; background: var(--panel); border-bottom: 1.5px solid var(--line); font: 500 18px Geist; color: var(--faint)`, hdr.map((x) => `<div>${x}</div>`).join("")) +
+          REPOS.map(([n, lang, k, s, pct, runs, p95, last], i) =>
+            h("div", `display: grid; grid-template-columns: ${cols}; align-items: center; height: 83px; padding: 0 28px; border-top: ${i ? "1.5px solid var(--line)" : "none"}`,
+              `<div class="star" style="font-size: 26px; color: var(--faint)">☆</div>` +
+              `<div><div style="font: 600 24px 'Geist Mono'">${n}</div><div style="margin-top: 4px; font: 400 17px Geist; color: var(--muted)">${lang} · Private</div></div>` +
+              `<div><span class="pill p-${k}"><i></i>${s}</span></div>` +
+              `<div style="display: flex; align-items: center; gap: 14px"><span class="mono" style="width: 64px; font-size: 21px">${pct}%</span><span style="width: 140px; height: 6px; border-radius: 3px; background: var(--control); overflow: hidden"><span class="bar" style="display: block; height: 100%; width: ${pct}%; background: ${pct < 80 ? "var(--fail)" : "var(--pass)"}"></span></span></div>` +
+              `<div>${[...runs].map((c) => `<span class="sq rs" style="background: ${c === "x" ? "var(--fail)" : c === "r" ? "var(--run)" : "var(--pass)"}"></span>`).join("")}</div>` +
+              `<div class="mono" style="font-size: 21px">${p95}</div><div style="font: 500 20px Geist">${last}</div>`, "trow")).join("");
+        $("#presults").innerHTML = [["api-service", "Repository"], ["api-gateway", "Repository"], ["Alerts", "Page"]].map(([n, k], i) =>
+          h("div", `display: flex; justify-content: space-between; align-items: center; height: 62px; padding: 0 14px; border-radius: 10px; ${i ? "" : "background: #221C45;"}`, `<span class="mono" style="font-size: 23px">${n}</span><span style="font: 400 18px Geist; color: var(--muted)">${k}</span>`)).join("");
+
+        // 04 tabs, DORA, chart, jobs
+        const TABS = ["Overview", "Workflows 12", "Pull requests 18", "Team", "Issues 34", "Security 2", "Audit trail"];
+        $("#tabs").innerHTML = TABS.map((t, i) => `<span class="tab" style="color: ${i ? "var(--muted)" : "var(--fg)"}">${t.replace(/ (\d+)$/, ' <span class="mono" style="font-size: 17px; color: var(--faint)">$1</span>')}</span>`).join("");
+        const DORA = [["Deploy frequency", "4.2", " / day", "Elite", "pass", "↑ 0.6 a day", "var(--pass-t)", false],
+          ["Lead time for changes", "19h", "", "High", "run", "↓ 3h faster", "var(--pass-t)", false],
+          ["Change failure rate", "18%", "", "Medium", "warn", "↑ 7 pts since Sep 24", "var(--fail-t)", true],
+          ["Time to restore", "2h 10m", "", "High", "run", "↑ 25m slower", "var(--warn)", false]];
+        $("#dora").innerHTML = DORA.map(([l, v, u, r, k, d, dc, warm], i) =>
+          h("div", `position: relative; border-radius: 20px; border: 1.5px solid ${warm ? "#3A2A2E" : "var(--line)"}; background: ${warm ? "#161419" : "linear-gradient(180deg, #161B23, #12161C)"}; padding: 26px 28px`,
+            `<div style="display: flex; justify-content: space-between; align-items: center"><span style="font: 400 20px Geist; color: var(--muted)">${l}</span><span class="chip" style="${tint[k]}">${r}</span></div>` +
+            `<div style="margin-top: 22px; font: 600 52px/1 'Geist Mono'">${v}<span style="font-size: 26px; color: var(--muted)">${u}</span></div>` +
+            `<div style="margin-top: 26px">${spark(series(12, 30, warm ? 2 : 0.3), warm ? "#FF6B6B" : "#4FD1E8", 360, 44)}</div>` +
+            `<div style="margin-top: 10px; font: 500 18px Geist; color: ${dc}">${d}</div>`, "dcard")).join("");
+        const r2 = rng(11);
+        const n4 = 30, ys95 = [], ys50 = [];
+        for (let i = 0; i < n4; i++) { const bump = i > 22 && i < 27 ? 40 * Math.sin(((i - 22) / 4) * Math.PI) : 0; ys95.push(95 - i * 0.6 - bump + r2() * 10); ys50.push(128 - i * 0.2 + r2() * 6 - bump * 0.3); }
+        const pth = (ys) => ys.map((y, i) => `${i ? "L" : "M"}${((i / (n4 - 1)) * 1024).toFixed(1)},${y.toFixed(1)}`).join(" ");
+        $("#p95").setAttribute("d", pth(ys95)); $("#p50").setAttribute("d", pth(ys50));
+        $("#p95area").setAttribute("d", `${pth(ys95)} L1024,170 L0,170 Z`);
+        const pk = ys95.reduce((m, y, i) => (y < ys95[m] ? i : m), 0);
+        $("#peak").setAttribute("cx", (pk / (n4 - 1)) * 1024); $("#peak").setAttribute("cy", ys95[pk]);
+        $("#peaklbl").style.left = `${28 + (pk / (n4 - 1)) * 1024 - 110}px`; $("#peaklbl").style.top = `${96 + ys95[pk] - 52}px`;
+        $("#jobs").innerHTML = [["deploy-prod › migrate-db", 31, 100], ["ci › e2e", 18, 58], ["ci › lint", 9, 29]].map(([n, c, w]) =>
+          h("div", "margin-bottom: 26px", `<div style="display: flex; justify-content: space-between; font: 500 21px 'Geist Mono'"><span>${n}</span><span style="color: var(--muted)">${c}</span></div><div style="margin-top: 10px; height: 6px; border-radius: 3px; background: var(--control)"><div class="jbar" style="height: 100%; width: ${w}%; border-radius: 3px; background: var(--fail)"></div></div>`)).join("");
+
+        // 05 bars, hypotheses, job time
+        const r3 = rng(23);
+        $("#bars").innerHTML = Array.from({ length: 40 }, (_, i) => {
+          const fail = [4, 17, 27, 28, 30, 31, 32, 36, 37, 38].includes(i), canc = [11, 33].includes(i);
+          const hgt = canc ? 12 : fail ? 125 + r3() * 25 : 80 + r3() * 40;
+          return `<div class="rb" style="flex: 1; height: ${hgt}px; border-radius: 4px 4px 0 0; background: ${canc ? "var(--neutral)" : fail ? "var(--fail)" : "var(--pass)"}; transform-origin: bottom"></div>`;
+        }).join("");
+        $("#hyp").innerHTML = [["The migration locks the courses table during deploy", "Likely", "fail", "migrate-db hit its 5-minute timeout in 6 of 8 failures"],
+          ["The readiness probe is flaky", "Possible", "warn", "Two failures show a rollout timeout while pods were healthy"],
+          ["A runner is short on disk", "Unlikely", "neutral", "Both failures on one runner logged less than 2 GB free"]].map(([t, c, k, e], i) =>
+          h("div", `padding: 12px 0; ${i ? "border-top: 1.5px solid var(--line);" : ""}`,
+            `<div style="display: flex; justify-content: space-between; align-items: center; gap: 16px"><span style="font: 500 21px Geist">${t}</span><span class="chip" style="${k === "neutral" ? "background: rgba(163,169,180,0.10); color: var(--muted)" : tint[k]}">${c}</span></div><div style="margin-top: 6px; font: 400 17px Geist; color: var(--muted)">${e}</div>`, "hy")).join("");
+        $("#jt").innerHTML = [["checkout", 3, 5], ["setup-node", 6, 9], ["install", 16, 30], ["build", 20, 36], ["migrate-db", 34, 80], ["deploy", 8, 17]].map(([n, p50, p95]) => {
+          const hot = n === "migrate-db";
+          return h("div", "display: grid; grid-template-columns: 170px 1fr 90px; align-items: center; gap: 18px; height: 33px",
+            `<span class="mono" style="font-size: 19px; color: ${hot ? "var(--fail-t)" : "var(--fg)"}">${n}</span><span style="position: relative; height: 16px; border-radius: 4px; background: var(--panel)"><span class="jt50" style="position: absolute; left: 0; top: 0; bottom: 0; width: ${p50}%; border-radius: 4px; background: ${hot ? "#8A3A42" : "#2A3444"}"></span><span class="jt95" style="position: absolute; top: -3px; bottom: -3px; left: ${p95}%; width: 3px; border-radius: 2px; background: var(--fg)"></span></span><span class="mono" style="font-size: 19px; text-align: right">${["12s", "34s", "1m 48s", "2m 10s", "4m 42s", "1m 20s"][["checkout", "setup-node", "install", "build", "migrate-db", "deploy"].indexOf(n)]}</span>`, "jtr");
+        }).join("");
+
+        // 06 heatmap, workload
+        const PPL = ["AL", "BK", "CM", "DN", "EO"];
+        const HEAT = [[0, 38, 21, 9, 2], [34, 0, 26, 6, 3], [29, 31, 0, 12, 1], [18, 22, 14, 0, 4], [24, 12, 19, 5, 0]];
+        const RAMP = ["#1A1F27", "#2E2660", "#4B3B99", "#7C5CFF", "#B9A6FF"];
+        $("#heat").innerHTML = `<div style="display: grid; grid-template-columns: 70px repeat(5, 88px); gap: 8px; font: 500 18px Geist; color: var(--muted)"><div></div>${PPL.map((p) => `<div style="text-align: center">${p}</div>`).join("")}` +
+          HEAT.map((row, i) => `<div style="line-height: 80px">${PPL[i]}</div>` + row.map((v, j) => {
+            const s = i === j ? -1 : v === 0 ? 0 : Math.min(4, 1 + Math.floor((v / 38) * 3.99));
+            return `<div class="hc" style="height: 80px; border-radius: 8px; background: ${s < 0 ? "transparent" : RAMP[s]}; display: flex; align-items: center; justify-content: center; font: 500 22px 'Geist Mono'; color: ${s === 4 ? "#14102B" : s === 0 ? "var(--faint)" : "var(--fg)"}">${s < 0 ? "" : v}</div>`;
+          }).join("")).join("") + "</div>";
+        $("#work").innerHTML = [["BK", "38% of commits after 20:00 · 9 open PRs", "High", "fail"], ["AL", "Reviewed 71 PRs — twice the median", "Watch", "warn"], ["CM", "Weekend commits on 4 of 4 weekends", "Watch", "warn"], ["EO", "3 PRs open for more than 5 days", "Watch", "warn"]].map(([p, r, c, k], i) =>
+          h("div", `display: flex; align-items: center; gap: 16px; padding: 22px 0; ${i ? "border-top: 1.5px solid var(--line);" : ""}`,
+            `<span class="ibox" style="border-radius: 50%; background: var(--raised); font-size: 18px">${p}</span><span style="flex: 1; font: 400 19px/1.35 Geist; color: var(--muted)">${r}</span><span class="chip" style="${tint[k]}">${c}</span>`, "wk")).join("");
+
+        // 07 cost
+        $("#costkpi").innerHTML = [["Billed so far", "$1,284.60", "Day 27 of 30", "var(--muted)", "var(--fg)"], ["Projected month end", "$1,427", "20% above August ($1,190)", "var(--warn)", "var(--warn)"], ["Daily burn", "$47.58", "7-day average", "var(--muted)", "var(--fg)"], ["Minutes", "96,420", "Gross Actions minutes", "var(--muted)", "var(--fg)"]].map(([l, v, f, fc, vc], i) =>
+          h("div", `padding: 28px 32px; ${i ? "border-left: 1.5px solid var(--line);" : ""}`, h("div", "font: 400 20px Geist; color: var(--muted)", l) + h("div", `margin-top: 14px; font: 600 50px/1 'Geist Mono'; color: ${vc}`, v, "cv") + h("div", `margin-top: 14px; font: 500 18px Geist; color: ${fc}`, f))).join("");
+        const r4 = rng(41);
+        $("#spend").innerHTML = Array.from({ length: 30 }, (_, i) => {
+          const weekend = i % 7 === 5 || i % 7 === 6, future = i >= 27;
+          const lin = weekend ? 30 + r4() * 10 : 90 + r4() * 40, mac = weekend ? 6 : 40 + r4() * 25, win = weekend ? 3 : 8 + r4() * 6;
+          return `<div class="sb" style="flex: 1; display: flex; flex-direction: column-reverse; transform-origin: bottom; opacity: ${future ? 0.35 : 1}"><div style="height: ${lin}px; background: #4FD1E8"></div><div style="height: ${mac}px; background: #A48BFF"></div><div style="height: ${win}px; background: #F5B544; border-radius: 3px 3px 0 0"></div></div>`;
+        }).join("");
+        $("#save").innerHTML = [["Move jobs off macOS runners", "−$180/mo", "web-app runs 3 jobs on macOS that use no macOS-only tooling."], ["Cancel superseded runs", "−$64/mo", "212 runs finished after a newer push to the same branch."], ["Cache the pnpm store", "−$50/mo", "The build job's cache hit rate is 41%."]].map(([t, v, d], i) =>
+          h("div", `padding: 20px 0; ${i ? "border-top: 1.5px solid var(--line);" : ""}`, `<div style="display: flex; justify-content: space-between"><span style="font: 600 22px Geist">${t}</span><span class="mono" style="font-size: 22px; font-weight: 600; color: var(--pass-t)">${v}</span></div><div style="margin-top: 8px; font: 400 18px/1.35 Geist; color: var(--muted)">${d}</div>`, "sv")).join("");
+
+        // 08 alerts
+        $("#chan").innerHTML = ["Slack", "Email", "Browser", "Digest"].map((c) => `<div class="ch" style="display: flex; align-items: center; justify-content: center; border-radius: 8px; font: 500 22px Geist; color: var(--muted)">${c}</div>`).join("");
+        const PREV = "You will be alerted in Slack when the failure rate on api-service goes above 20% within 24 hours.";
+        $("#preview").innerHTML = PREV.split(" ").map((w) => `<span class="pw" style="opacity: 0">${w}</span>`).join(" ");
+        $("#firing").innerHTML = [["fail", "✕", "Failure rate is 33% on api-service", "firing for 18 min"], ["warn", "◷", "p95 duration is 14.2 min on web-app", "firing for 2 h"], ["warn", "≡", "Queue wait p95 is 6.7 min on infra-terraform", "firing for 3 h"]].map(([k, ic, t, f], i) =>
+          h("div", `display: flex; align-items: center; gap: 18px; height: 120px; padding: 0 24px; ${i ? "border-top: 1.5px solid var(--line);" : ""}`,
+            h("div", tint[k], ic, "ibox") + h("div", "flex: 1", h("div", "font: 500 21px/1.3 Geist", t) + h("div", "margin-top: 4px; font: 400 17px Geist; color: var(--muted)", f)) +
+            `<span class="mute pill" style="height: 44px; border-radius: 8px; border: 1.5px solid var(--control); font-weight: 600">Mute 1h</span>`, "fr")).join("");
+
+        // 09 montage tiles
+        const TILES = [
+          ["Access by group", "Admins choose which group sees which feature", (() => { const g = ["Admin", "DevOps", "Dev", "PM"]; return `<div style="display: grid; grid-template-columns: 170px repeat(4, 1fr); gap: 10px 0; font: 500 17px Geist; color: var(--muted)"><div></div>${g.map((x) => `<div style="text-align: center">${x}</div>`).join("")}${["DORA metrics", "Cost", "Workload risk"].map((f, i) => `<div style="color: var(--fg)">${f}</div>` + g.map((_, j) => `<div style="text-align: center"><span class="cb" data-on="${j === 0 || (i + j) % 2 === 1 ? 1 : 0}" style="display: inline-block; width: 24px; height: 24px; border-radius: 5px; border: 2px solid var(--strong)"></span></div>`).join("")).join("")}</div>`; })(), "permissions"],
+          ["Audit log", "Every grant and membership change", ["Granted DORA metrics for Developer", "Set groups for bk: DevOps", "Removed Cost for PM"].map((x) => `<div style="padding: 12px 0; border-top: 1.5px solid var(--line); font: 400 19px Geist">${x}</div>`).join(""), "audit"],
+          ["Phone layout", "Cards, tab bar and chips under 640 px", `<div style="margin: 0 auto; width: 150px; height: 230px; border-radius: 26px; border: 3px solid var(--strong); background: var(--panel); padding: 16px 12px; display: flex; flex-direction: column; gap: 8px">${["fail", "fail", "pass", "pass"].map((k) => `<div style="height: 30px; border-radius: 8px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 0 8px"><span style="width: 50px; height: 7px; border-radius: 4px; background: var(--muted)"></span><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--${k})"></span></div>`).join("")}<div style="margin-top: auto; height: 22px; border-top: 1.5px solid var(--line); display: flex; justify-content: space-around; align-items: end">${"····".split("").map(() => `<span style="width: 14px; height: 6px; border-radius: 3px; background: var(--faint)"></span>`).join("")}</div></div>`, "phone"],
+          ["Org health scorecard", "Every repository ranked, worst first", [["api-service", "D", "fail"], ["infra-terraform", "C", "warn"], ["web-app", "A", "pass"]].map(([n, g, k]) => `<div style="display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-top: 1.5px solid var(--line)"><span class="mono" style="font-size: 19px">${n}</span><span class="chip" style="${tint[k]}">${g}</span></div>`).join(""), "scorecards"],
+          ["1:1 prep sheet", "One page per person before a one-to-one", `<div style="font: 400 19px/1.6 Geist; color: var(--muted)"><div style="color: var(--fg); font-weight: 600">bk · last 30 days</div><div>11 merged · review response 30h</div><div>After-hours share rising</div><div style="color: var(--link)">Ask: is the on-call load fair?</div></div>`, "one-to-one"],
+          ["Weekly leadership digest", "Monday email: health, trends, what needs attention", `<div style="border-radius: 12px; background: var(--panel); border: 1.5px solid var(--line); padding: 16px 18px; font: 400 18px/1.55 Geist; color: var(--muted)"><div style="color: var(--fg); font-weight: 600">GitDash weekly · Monday 09:00</div><div>Change failure rate up 7 pts</div><div>2 repositories need attention</div></div>`, "leadership"],
+        ];
+        $("#tiles").innerHTML = TILES.map(([t, d, body]) => h("div", "position: relative; border-radius: 20px; border: 1.5px solid var(--line); background: linear-gradient(180deg, rgba(22,27,35,0.96), rgba(18,22,28,0.96)); padding: 26px 28px; overflow: hidden",
+          `<div style="font: 600 24px Geist">${t}</div><div style="margin-top: 6px; font: 400 17px Geist; color: var(--muted)">${d}</div><div style="margin-top: 20px">${body}</div>`, "tile")).join("");
+
+        // 10 outro chips
+        $("#ochips").innerHTML = [["▥", "DORA per repo and org", "#4FD1E8"], ["◔", "Alerts that explain themselves", "#F5B544"], ["◈", "Self-hosted", "#3DD68C"]].map(([i, t, c]) =>
+          `<span class="oc" style="display: inline-flex; align-items: center; gap: 12px; height: 60px; padding: 0 26px; border-radius: 30px; border: 1.5px solid var(--control); background: rgba(19,23,29,0.8); font: 500 24px Geist"><span style="color: ${c}">${i}</span>${t}</span>`).join("");
+
+        // HUD segments
+        $("#hudsegs").innerHTML = Array.from({ length: 8 }, () => `<span class="seg"></span>`).join("");
+
+        // ================= animation vocabulary =================
+        const pop = (e, t, o = {}) => tl.fromTo(e, { autoAlpha: 0, scale: o.from ?? 0.6 }, { autoAlpha: 1, scale: 1, duration: o.d ?? 0.45, ease: o.ease ?? "back.out(1.8)", stagger: o.stagger ?? 0 }, t);
+        const rise = (e, t, o = {}) => tl.fromTo(e, { autoAlpha: 0, y: o.y ?? 36 }, { autoAlpha: 1, y: 0, duration: o.d ?? 0.5, ease: o.ease ?? "power3.out", stagger: o.stagger ?? 0 }, t);
+        const slideX = (e, t, o = {}) => tl.fromTo(e, { autoAlpha: 0, x: o.x ?? -40 }, { autoAlpha: 1, x: 0, duration: o.d ?? 0.45, ease: "power3.out", stagger: o.stagger ?? 0 }, t);
+        const draw = (e, t, d = 0.8, ease = "power2.inOut", stagger = 0) => tl.fromTo(e, { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: d, ease, stagger }, t);
+        const grow = (e, t, o = {}) => tl.fromTo(e, { scaleY: 0 }, { scaleY: 1, duration: o.d ?? 0.5, ease: o.ease ?? "power3.out", stagger: o.stagger ?? 0.02, immediateRender: false }, t);
+        const odo = (e, t, d = 1.1) => $$(e).forEach((el) => {
+          const v = +el.dataset.v, dec = +el.dataset.dec, o = { n: 0 };
+          tl.to(o, { n: v, duration: d, ease: "power2.out", onUpdate: () => (el.textContent = o.n.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })) }, t);
+        });
+        const flash = (t, a = 0.3) => {
+          tl.to("#flash", { opacity: a, duration: 0.03, ease: "none" }, t);
+          tl.to("#flash", { opacity: 0, duration: 0.35, ease: "power2.out" }, t + 0.03);
+        };
+        const wipe = (t) => tl.fromTo("#wipe", { x: 0, autoAlpha: 1 }, { x: 3200, autoAlpha: 1, duration: 0.7, ease: "power2.inOut", immediateRender: false }, t);
+        const intro = (sc, t) => {
+          const k = $(".kicker", sc);
+          if (k) slideX(k, t + 0.02, { x: -24 });
+          const ws = $$(".hl .w", sc);
+          if (ws.length) tl.fromTo(ws, { autoAlpha: 0, yPercent: 60 }, { autoAlpha: 1, yPercent: 0, duration: 0.45, ease: "power3.out", stagger: 0.05 }, t + 0.08);
+        };
+
+        // ================= atmosphere =================
+        tl.fromTo("#fade", { opacity: 1 }, { opacity: 0, duration: 0.6 }, 0);
+        tl.fromTo("#o1", { x: 0, y: 0 }, { x: -160, y: 60, duration: T.duration / 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+        tl.fromTo("#o2", { x: 0, y: 0 }, { x: 140, y: 40, duration: T.duration / 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+        tl.fromTo("#o3", { x: 0 }, { x: -120, duration: T.duration / 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+        for (let n = 0; B(n) < T.duration && n < T.outroBeat; n++) {
+          if (!isKick(n) || n % 4) continue;
+          tl.to("#pulse", { scale: 1.006, duration: 0.05, ease: "power1.out" }, B(n));
+          tl.to("#pulse", { scale: 1, duration: 0.33, ease: "power2.out" }, B(n) + 0.05);
+          tl.to("#grid", { opacity: 0.7, duration: 0.05 }, B(n));
+          tl.to("#grid", { opacity: 0.5, duration: 0.4 }, B(n) + 0.05);
+        }
+
+        // ================= scene windows =================
+        const WINDOWS = [
+          ["#sc01", "s01-cover", "none"], ["#sc02", "s02-monitor", "up"], ["#sc03", "s03-table", "zoom"],
+          ["#sc04", "s04-repo", "up"], ["#sc05", "s05-workflow", "flip"], ["#sc06", "s06-team", "up"],
+          ["#sc07", "s07-cost", "zoom"], ["#sc08", "s08-alerts", "iris"], ["#sc09", "s09-montage", "up"], ["#sc10", "s10-outro", "fade"],
+        ];
+        WINDOWS.forEach(([sel, sid, kind], i) => {
+          const sc = $(sel);
+          const t0 = SC[sid].start;
+          const t1 = i < WINDOWS.length - 1 ? SC[WINDOWS[i + 1][1]].start : T.duration;
+          if (kind === "none") tl.set(sc, { autoAlpha: 1 }, t0);
+          else if (kind === "up") tl.fromTo(sc, { autoAlpha: 0, y: 110 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: "power3.out" }, t0);
+          else if (kind === "zoom") tl.fromTo(sc, { autoAlpha: 0, scale: 1.25 }, { autoAlpha: 1, scale: 1, duration: 0.6, ease: "expo.out" }, t0);
+          else if (kind === "flip") tl.fromTo(sc, { autoAlpha: 0, rotationY: -60, transformPerspective: 2200 }, { autoAlpha: 1, rotationY: 0, duration: 0.6, ease: "power3.out" }, t0);
+          else if (kind === "iris") tl.fromTo(sc, { autoAlpha: 1, clipPath: "circle(0% at 50% 50%)" }, { clipPath: "circle(80% at 50% 50%)", duration: 0.6, ease: "power2.inOut" }, t0);
+          else if (kind === "fade") tl.fromTo(sc, { autoAlpha: 0 }, { autoAlpha: 1, duration: 1.0, ease: "power1.inOut" }, t0);
+          if (i < WINDOWS.length - 1) tl.to(sc, { autoAlpha: 0, scale: 0.96, duration: 0.24, ease: "power2.in" }, t1 - 0.24);
+          if (i > 0) { flash(t0, 0.12); if (kind !== "fade") wipe(t0 - 0.1); }
+          if (i > 0 && i < 9) intro(sc, t0);
+        });
+        T.drops.forEach((n) => flash(B(n), 0.35));
+
+        // HUD: features 1..8 over scenes 2..9
+        tl.to("#hud", { autoAlpha: 1, duration: 0.3 }, SC["s02-monitor"].start + 0.3);
+        tl.to("#hud", { autoAlpha: 0, duration: 0.3 }, SC["s10-outro"].start - 0.3);
+        const segs = $$("#hud .seg");
+        WINDOWS.slice(1, 9).forEach(([, sid], k) => {
+          tl.set("#hudn", { textContent: `${String(k + 1).padStart(2, "0")} / 08` }, SC[sid].start);
+          tl.set(segs[k], { className: "seg on" }, SC[sid].start);
+        });
+
+        // ================= per-scene choreography (reveals on spoken words) =================
+        { // 01 cover
+          const s = "s01-cover", t0 = SC[s].start;
+          pop("#logo", t0 + 0.3, { from: 0.7, d: 0.7, ease: "expo.out" });
+          tl.fromTo(".lb", { scaleY: 0, transformOrigin: "50% 100%" }, { scaleY: 1, duration: 0.5, ease: "back.out(1.6)", stagger: 0.12 }, t0 + 0.55);
+          rise("#brand", t0 + 1.2);
+          rise("#tag1", W(s, "gitdash") - 0.2, { y: 30 });
+          tl.fromTo("#tag2", { autoAlpha: 0, scale: 1.4, filter: "blur(10px)" }, { autoAlpha: 1, scale: 1, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, W(s, "readable") - 0.1);
+        }
+        { // 02 monitor
+          const s = "s02-monitor", t0 = SC[s].start;
+          rise("#kpi", t0 + 0.45);
+          odo("#kpi .odo", t0 + 0.6);
+          draw("#kpi .sp", t0 + 0.7, 1.2, "power2.out", 0.1);
+          rise("#sc02 .ct", W(s, "wrong") - 0.3);
+          rise("#att", W(s, "wrong") - 0.2);
+          slideX("#att .att", W(s, "wrong"), { stagger: 0.18 });
+          pop("#att .att:first-child .ibox", W(s, "right"), { from: 1.4, d: 0.35 });
+        }
+        { // 03 table
+          const s = "s03-table", t0 = SC[s].start;
+          rise(".fchip", t0 + 0.4, { stagger: 0.06, y: 16 });
+          rise("#table", t0 + 0.5);
+          rise(".trow", W(s, "status") - 0.2, { stagger: 0.07, y: 18 });
+          tl.fromTo(".bar", { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.7, ease: "power3.out", stagger: 0.07 }, W(s, "success"));
+          tl.fromTo(".rs", { autoAlpha: 0, scaleY: 0.2 }, { autoAlpha: 1, scaleY: 1, duration: 0.18, stagger: 0.012 }, W(s, "last"));
+          const f = $$(".fchip");
+          tl.set(f[0], { background: "transparent", borderColor: "#232A34", color: "#A3A9B4" }, W(s, "filter"));
+          tl.set(f[1], { background: "#221C45", borderColor: "rgba(164,139,255,0.6)", color: "#D3C7FF" }, W(s, "filter"));
+          tl.to($$(".trow").slice(2), { autoAlpha: 0.25, duration: 0.25 }, W(s, "filter"));
+          tl.to(".star", { color: "#A48BFF", duration: 0.2 }, W(s, "pin"));
+          tl.set($$(".star")[0], { textContent: "★" }, W(s, "pin"));
+          pop($$(".star")[0], W(s, "pin"), { from: 1.8, d: 0.4 });
+          pop("#palette", W(s, "keyboard") - 0.25, { from: 0.92, d: 0.35, ease: "power3.out" });
+          tl.fromTo("#ptype", { textContent: "" }, { textContent: "api", duration: 0.3, ease: "steps(3)", immediateRender: false }, W(s, "keyboard"));
+        }
+        { // 04 repo
+          const s = "s04-repo", t0 = SC[s].start;
+          rise(".tab", t0 + 0.35, { stagger: 0.05, y: 10 });
+          tl.fromTo("#tabline", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 }, t0 + 0.6);
+          rise(".dcard", W(s, "dora") - 0.15, { stagger: 0.12 });
+          draw("#dora .sp", W(s, "dora") + 0.2, 1.0, "power2.out", 0.12);
+          rise("#sc04 .card", W(s, "duration") - 0.3, { stagger: 0.12 });
+          draw("#p95", W(s, "duration"), 1.4); draw("#p50", W(s, "duration") + 0.15, 1.4);
+          tl.fromTo("#p95area", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8 }, W(s, "duration") + 0.8);
+          pop(["#peak", "#peaklbl"], W(s, "duration") + 1.3, { from: 0.4 });
+          tl.fromTo(".jbar", { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.7, ease: "power3.out", stagger: 0.12 }, W(s, "fail"));
+          // underline slides across tabs as they are named
+          const tabs = $$(".tab");
+          const moveTo = (i, t) => {
+            const el = tabs[i], x = el.offsetLeft, w = el.offsetWidth;
+            tl.to("#tabline", { x, width: w, duration: 0.35, ease: "power3.inOut" }, t);
+            tl.to(tabs, { color: "#A3A9B4", duration: 0.15 }, t);
+            tl.to(el, { color: "#EDEAE3", duration: 0.15 }, t);
+          };
+          tl.set("#tabline", { width: tabs[0].offsetWidth }, t0);
+          moveTo(2, W(s, "pull")); moveTo(4, W(s, "issues")); moveTo(5, W(s, "security")); moveTo(6, W(s, "audit"));
+        }
+        { // 05 workflow
+          const s = "s05-workflow", t0 = SC[s].start;
+          rise("#sc05 .card", t0 + 0.4, { stagger: 0.12 });
+          grow(".rb", t0 + 0.6, { stagger: 0.025, d: 0.4 });
+          tl.fromTo("#p95line", { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.8, ease: "power2.out", immediateRender: false }, t0 + 1.4);
+          rise(".hy", W(s, "fails") - 0.1, { stagger: 0.3, y: 20 });
+          tl.fromTo(".jt50", { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.6, ease: "power3.out", stagger: 0.08 }, W(s, "time"));
+          pop(".jt95", W(s, "time") + 0.4, { stagger: 0.08, from: 0 });
+        }
+        { // 06 team
+          const s = "s06-team", t0 = SC[s].start;
+          rise("#sc06 .card", t0 + 0.4, { stagger: 0.12 });
+          pop(".hc", W(s, "review") - 0.1, { stagger: 0.025, from: 0.3, d: 0.3 });
+          tl.fromTo("#bus", { autoAlpha: 0, scale: 1.6 }, { autoAlpha: 1, scale: 1, duration: 0.6, ease: "expo.out" }, W(s, "bus"));
+          slideX(".wk", W(s, "late") - 0.2, { stagger: 0.15, x: 30 });
+          pop(".wk:first-child .chip", W(s, "resignation"), { from: 1.6, d: 0.35 });
+        }
+        { // 07 cost
+          const s = "s07-cost", t0 = SC[s].start;
+          rise("#costkpi", t0 + 0.4);
+          rise("#sc07 .card:not(#costkpi)", W(s, "billing") - 0.2, { stagger: 0.12 });
+          grow(".sb", W(s, "billing"), { stagger: 0.03, d: 0.45 });
+          tl.fromTo($$("#costkpi .cv")[1], { scale: 1 }, { scale: 1.08, duration: 0.2, yoyo: true, repeat: 1, ease: "power2.out" }, W(s, "projection"));
+          slideX(".sv", W(s, "less") - 0.4, { stagger: 0.2, x: 30 });
+        }
+        { // 08 alerts
+          const s = "s08-alerts", t0 = SC[s].start;
+          tl.fromTo(".pw", { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: 0.07, immediateRender: false }, W(s, "plain"));
+          const ch = $$(".ch");
+          ["slack", "email", "browser", "digest"].forEach((w, i) => {
+            tl.to(ch, { background: "rgba(0,0,0,0)", color: "#A3A9B4", duration: 0.12 }, W(s, w));
+            tl.to(ch[i], { background: "#1C2230", color: "#EDEAE3", duration: 0.12 }, W(s, w));
+          });
+          tl.to(ch, { background: "rgba(0,0,0,0)", color: "#A3A9B4", duration: 0.12 }, W(s, "digest") + 0.6);
+          tl.to(ch[0], { background: "#1C2230", color: "#EDEAE3", duration: 0.12 }, W(s, "digest") + 0.6);
+          rise(["#sc08 .ct:not(.card .ct)", "#firing"], t0 + 0.5, { stagger: 0.1 });
+          slideX(".fr", t0 + 0.7, { stagger: 0.15, x: 30 });
+          tl.to(".fr:first-child .mute", { background: "#1C2230", borderColor: "#A48BFF", duration: 0.15 }, W(s, "digest") + 1.0);
+          tl.to(".fr:first-child", { autoAlpha: 0.35, duration: 0.3 }, W(s, "digest") + 1.3);
+        }
+        { // 09 montage
+          const s = "s09-montage";
+          const tiles = $$(".tile");
+          ["permissions", "audit", "phone", "scorecards", "one-to-one", "leadership"].forEach((w, i) => pop(tiles[i], W(s, w) - 0.15, { from: 0.85, d: 0.45, ease: "back.out(1.4)" }));
+          $$(".cb").forEach((cb, i) => {
+            if (cb.dataset.on === "1") tl.to(cb, { background: "#7C5CFF", borderColor: "#7C5CFF", duration: 0.12 }, W(s, "permissions") + 0.3 + i * 0.05);
+          });
+        }
+        { // 10 outro
+          const s = "s10-outro", t0 = SC[s].start;
+          rise("#otag", t0 + 0.6, { y: 30, d: 0.9 });
+          rise(".oc", W(s, "open") - 0.3, { stagger: 0.12, y: 18 });
+          rise("#ourl", W(s, "infrastructure"), { y: 12 });
+        }
+
+        // ================= captions =================
+        const capLayer = $("#captions");
+        T.captions.forEach((c) => {
+          const cap = document.createElement("div");
+          cap.className = "cap";
+          const box = document.createElement("div");
+          box.className = "cap-box";
+          const spans = c.words.map(([txt], j) => {
+            if (j) box.append(" ");
+            const sp = document.createElement("span");
+            sp.className = "cw";
+            sp.textContent = txt;
+            box.append(sp);
+            return sp;
+          });
+          cap.append(box);
+          capLayer.append(cap);
+          tl.fromTo(cap, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.14, ease: "power2.out" }, c.start);
+          tl.to(cap, { autoAlpha: 0, duration: 0.12, ease: "power1.in" }, Math.max(c.start + 0.3, c.end - 0.12));
+          c.words.forEach(([, st], j) => {
+            tl.to(spans[j], { color: "#D3C7FF", duration: 0.05 }, st);
+            const next = j < c.words.length - 1 ? c.words[j + 1][1] : Math.max(st + 0.35, c.end - 0.4);
+            tl.to(spans[j], { color: "#EDEAE3", duration: 0.12 }, next);
+          });
+        });
+
+        tl.to("#fade", { opacity: 1, duration: 1.2, ease: "power1.in" }, T.duration - 1.2);
+        tl.set({}, {}, T.duration);
+      })();
+    </script>
+  </body>
+</html>

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { validateOrg, safeError } from "@/lib/validation";
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { withCache, hashKey } from "@/lib/cache";
 
 const CACHE_TTL = 300;
 
@@ -21,6 +24,7 @@ export interface BillingError {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/billing");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -41,7 +45,10 @@ export async function GET(req: NextRequest) {
     const octokit = getOctokit(token);
     if (org) {
       try {
-        const { data } = await octokit.rest.billing.getGithubActionsBillingOrg({ org });
+        const data = await withCache(`github/billing:${hashKey(token)}:org:${org}`, CACHE_TTL, async () =>
+          (await octokit.rest.billing.getGithubActionsBillingOrg({ org })).data,
+          { shared: true },
+        );
         const result: BillingData = {
           total_minutes_used: data.total_minutes_used,
           total_paid_minutes_used: data.total_paid_minutes_used,
@@ -51,7 +58,7 @@ export async function GET(req: NextRequest) {
           login: org,
         };
         return NextResponse.json(result, {
-          headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
+          headers: gatedCacheHeaders(),
         });
       } catch (orgErr: unknown) {
         const status = (orgErr as { status?: number })?.status;
@@ -72,7 +79,10 @@ export async function GET(req: NextRequest) {
     } else {
       const { data: me } = await octokit.rest.users.getAuthenticated();
       try {
-        const { data } = await octokit.rest.billing.getGithubActionsBillingUser({ username: me.login });
+        const data = await withCache(`github/billing:${hashKey(token)}:user:${me.login}`, CACHE_TTL, async () =>
+          (await octokit.rest.billing.getGithubActionsBillingUser({ username: me.login })).data,
+          { shared: true },
+        );
         const result: BillingData = {
           total_minutes_used: data.total_minutes_used,
           total_paid_minutes_used: data.total_paid_minutes_used,
@@ -82,7 +92,7 @@ export async function GET(req: NextRequest) {
           login: me.login,
         };
         return NextResponse.json(result, {
-          headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600` },
+          headers: gatedCacheHeaders(),
         });
       } catch (userBillingErr: unknown) {
         // GitHub deprecated the personal billing endpoint in 2024.

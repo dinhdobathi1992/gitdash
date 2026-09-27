@@ -120,7 +120,7 @@ export default function SecurityAlertsPanel({ owner, repo }: { owner: string; re
                 data.counts[sev] > 0 ? SEVERITY_STYLE[sev].chip : "border-slate-800 bg-slate-900/40",
               )}
             >
-              <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] mb-1.5">
+              <div className="flex items-center gap-1.5 text-[10.5px] font-semibold mb-1.5">
                 <span className={cn("w-1.5 h-1.5 rounded-full", SEVERITY_STYLE[sev].dot)} />
                 {SEVERITY_STYLE[sev].label}
               </div>
@@ -154,12 +154,12 @@ export default function SecurityAlertsPanel({ owner, repo }: { owner: string; re
                     <span className={cn("font-mono text-lg font-bold", s.open_count > 0 ? "text-white" : "text-emerald-400")}>
                       {s.open_count}
                     </span>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-xs text-slate-500">
                       open{s.mttr_days !== null && ` · ${s.mttr_days}d avg fix`}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-amber-300/90">{STATUS_NOTE[s.status]}</span>
+                  <span className="text-xs text-amber-300/90">{STATUS_NOTE[s.status]}</span>
                 )}
               </div>
             );
@@ -187,18 +187,18 @@ export default function SecurityAlertsPanel({ owner, repo }: { owner: string; re
                   rel="noopener noreferrer"
                   className="group flex items-center gap-3 px-4 py-3 border-b border-slate-800/60 last:border-b-0 hover:bg-slate-800/40 transition-colors"
                 >
-                  <span className={cn("shrink-0 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border", style.chip)}>
+                  <span className={cn("shrink-0 text-xs font-semibold capitalize px-1.5 py-0.5 rounded border", style.chip)}>
                     {style.label}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-200 truncate group-hover:text-white transition-colors">
                       {a.title}
                     </p>
-                    <p className="text-[11px] text-slate-500 font-mono truncate">
+                    <p className="text-xs text-slate-500 font-mono truncate">
                       {SOURCE_META[a.source].label} · {a.subject}
                     </p>
                   </div>
-                  <span className="shrink-0 text-[11px] text-slate-500 tabular-nums">{a.age_days}d</span>
+                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">{a.age_days}d</span>
                   <ExternalLink className="w-3 h-3 shrink-0 text-slate-700 group-hover:text-slate-400 transition-colors" />
                 </a>
               );
@@ -216,13 +216,13 @@ export default function SecurityAlertsPanel({ owner, repo }: { owner: string; re
         )}
 
         {data.total_open > data.alerts.length && (
-          <p className="text-[11px] text-slate-600">
+          <p className="text-xs text-slate-600">
             Showing the {data.alerts.length} most severe of {data.total_open} open alerts.
           </p>
         )}
 
         {data.partial && !data.needs_scope && (
-          <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+          <p className="flex items-start gap-1.5 text-xs text-slate-500">
             <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-slate-600" />
             Some sources are not enabled for this repository, so this is not a complete picture.
           </p>

@@ -10,6 +10,8 @@ import { NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { safeError } from "@/lib/validation";
+import { privateCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 const CACHE_TTL = 30; // seconds — short-lived, browser-only cache
 
@@ -19,6 +21,7 @@ export interface RateLimitStatus {
 }
 
 export async function GET() {
+  labelGitHubRoute("github/rate-limit");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -42,7 +45,7 @@ export async function GET() {
     };
 
     return NextResponse.json(status, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` },
+      headers: privateCacheHeaders(CACHE_TTL),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch rate limit status");

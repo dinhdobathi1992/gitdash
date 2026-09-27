@@ -17,6 +17,8 @@ import { getAiSettings, saveAiSettings, type AiSettingsProvider } from "@/lib/db
 import { envProviders, invalidateAiOverrideCache, resolveAiOverride } from "@/lib/ai";
 import { seal, maskHint } from "@/lib/secret-box";
 import { safeError } from "@/lib/validation";
+import { noStoreHeaders } from "@/lib/http-cache";
+import { requireAccess } from "@/lib/permissions";
 
 export const maxDuration = 60;
 
@@ -42,6 +44,8 @@ export interface AiSettingsResponse {
 }
 
 export async function GET() {
+  const denied = await requireAccess(null, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -65,7 +69,7 @@ export async function GET() {
         api_key_hint: null, has_key: false, updated_by: null, updated_at: null,
         db_available: false,
       } satisfies AiSettingsResponse,
-      { headers: { "Cache-Control": "private, no-store" } },
+      { headers: noStoreHeaders() },
     );
   }
 
@@ -84,7 +88,7 @@ export async function GET() {
         updated_at: s?.updated_at ?? null,
         db_available: true,
       } satisfies AiSettingsResponse,
-      { headers: { "Cache-Control": "private, no-store" } },
+      { headers: noStoreHeaders() },
     );
   } catch {
     return NextResponse.json(
@@ -94,12 +98,14 @@ export async function GET() {
         api_key_hint: null, has_key: false, updated_by: null, updated_at: null,
         db_available: false,
       } satisfies AiSettingsResponse,
-      { headers: { "Cache-Control": "private, no-store" } },
+      { headers: noStoreHeaders() },
     );
   }
 }
 
 export async function PUT(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

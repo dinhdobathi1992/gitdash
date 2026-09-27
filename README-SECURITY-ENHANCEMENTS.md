@@ -286,3 +286,49 @@ The README now serves as:
 **Key Message:** "Your PAT is yours. We protect it. Don't trust us — verify it yourself."
 
 This approach respects the user's intelligence and security concerns while providing concrete, verifiable proof of security claims.
+
+---
+
+## Shared API cache: GitHub data at rest in Postgres
+
+When `DATABASE_URL` is set, GitDash keeps a shared second-level cache of GitHub
+API responses in the `api_cache` table (`src/lib/cache-l2.ts`), so replicas
+reuse each other's results instead of each spending the GitHub rate limit.
+
+- **What is stored:** GitHub API response DTOs for `/api/github/*` routes only,
+  as JSONB. This can include private-repository metadata the signed-in token
+  can see (repo names, workflow runs, PR/contributor stats, Dependabot/secret-
+  scanning alert *metadata* — never secret values).
+- **What is never stored:** tokens/PATs, settings, AI/email provider keys, AI
+  output, permission data. Enforced by a test that only `/api/github` routes
+  opt in (`withCache(..., { shared: true })`).
+- **Isolation:** every key contains a SHA-256 digest of the requesting token,
+  so one user's cached data is never served to another token.
+- **Lifetime:** rows expire with the route's cache TTL (partial results: 30s),
+  are deleted on read once expired, swept on ~1% of writes, and swept by the
+  daily cron (`/api/cron/sync`).
+- **Turning it off:** set `GITDASH_L2_CACHE=0`. The in-process cache keeps
+  working; nothing is written to `api_cache`. Rows already stored are not
+  swept while the layer is off — run `TRUNCATE api_cache;` to remove them.
+
+---
+
+## Organization-mode permissions: what they protect and how they fail
+
+- **Scope.** Group permissions gate GitDash features and pages. They do not change what a user's own
+  GitHub token can reach on GitHub. Server-held data (`/api/db/runs`, `/api/db/trends`, synced with
+  the service token) is only served after the user's own token proves it can see that repo or org.
+  Org-wide trends are served to active members of that org (they aggregate the org's synced repos).
+- **Enforcement point.** `src/proxy.ts` classifies every route (`src/lib/permissions.ts`); unknown API
+  routes are denied. Write and admin handlers re-check with the same decision function.
+- **Identity** always comes from GitHub for the token in use (cached 60s), never from the cookie.
+  A revoked token (401) ends the session immediately.
+- **Timing.** Grants and revocations reach new requests within 60s. If GitHub or the database is
+  unavailable, the last known answer is reused for up to 10 minutes, then requests fail with
+  503 (`authz_unavailable`) — never open.
+- **CSRF.** State-changing API calls must come from the app's own origin; PAT sign-in additionally
+  requires a JSON body.
+- **Audit.** Every group or grant change is written in the same database statement as the change,
+  with actor, before and after.
+- **Known limit.** The sign-in rate limiter is per instance; with several replicas the effective
+  limit multiplies. `GITDASH_ALLOWED_ORGS` removes most of the abuse value.

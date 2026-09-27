@@ -18,9 +18,12 @@ import { aiEnabled, generateJson, type AiFailureReason } from "@/lib/ai";
 import { buildInsightsSnapshot, type InsightsScope } from "@/lib/ai-snapshots";
 import { INSIGHTS_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import { parseInsightsContent, type InsightsContent } from "@/lib/ai-schema";
-import { withCache, cacheGet, cacheSet, cacheDelete, hashKey } from "@/lib/cache";
+import { withCache, cacheGet, cacheSet, hashKey } from "@/lib/cache";
 import { aiRateLimit } from "@/lib/ratelimit";
 import { validateOwner, validateRepo, validateOrg, safeError } from "@/lib/validation";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export const maxDuration = 60;
 
@@ -55,6 +58,7 @@ function failureResponse(reason: AiFailureReason): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("ai/insights");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -141,17 +145,15 @@ export async function GET(req: NextRequest) {
       // Only write through on success — never cache a failure.
       if ("ok" in payload) cacheSet(cacheKey, payload, CACHE_TTL);
     } else {
-      payload = await withCache(cacheKey, CACHE_TTL, generate);
-      // A failure that slipped into the cache would poison the key for its
-      // whole TTL, so evict it and let the next request try again.
-      if (!("ok" in payload)) cacheDelete(cacheKey);
+      // Never cache a failure: it would poison the key for its whole TTL.
+      payload = await withCache(cacheKey, CACHE_TTL, generate, { shouldCache: (p) => "ok" in p });
     }
 
     if (!("ok" in payload)) return failureResponse(payload.failed);
 
     return NextResponse.json(
       { ...payload, cached: hit },
-      { headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` } },
+      { headers: gatedCacheHeaders() },
     );
   } catch (e) {
     return safeError(e, "Failed to generate AI insights");

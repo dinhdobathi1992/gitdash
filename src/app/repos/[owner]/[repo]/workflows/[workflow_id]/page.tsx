@@ -4,16 +4,26 @@ import { useMemo, useState, useRef, useEffect, Suspense } from "react";
 import React from "react";
 import useSWR from "swr";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { fetcher } from "@/lib/swr";
-import { WorkflowRun, WorkflowJob, JobStatsResponse } from "@/lib/github";
+import { fetcher, requestFresh } from "@/lib/swr";
+import { WorkflowRun, WorkflowJob, JobStatsResponse, type WorkflowOverview } from "@/lib/github";
 import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
+import { Tabs, type TabItem } from "@/components/ui/Tabs";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { LinkButton } from "@/components/ui/Button";
+import { ErrorBanner } from "@/components/ui/Card";
+import { useCrumbLabel } from "@/lib/breadcrumbs";
+import { useNow } from "@/lib/use-alerts";
+import { useAiEnabled } from "@/lib/use-ai-enabled";
+import {
+  WorkflowKpiStrip, RunsBarChart, JobTimeBreakdown, RecentRunsTable, failureStreak,
+} from "@/components/workflow/WorkflowOverview";
 import StatCard from "@/components/StatCard";
 import { ConclusionBadge } from "@/components/Badge";
 import { formatDuration, cn } from "@/lib/utils";
 import AnomalyExplanation from "@/components/AnomalyExplanation";
 import RootCauseHypotheses from "@/components/RootCauseHypotheses";
 import { estimateRunCost } from "@/lib/cost";
-import { format, getHours, getDay } from "date-fns";
+import { getHours, getDay } from "date-fns";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -22,8 +32,8 @@ import {
 import {
   CheckCircle, Clock, Activity, Calendar, GitCommit, User,
   ExternalLink, AlertCircle, RefreshCw, Timer, Zap, TrendingUp,
-  ChevronDown, Download, ArrowUpDown, BarChart3, X, Lightbulb,
-  TrendingDown, GitPullRequest, GitPullRequestClosed, RotateCcw, Shield, Cpu, FlameKindling,
+  ChevronDown, Download, ArrowUpDown, X, Lightbulb,
+  TrendingDown, GitPullRequest, GitPullRequestClosed, RotateCcw, Cpu, FlameKindling,
 } from "lucide-react";
 import {
   calculateDoraMetrics,
@@ -42,7 +52,6 @@ import {
 } from "@/lib/queue-analysis";
 import {
   analyzeWorkflow,
-  SEVERITY_STYLES,
   CATEGORY_LABELS,
 } from "@/lib/optimization";
 import {
@@ -70,24 +79,11 @@ function DisabledFeature({ label, settingsHref }: { label: string; settingsHref:
 }
 
 // ── colour palette ────────────────────────────────────────────────────────────
-const OUTCOME_COLORS: Record<string, string> = {
-  success: "#4ade80", failure: "#f87171", cancelled: "#facc15",
-  skipped: "#94a3b8", timed_out: "#fb923c",
-};
 const JOB_PALETTE = [
-  "#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#0d9488",
+  "#A48BFF","#74B6F4","#4FD1E8","#3DD68C","#F5B544","#FF6B6B","#8E9BFA","#4FD1E8",
 ];
 
 // ── math helpers ─────────────────────────────────────────────────────────────
-function pct(arr: number[], p: number) {
-  if (!arr.length) return 0;
-  const s = [...arr].sort((a, b) => a - b);
-  // Linear interpolation avoids conflating p95 with p100 on small samples.
-  const idx = p * (s.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (idx - lo);
-}
 function avg(arr: number[]) {
   return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 }
@@ -128,14 +124,6 @@ const ACTIVE_RUN_STATUSES = new Set(["in_progress", "queued", "waiting", "reques
 
 // Day-of-week labels (Sun=0…Sat=6) — module-level so useMemo deps are stable.
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "overview",     label: "Overview",     icon: Activity },
-  { id: "performance",  label: "Performance",  icon: Cpu },
-  { id: "reliability",  label: "Reliability",  icon: Shield },
-  { id: "triggers",     label: "Triggers",     icon: Zap },
-  { id: "dora",         label: "DORA",         icon: BarChart3 },
-  { id: "runs",         label: "Runs",         icon: GitCommit },
-];
 
 // ── sortable table header ─────────────────────────────────────────────────────
 type SortDir = "asc" | "desc";
@@ -148,7 +136,7 @@ function SortTh({
   const active = current === col;
   return (
     <th
-      className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-white transition-colors"
+      className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap cursor-pointer select-none hover:text-white transition-colors"
       onClick={onClick}
     >
       <span className="flex items-center gap-1">
@@ -168,7 +156,7 @@ function SortTh({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function WorkflowDetailPage() {
   return (
-    <Suspense fallback={<div className="p-8 animate-pulse text-slate-500 text-sm">Loading…</div>}>
+    <Suspense fallback={<div className="px-10 pt-8 text-sm text-muted">Loading…</div>}>
       <WorkflowContent />
     </Suspense>
   );
@@ -205,19 +193,24 @@ function WorkflowContent() {
   const hasInProgress = (runs: WorkflowRun[] | undefined) =>
     runs?.some(r => r.status != null && ACTIVE_RUN_STATUSES.has(r.status)) ?? false;
 
+  const runsKey = `/api/github/runs?owner=${owner}&repo=${repo}&workflow_id=${workflow_id}&per_page=${perPage}`;
+  const refreshRuns = () => {
+    requestFresh(runsKey);
+    mutateRuns();
+  };
   const {
     data: runs, error: runsError, isLoading: runsLoading,
     isValidating: runsValidating, mutate: mutateRuns,
   } = useSWR<WorkflowRun[]>(
-    `/api/github/runs?owner=${owner}&repo=${repo}&workflow_id=${workflow_id}&per_page=${perPage}`,
+    runsKey,
     fetcher<WorkflowRun[]>,
     {
       refreshInterval: (data) => hasInProgress(data) ? 30_000 : 0,
     }
   );
 
-  // ── job stats (only fetched when Performance tab is active AND feature enabled) ──
-  const jobStatsKey = (tab === "performance" && flags.performanceTab)
+  // ── job stats (Overview's "Where the time goes" and the Performance tab; feature-gated) ──
+  const jobStatsKey = ((tab === "performance" || tab === "overview") && flags.performanceTab)
     ? `/api/github/job-stats?owner=${owner}&repo=${repo}&workflow_id=${workflow_id}&per_page=${Math.min(perPage, 30)}`
     : null;
   const {
@@ -252,19 +245,13 @@ function WorkflowContent() {
   }, [runs, workflow_id]);
 
   const workflowName = runs?.[0]?.name ?? `Workflow #${workflow_id}`;
+  useCrumbLabel(workflow_id, runs?.[0]?.name ?? undefined);
+  const now = useNow();
+  const { enabled: aiEnabled } = useAiEnabled();
 
   // ── derived ───────────────────────────────────────────────────────────────
   const safeRuns = useMemo(() => runs ?? [], [runs]);
   const completed = useMemo(() => safeRuns.filter(r => r.status === "completed"), [safeRuns]);
-  const successCount = completed.filter(r => r.conclusion === "success").length;
-  const failureCount = completed.filter(r => r.conclusion === "failure").length;
-  const successRate = completed.length ? Math.round(successCount / completed.length * 100) : 0;
-
-  const durations = completed.map(r => r.duration_ms ?? 0).filter(Boolean);
-  const avgDuration   = durations.length ? Math.round(avg(durations)) : undefined;
-  const p95Duration   = durations.length ? pct(durations, 0.95) : undefined;
-  const queues        = safeRuns.map(r => r.queue_wait_ms ?? 0).filter(Boolean);
-  const avgQueue      = queues.length ? Math.round(avg(queues)) : undefined;
 
   // ── anomaly detection (skipped when feature disabled) ────────────────────
   const anomalyMap = useMemo(
@@ -272,125 +259,117 @@ function WorkflowContent() {
     [safeRuns, flags.anomalyDetection]
   );
 
+  // Header meta: status + failure streak, file path, trigger, run count.
+  const latest = safeRuns[0];
+  const streak = failureStreak(safeRuns);
+  const live = hasInProgress(runs);
+  const status = live
+    ? { tone: "run" as const, label: "Running" }
+    : streak > 0
+      ? { tone: "fail" as const, label: streak > 1 ? `Failing · ${streak} in a row` : "Failing" }
+      : completed.length
+        ? { tone: "pass" as const, label: "Passing" }
+        : { tone: "neutral" as const, label: "No recent runs" };
+  const runs30 = safeRuns.filter((r) => now - new Date(r.created_at).getTime() <= 30 * 86_400_000).length;
+  const triggerLine = latest ? `On ${latest.event.replace(/_/g, " ")}${latest.head_branch ? ` to ${latest.head_branch}` : ""}` : null;
+  const { data: overview } = useSWR<WorkflowOverview[]>(`/api/github/repo-overview?owner=${owner}&repo=${repo}`);
+  const wfPath = overview?.find((w) => String(w.id) === String(workflow_id))?.path;
+
+  const tabs: TabItem[] = [
+    { key: "overview", label: "Overview" },
+    { key: "runs", label: "Runs", count: safeRuns.length || null },
+    { key: "performance", label: "Performance" },
+    { key: "reliability", label: "Reliability" },
+    { key: "triggers", label: "Triggers" },
+    { key: "dora", label: "DORA" },
+  ];
+
   return (
-    <div className="p-8">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-7 lg:pb-12">
       <RepoWorkflowBreadcrumb owner={owner} repo={repo} workflowName={workflowName} />
 
       {/* ── header ── */}
-      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <h1 className="text-2xl font-bold text-white">{workflowName}</h1>
-            {hasInProgress(runs) && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                Live
-              </span>
-            )}
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="font-mono text-[22px] sm:text-[26px] leading-8 font-semibold tracking-[-0.01em] text-fg truncate">{workflowName}</h1>
+          <div className="mt-2 flex items-center gap-x-4 gap-y-1.5 flex-wrap text-[13px] text-muted">
+            {runsLoading ? <span className="h-6 w-24 rounded-full skeleton" /> : <StatusPill tone={status.tone} pulse={live}>{status.label}</StatusPill>}
+            {wfPath && <span className="font-mono">{wfPath}</span>}
+            {triggerLine && <span>{triggerLine}</span>}
+            {!runsLoading && <span>{runs30} run{runs30 === 1 ? "" : "s"} in 30 days</span>}
           </div>
-          <p className="text-sm text-slate-400">Last {perPage} runs · {completed.length} completed</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="sr-only" htmlFor="per-page">Runs to load</label>
           <select
+            id="per-page"
             value={perPage}
             onChange={e => setPerPage(Number(e.target.value))}
-            className="text-sm bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+            className="h-9 pl-2.5 pr-8 rounded-control bg-surface border border-control text-[13px] text-fg focus:outline-none focus:border-brand-fg"
           >
             {[20, 50, 100].map(n => <option key={n} value={n}>Last {n} runs</option>)}
           </select>
-          <button
-            onClick={() => mutateRuns()}
-            disabled={runsValidating}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", runsValidating && "animate-spin")} />
-            Refresh
-          </button>
-          <a
-            href={`https://github.com/${owner}/${repo}/actions/workflows/${workflow_id}`}
-            target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> GitHub
-          </a>
+          <ExportButton
+            data={safeRuns}
+            filenameBase={`${repo}-${workflowName}-runs`}
+            label="Export CSV"
+            csvOnly
+            csvRows={() => safeRuns.map((r) => ({
+              run: r.run_number,
+              outcome: r.conclusion ?? r.status ?? "",
+              branch: r.head_branch ?? "",
+              actor: r.actor?.login ?? "",
+              duration_s: r.duration_ms ? Math.round(r.duration_ms / 1000) : "",
+              queue_s: r.queue_wait_ms ? Math.round(r.queue_wait_ms / 1000) : "",
+              created_at: r.created_at,
+              url: r.html_url,
+            }))}
+          />
+          <LinkButton href={`https://github.com/${owner}/${repo}/actions/workflows/${workflow_id}`} external className="hidden sm:inline-flex">
+            Open in GitHub <ExternalLink className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
+          </LinkButton>
         </div>
+      </header>
+
+      <Tabs label="Workflow sections" items={tabs} active={tab} onSelect={(k) => setTab(k as Tab)} className="mt-5" />
+
+      <div className="mt-7 flex flex-col gap-7">
+        {runsError && <ErrorBanner message={`Couldn't load runs: ${runsError.message}`} onRetry={refreshRuns} />}
+
+        {runsLoading ? <LoadingSkeleton /> : (
+          <>
+            {/* All tabs stay mounted — hidden keeps charts alive so Recharts
+                never re-measures on switch, making tabs instant. */}
+            <div hidden={tab !== "overview"}>
+              <OverviewTab
+                runs={safeRuns}
+                now={now}
+                owner={owner}
+                repo={repo}
+                workflowId={Number(workflow_id)}
+                aiEnabled={aiEnabled && flags.aiInsights}
+                jobStats={jobStats}
+                jobStatsLoading={jobStatsLoading}
+                jobsDisabled={!flags.performanceTab}
+                onViewAllRuns={() => setTab("runs")}
+              />
+            </div>
+            <div hidden={tab !== "performance"}>
+              {flags.performanceTab
+                ? <PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} runs={safeRuns} />
+                : <DisabledFeature label="Performance" settingsHref="/settings?section=features" />}
+            </div>
+            <div hidden={tab !== "reliability"}>
+              {flags.reliabilityTab
+                ? <ReliabilityTab runs={safeRuns} completed={completed} anomalyMap={anomalyMap} owner={owner} repo={repo} workflowId={Number(workflow_id)} />
+                : <DisabledFeature label="Reliability" settingsHref="/settings?section=features" />}
+            </div>
+            <div hidden={tab !== "triggers"}><TriggersTab runs={safeRuns} /></div>
+            <div hidden={tab !== "dora"}><DoraTab runs={safeRuns} /></div>
+            <div hidden={tab !== "runs"}><RunsTab runs={safeRuns} owner={owner} repo={repo} onRefresh={refreshRuns} isRefreshing={runsValidating} anomalyMap={anomalyMap} /></div>
+          </>
+        )}
       </div>
-
-      {runsError && (
-        <div className="mb-4 flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-300 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {runsError.message ?? "Failed to load runs"}
-        </div>
-      )}
-
-      {/* ── top stat cards (always visible) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Success Rate" value={runsLoading ? "—" : `${successRate}%`}
-          sub={`${successCount} of ${completed.length} completed`}
-          icon={CheckCircle} iconColor="text-green-400"
-          tooltip="Percentage of completed runs (excluding cancelled/skipped) that finished with conclusion = success. Calculated over the runs loaded for this view." />
-        <StatCard label="Avg Duration" value={runsLoading ? "—" : formatDuration(avgDuration)}
-          sub={`p95: ${formatDuration(p95Duration)}`}
-          icon={Clock} iconColor="text-violet-400"
-          tooltip="Mean execution time (run_started_at → completed_at) — queue wait is excluded. The sub-label shows p95: the value 95% of runs finish under. Does NOT include time spent waiting for a runner." />
-        <StatCard label="Avg Queue Wait" value={runsLoading ? "—" : formatDuration(avgQueue)}
-          sub="Time before first step"
-          icon={Timer} iconColor="text-amber-400"
-          tooltip="Time from trigger (created_at) to runner ready (run_started_at) — a proxy for queue wait. Note: the true queue time (trigger → first job executing) is shown inside the expanded run detail and may be longer if setup jobs run first." />
-        <StatCard label="Total Runs" value={runsLoading ? "—" : safeRuns.length}
-          sub={`${failureCount} failed`}
-          icon={Activity} iconColor="text-blue-400"
-          tooltip="Total workflow runs loaded for this view. The sub-label shows how many completed runs ended with a failure conclusion." />
-      </div>
-
-      {/* ── tabs ── */}
-      <div
-        role="tablist"
-        aria-label="Workflow metrics tabs"
-        className="flex gap-1 mb-6 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit"
-      >
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`tabpanel-${t.id}`}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-              tab === t.id
-                ? "bg-slate-700 text-white shadow-sm"
-                : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-            )}
-          >
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── tab bodies ── */}
-      {runsLoading ? <LoadingSkeleton /> : (
-        <>
-          {/* All tabs are always mounted — display:none keeps charts alive so
-              Recharts never re-measures on switch, making tabs instant. */}
-          <div role="tabpanel" id="tabpanel-overview"     aria-labelledby="tab-overview"     hidden={tab !== "overview"}><OverviewTab    runs={safeRuns} completed={completed} /></div>
-          <div role="tabpanel" id="tabpanel-performance" aria-labelledby="tab-performance" hidden={tab !== "performance"}>
-            {flags.performanceTab
-              ? <PerformanceTab jobStats={jobStats} loading={jobStatsLoading} error={jobStatsError} analysedCount={Math.min(perPage, 30)} requestedCount={perPage} runs={safeRuns} />
-              : <DisabledFeature label="Performance Tab" settingsHref="/settings" />}
-          </div>
-          <div role="tabpanel" id="tabpanel-reliability" aria-labelledby="tab-reliability" hidden={tab !== "reliability"}>
-            {flags.reliabilityTab
-              ? <ReliabilityTab runs={safeRuns} completed={completed} anomalyMap={anomalyMap} owner={owner} repo={repo} workflowId={Number(workflow_id)} />
-              : <DisabledFeature label="Reliability Tab" settingsHref="/settings" />}
-          </div>
-          <div role="tabpanel" id="tabpanel-triggers"     aria-labelledby="tab-triggers"     hidden={tab !== "triggers"}><TriggersTab    runs={safeRuns} /></div>
-          <div role="tabpanel" id="tabpanel-dora"         aria-labelledby="tab-dora"         hidden={tab !== "dora"}><DoraTab        runs={safeRuns} /></div>
-          <div role="tabpanel" id="tabpanel-runs"         aria-labelledby="tab-runs"         hidden={tab !== "runs"}><RunsTab        runs={safeRuns} owner={owner} repo={repo} onRefresh={() => mutateRuns()} isRefreshing={runsValidating} anomalyMap={anomalyMap} /></div>
-        </>
-      )}
     </div>
   );
 }
@@ -398,174 +377,77 @@ function WorkflowContent() {
 // ══════════════════════════════════════════════════════════════════════════════
 // OVERVIEW TAB
 // ══════════════════════════════════════════════════════════════════════════════
-function OverviewTab({ runs, completed }: { runs: WorkflowRun[]; completed: WorkflowRun[] }) {
-  // ── Optimization tips ──────────────────────────────────────────────────────
+function OverviewTab({
+  runs, now, owner, repo, workflowId, aiEnabled, jobStats, jobStatsLoading, jobsDisabled, onViewAllRuns,
+}: {
+  runs: WorkflowRun[];
+  now: number;
+  owner: string;
+  repo: string;
+  workflowId: number;
+  aiEnabled: boolean;
+  jobStats?: JobStatsResponse;
+  jobStatsLoading: boolean;
+  jobsDisabled: boolean;
+  onViewAllRuns: () => void;
+}) {
+  // ── Optimization tips (dismissible) ────────────────────────────────────────
   const tips = useMemo(() => analyzeWorkflow(runs), [runs]);
   const [dismissedTips, setDismissedTips] = useState<Set<string>>(new Set());
-  const visibleTips = useMemo(
-    () => tips.filter((t) => !dismissedTips.has(t.id)),
-    [tips, dismissedTips],
-  );
-  const dismissTip = (id: string) =>
-    setDismissedTips((prev) => new Set(prev).add(id));
-
-  // rolling 7-run success rate
-  const rollingRate = useMemo(() => {
-    const window = 7;
-    return runs
-      .slice()
-      .reverse()
-      .map((_, i, arr) => {
-        const slice = arr.slice(Math.max(0, i - window + 1), i + 1).filter(r => r.status === "completed");
-        const ok = slice.filter(r => r.conclusion === "success").length;
-        return {
-          run: `#${arr[i].run_number}`,
-          rate: slice.length ? Math.round(ok / slice.length * 100) : null,
-        };
-      });
-  }, [runs]);
-
-  // duration over time — values in minutes (2 decimal places)
-  const durTrend = useMemo(() => runs
-    .filter(r => r.duration_ms !== undefined)
-    .slice().reverse()
-    .map(r => ({
-      run: `#${r.run_number}`,
-      duration: Math.round((r.duration_ms ?? 0) / 60000 * 100) / 100,
-      queue:    Math.round((r.queue_wait_ms ?? 0) / 60000 * 100) / 100,
-    })), [runs]);
-
-  // outcome breakdown
-  const breakdown = useMemo(() => {
-    const counts: Record<string, number> = {};
-    completed.forEach(r => { const k = r.conclusion ?? "unknown"; counts[k] = (counts[k] ?? 0) + 1; });
-    return Object.entries(counts).map(([name, value]) => ({ name, value, color: OUTCOME_COLORS[name] ?? "#94a3b8" }));
-  }, [completed]);
-
-  // frequency
-  const freqData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    runs.forEach(r => { const d = format(new Date(r.created_at), "MMM d"); counts[d] = (counts[d] ?? 0) + 1; });
-    return Object.entries(counts).map(([date, count]) => ({ date, count })).slice(-14);
-  }, [runs]);
+  const visibleTips = useMemo(() => tips.filter((t) => !dismissedTips.has(t.id)), [tips, dismissedTips]);
+  const dismissTip = (id: string) => setDismissedTips((prev) => new Set(prev).add(id));
+  const failed = runs.filter((r) => r.conclusion === "failure" || r.conclusion === "timed_out").length;
 
   return (
-    <div className="space-y-6">
-      {/* ── Optimization Tips (dismissible) ─────────────────────────────── */}
+    <div className="flex flex-col gap-7">
+      <WorkflowKpiStrip runs={runs} loading={false} />
+      <RunsBarChart runs={runs} />
+
+      <div className={cn("grid gap-4", aiEnabled && "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]")}>
+        {aiEnabled && (
+          <section aria-labelledby="why-failing" className="card p-5">
+            <div className="flex items-start justify-between gap-4 mb-2">
+              <h2 id="why-failing" className="text-[15px] font-semibold text-fg">Why it&apos;s failing</h2>
+              <span className="text-xs text-muted">AI hypotheses from {failed} failed run{failed === 1 ? "" : "s"}</span>
+            </div>
+            <RootCauseHypotheses owner={owner} repo={repo} workflowId={workflowId} />
+          </section>
+        )}
+        <JobTimeBreakdown jobStats={jobStats} loading={jobStatsLoading} disabled={jobsDisabled} />
+      </div>
+
+      <RecentRunsTable runs={runs} now={now} onViewAll={onViewAllRuns} />
+
       {visibleTips.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 mb-1">
-            <Lightbulb className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-semibold text-white">Optimization Tips</h3>
-            <span className="text-[10px] text-slate-500 ml-1">{visibleTips.length} suggestion{visibleTips.length !== 1 ? "s" : ""}</span>
+        <section aria-labelledby="tips-title" className="card p-5">
+          <div className="flex items-baseline gap-2.5 mb-3">
+            <h2 id="tips-title" className="text-[15px] font-semibold text-fg">Ways to speed this up</h2>
+            <span className="text-[13px] text-faint">{visibleTips.length} suggestion{visibleTips.length !== 1 ? "s" : ""}</span>
           </div>
-          {visibleTips.map((tip) => {
-            const style = SEVERITY_STYLES[tip.severity];
-            return (
-              <div
-                key={tip.id}
-                className={cn(
-                  "flex items-start gap-3 px-4 py-3 rounded-lg border",
-                  style.bg, style.border,
-                )}
-              >
-                <AlertCircle className={cn("w-4 h-4 shrink-0 mt-0.5", style.icon)} />
+          <ul>
+            {visibleTips.map((tip) => (
+              <li key={tip.id} className="flex items-start gap-3 py-3 border-b border-line last:border-0">
+                <Lightbulb className={cn("w-4 h-4 shrink-0 mt-0.5", tip.severity === "critical" ? "text-status-fail-text" : tip.severity === "warning" ? "text-status-warn-text" : "text-status-run-text")} aria-hidden="true" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={cn("text-xs font-semibold", style.text)}>{tip.title}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/50 text-slate-400">{CATEGORY_LABELS[tip.category]}</span>
-                    {tip.impact && (
-                      <span className="text-[10px] text-slate-500">{tip.impact}</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">{tip.description}</p>
+                  <p className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-fg">{tip.title}</span>
+                    <span className="text-xs text-faint">{CATEGORY_LABELS[tip.category]}{tip.impact ? ` · ${tip.impact}` : ""}</span>
+                  </p>
+                  <p className="mt-1 text-[13px] leading-5 text-muted">{tip.description}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => dismissTip(tip.id)}
-                  className="shrink-0 p-1 rounded hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors"
-                  aria-label={`Dismiss tip: ${tip.title}`}
+                  className="shrink-0 flex items-center justify-center w-8 h-8 rounded-control text-faint hover:text-fg hover:bg-raised"
+                  aria-label={`Dismiss suggestion: ${tip.title}`}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
-              </div>
-            );
-          })}
-        </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-
-      {/* rolling success + duration */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Rolling Success Rate" sub="7-run sliding window" tooltip="Moving average of the CI pass rate calculated over every 7 consecutive runs. Smooths out single-run noise — a sustained dip below 80% (red dashed line) indicates a systemic reliability problem, not just a fluke.">
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={rollingRate}>
-              <defs>
-                <linearGradient id="rateGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#4ade80" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
-              <Tooltip content={<ChartTip unit="%" />} />
-              <ReferenceLine y={80} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.5} />
-              <Area type="monotone" dataKey="rate" name="Success rate" stroke="#4ade80" fill="url(#rateGrad)" strokeWidth={2} dot={false} connectNulls />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Action Duration Trend" sub="Execution time · Queue wait (minutes, independent series)" tooltip="Two independent series — NOT stacked. Purple = execution time only (run_started_at → completed_at). Amber = queue wait only (created_at → run_started_at). A rising purple means the workflow is getting slower. A rising amber means runner capacity is the bottleneck. Total elapsed = purple + amber.">
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={durTrend}>
-              <defs>
-                <linearGradient id="durGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="queueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
-              <Tooltip content={<ChartTip unit="m" />} />
-              <Area type="monotone" dataKey="duration" name="Execution time" stroke="#7c3aed" fill="url(#durGrad)"   strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="queue"    name="Queue wait"     stroke="#f59e0b" fill="url(#queueGrad)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      {/* outcome + frequency */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        <ChartCard title="Outcome Breakdown" tooltip="Donut chart showing the distribution of run conclusions (success, failure, cancelled, skipped, timed_out) over the last 60 runs. A large failure or timed_out slice warrants immediate investigation.">
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={breakdown} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={3} dataKey="value">
-                {breakdown.map((e, i) => <Cell key={i} fill={e.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "8px", fontSize: "12px" }} />
-              <Legend formatter={v => <span className="text-xs text-slate-300 capitalize">{v}</span>} />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <div className="lg:col-span-2">
-          <ChartCard title="Run Frequency" sub="Runs per day (last 14 days)" tooltip="Number of workflow runs triggered each calendar day over the last 14 days. Gaps reveal days with no activity (weekend, holiday, or blocked pipelines). Unusual spikes may indicate retry storms or misconfigured triggers.">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={freqData} barSize={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip content={<ChartTip unit=" runs" />} />
-                <Bar dataKey="count" name="Runs" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </div>
-      </div>
     </div>
   );
 }
@@ -623,13 +505,13 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
             avg: Math.round(j.avg_ms / 60000 * 100) / 100,
             p95: Math.round(j.p95_ms / 60000 * 100) / 100,
           }))} layout="vertical" barSize={12} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-            <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
-            <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} width={180} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
+            <YAxis type="category" dataKey="name" tick={{ fill: "#A3A9B4", fontSize: 11 }} axisLine={false} tickLine={false} width={180} />
             <Tooltip content={<ChartTip unit="m" />} />
             <Legend formatter={v => <span className="text-xs text-slate-300">{v}</span>} />
-            <Bar dataKey="avg" name="Avg"  fill="#7c3aed" radius={[0, 4, 4, 0]} />
-            <Bar dataKey="p95" name="p95"  fill="#2563eb" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="avg" name="Avg"  fill="#A48BFF" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="p95" name="p95"  fill="#74B6F4" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -639,9 +521,9 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
         <ChartCard title="Job Composition per Run" sub="Stacked duration per run (minutes) — last 20 runs" tooltip="Stacked bar chart showing how each job contributed to total run duration for the last 20 runs. Useful for spotting which job dominates build time and whether that share is growing over time.">
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={waterfallData} barSize={14}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+              <XAxis dataKey="run" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
               <Tooltip content={<ChartTip unit="m" />} />
               <Legend formatter={v => <span className="text-xs text-slate-300">{v}</span>} />
               {allJobNames.map((name, i) => (
@@ -659,7 +541,7 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
             <thead>
               <tr className="border-b border-slate-700/50">
                 {["Step", "Job", "Runs", "Avg", "p95", "Max", "Success %"].map(h => (
-                  <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -714,11 +596,11 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
             <ChartCard title="Queue Wait Distribution" sub="How long runs wait for a runner">
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={queueDist} barSize={20}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<ChartTip unit=" runs" />} />
-                  <Bar dataKey="count" name="Runs" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" name="Runs" fill="#F5B544" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -727,11 +609,11 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
               <ChartCard title="Queue Wait Trend" sub="Wait time per run (minutes) — oldest to newest">
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={queueTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+                    <XAxis dataKey="run" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} unit="m" />
                     <Tooltip content={<ChartTip unit="m" />} />
-                    <Area type="monotone" dataKey="queue_min" name="Queue wait" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeWidth={2} />
+                    <Area type="monotone" dataKey="queue_min" name="Queue wait" stroke="#F5B544" fill="#F5B544" fillOpacity={0.15} strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -746,7 +628,7 @@ function PerformanceTab({ jobStats, loading, error, analysedCount, requestedCoun
                   <thead>
                     <tr className="border-b border-slate-700/50">
                       {["Branch", "Runs", "Avg Wait", "p95 Wait", "Delayed", "Time Wasted"].map(h => (
-                        <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -802,7 +684,7 @@ function QueueHeatmap({ cells }: { cells: { day: number; hour: number; avg_ms: n
           {/* hour labels */}
           <div className="flex mb-1 ml-10">
             {Array.from({ length: 24 }, (_, i) => (
-              <div key={i} className="flex-1 text-center text-[10px] text-slate-500 tabular-nums">
+              <div key={i} className="flex-1 text-center text-xs text-slate-500 tabular-nums">
                 {i % 3 === 0 ? `${i}` : ""}
               </div>
             ))}
@@ -810,7 +692,7 @@ function QueueHeatmap({ cells }: { cells: { day: number; hour: number; avg_ms: n
           {/* rows: one per day */}
           {HEATMAP_DAY_LABELS.map((dayLabel, dayIdx) => (
             <div key={dayIdx} className="flex items-center gap-1 mb-0.5">
-              <span className="w-9 text-right text-[11px] text-slate-400 shrink-0">{dayLabel}</span>
+              <span className="w-9 text-right text-xs text-slate-400 shrink-0">{dayLabel}</span>
               <div className="flex flex-1 gap-px">
                 {Array.from({ length: 24 }, (_, hour) => {
                   const cell = cells.find(c => c.day === dayIdx && c.hour === hour);
@@ -834,13 +716,13 @@ function QueueHeatmap({ cells }: { cells: { day: number; hour: number; avg_ms: n
           ))}
           {/* legend */}
           <div className="flex items-center justify-end gap-2 mt-2">
-            <span className="text-[10px] text-slate-500">Low</span>
+            <span className="text-xs text-slate-500">Low</span>
             <div className="flex gap-px">
               {["bg-slate-800/40", "bg-emerald-500/30", "bg-emerald-500/50", "bg-amber-500/40", "bg-orange-500/50", "bg-red-500/60"].map((bg, i) => (
                 <div key={i} className={cn("w-4 h-3 rounded-[2px]", bg)} />
               ))}
             </div>
-            <span className="text-[10px] text-slate-500">High</span>
+            <span className="text-xs text-slate-500">High</span>
           </div>
         </div>
       </div>
@@ -946,9 +828,9 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
       <ChartCard title="Pass / Fail Timeline" sub="1 = success · -1 = failure — ordered oldest → newest" tooltip="Visual timeline of run outcomes ordered chronologically. Green bars (+1) are successful runs; red bars (-1) are failures. Gaps or clusters of red immediately reveal the duration and pattern of outages. Hover any bar to see the run number and conclusion.">
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={timeline} barSize={6}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey="run" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-            <YAxis domain={[-1, 1]} ticks={[-1, 0, 1]} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+            <XAxis dataKey="run" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            <YAxis domain={[-1, 1]} ticks={[-1, 0, 1]} tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
@@ -961,12 +843,12 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
                 );
               }}
             />
-            <ReferenceLine y={0} stroke="#334155" />
+            <ReferenceLine y={0} stroke="#2A313C" />
             <Bar dataKey="v" name="Result" radius={[2, 2, 0, 0]}
-              fill="#4ade80"
+              fill="#3DD68C"
             >
               {timeline.map((entry, i) => (
-                <Cell key={i} fill={entry.v === 1 ? "#4ade80" : entry.v === -1 ? "#f87171" : "#94a3b8"} />
+                <Cell key={i} fill={entry.v === 1 ? "#3DD68C" : entry.v === -1 ? "#FF6B6B" : "#A3A9B4"} />
               ))}
             </Bar>
           </BarChart>
@@ -1011,7 +893,7 @@ function ReliabilityTab({ runs, completed, anomalyMap, owner, repo, workflowId }
                         </span>
                       ))}
                     </div>
-                    <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold border shrink-0", style.bg, style.text, style.border)}>
+                    <span className={cn("px-1.5 py-0.5 rounded text-xs font-semibold border shrink-0", style.bg, style.text, style.border)}>
                       {sev}
                     </span>
                   </div>
@@ -1244,7 +1126,7 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
               <Pie data={eventBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={76} paddingAngle={3} dataKey="value">
                 {eventBreakdown.map((_, i) => <Cell key={i} fill={JOB_PALETTE[i % JOB_PALETTE.length]} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "8px", fontSize: "12px" }} />
+              <Tooltip contentStyle={{ background: "#1E242D", border: "1px solid #2A313C", borderRadius: "8px", fontSize: "12px" }} />
               <Legend formatter={v => <span className="text-xs text-slate-300 capitalize">{v}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -1255,11 +1137,11 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
           <ChartCard title="Top Branches" sub="Branches with most runs">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={branchLeaderboard} layout="vertical" barSize={14}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="branch" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} width={120} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" horizontal={false} />
+                <XAxis type="number" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="branch" tick={{ fill: "#A3A9B4", fontSize: 11 }} axisLine={false} tickLine={false} width={120} />
                 <Tooltip content={<ChartTip unit=" runs" />} />
-                <Bar dataKey="count" name="Runs" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Runs" fill="#A48BFF" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -1271,11 +1153,11 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
         <ChartCard title="Hour of Day" sub="When runs are triggered (UTC)">
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={hourData} barSize={10}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="hour" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+              <XAxis dataKey="hour" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} interval={3} />
+              <YAxis tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip content={<ChartTip unit=" runs" />} />
-              <Bar dataKey="count" name="Runs" fill="#0891b2" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" name="Runs" fill="#4FD1E8" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -1283,11 +1165,11 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
         <ChartCard title="Day of Week" sub="When runs are triggered">
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={dayData} barSize={24}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
+              <XAxis dataKey="day" tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#7A818D", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip content={<ChartTip unit=" runs" />} />
-              <Bar dataKey="count" name="Runs" fill="#059669" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" name="Runs" fill="#3DD68C" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -1300,7 +1182,7 @@ function TriggersTab({ runs }: { runs: WorkflowRun[] }) {
             <thead>
               <tr className="border-b border-slate-700/50">
                 {["#", "Actor", "Runs", "Success %"].map(h => (
-                  <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">{h}</th>
+                  <th key={h} className="text-left px-3 py-2 text-xs font-medium text-slate-400">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1446,7 +1328,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
               <th className="w-8" />
               <SortTh col="run"      label="Run"     current={sortCol} dir={sortDir} onClick={() => toggleSort("run")} />
               <SortTh col="status"   label="Status"  current={sortCol} dir={sortDir} onClick={() => toggleSort("status")} />
-              <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap">Commit / PR</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">Commit / PR</th>
               <SortTh col="branch"   label="Branch"  current={sortCol} dir={sortDir} onClick={() => toggleSort("branch")} />
               <SortTh col="trigger"  label="Trigger" current={sortCol} dir={sortDir} onClick={() => toggleSort("trigger")} />
               <SortTh col="actor"    label="Actor"   current={sortCol} dir={sortDir} onClick={() => toggleSort("actor")} />
@@ -1494,7 +1376,7 @@ function RunsTab({ runs, owner, repo, onRefresh, isRefreshing, anomalyMap }: { r
                         const tooltipLines = a.anomalies.map(formatAnomalyTooltip);
                         return (
                           <span
-                            className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold border", style.bg, style.text, style.border)}
+                            className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold border", style.bg, style.text, style.border)}
                             title={tooltipLines.join("\n")}
                           >
                             Anomaly
@@ -1646,32 +1528,32 @@ function RunJobsRow({
               <span className="text-violet-300 tabular-nums">
                 {totalDuration != null ? formatDuration(totalDuration) : "—"}
               </span>
-              <span className="text-slate-500 font-normal ml-1 text-[11px]">(first job start → last job end)</span>
+              <span className="text-slate-500 font-normal ml-1 text-xs">(first job start → last job end)</span>
             </span>
             {trueQueueMs !== null && trueQueueMs > 0 && (
               <span className="text-xs text-slate-400">
                 Queue wait:&nbsp;
                 <span className="text-amber-300 tabular-nums">{formatDuration(trueQueueMs)}</span>
-                <span className="text-slate-500 font-normal ml-1 text-[11px]">(triggered → first job start)</span>
+                <span className="text-slate-500 font-normal ml-1 text-xs">(triggered → first job start)</span>
               </span>
             )}
           </div>
           {/* timestamps row */}
           <div className="flex flex-wrap gap-x-6 gap-y-0.5">
             {createdAt && (
-              <span className="text-[11px] tabular-nums">
+              <span className="text-xs tabular-nums">
                 <span className="text-slate-600">Triggered:</span>{" "}
                 <span className="text-slate-400">{new Date(createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
               </span>
             )}
             {ganttWindow && (
-              <span className="text-[11px] tabular-nums">
+              <span className="text-xs tabular-nums">
                 <span className="text-slate-600">First job:</span>{" "}
                 <span className="text-slate-400">{new Date(ganttWindow.minT).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
               </span>
             )}
             {ganttWindow && (
-              <span className="text-[11px] tabular-nums">
+              <span className="text-xs tabular-nums">
                 <span className="text-slate-600">Completed:</span>{" "}
                 <span className="text-slate-400">{new Date(ganttWindow.minT + ganttWindow.span).toISOString().replace("T", " ").slice(0, 19)} UTC</span>
               </span>
@@ -1683,7 +1565,7 @@ function RunJobsRow({
       {/* ── Gantt timeline ── */}
       {ganttWindow && (
         <div className="space-y-1.5">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Timeline</p>
+          <p className="text-xs text-slate-500 font-medium">Timeline</p>
           {jobs.map((job, ji) => {
             const jStart = job.started_at ? new Date(job.started_at).getTime() : null;
             const jEnd   = job.completed_at ? new Date(job.completed_at).getTime() : null;
@@ -1699,7 +1581,7 @@ function RunJobsRow({
             return (
               <div key={job.id} className="flex items-center gap-2">
                 {/* job name */}
-                <span className="w-40 shrink-0 text-[11px] text-slate-400 truncate text-right" title={job.name}>
+                <span className="w-40 shrink-0 text-xs text-slate-400 truncate text-right" title={job.name}>
                   {job.name}
                 </span>
                 {/* bar track */}
@@ -1713,14 +1595,14 @@ function RunJobsRow({
                   )}
                 </div>
                 {/* duration label */}
-                <span className="w-16 shrink-0 text-[11px] text-slate-500 tabular-nums text-right">
+                <span className="w-16 shrink-0 text-xs text-slate-500 tabular-nums text-right">
                   {job.duration_ms != null ? formatDuration(job.duration_ms) : "—"}
                 </span>
               </div>
             );
           })}
           {/* axis labels */}
-          <div className="flex ml-[10.5rem] mr-16 text-[10px] text-slate-600 tabular-nums">
+          <div className="flex ml-[10.5rem] mr-16 text-xs text-slate-600 tabular-nums">
             <span>0s</span>
             <span className="ml-auto">{formatDuration(ganttWindow.span)}</span>
           </div>
@@ -1856,7 +1738,7 @@ function DoraTab({ runs }: { runs: WorkflowRun[] }) {
         overallColors.bg, overallColors.border,
       )}>
         <div>
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-1">
+          <p className="text-xs text-slate-400 font-medium mb-1">
             Overall DORA Performance
           </p>
           <p className={cn("text-2xl font-bold", overallColors.text)}>
@@ -1898,14 +1780,14 @@ function DoraTab({ runs }: { runs: WorkflowRun[] }) {
                     <Icon className="w-3.5 h-3.5" />
                   </span>
                   <div className="flex items-center gap-0.5">
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <span className="text-xs font-medium text-slate-400">
                       {m.label}
                     </span>
                     <MetricTooltip text={m.tooltip} align="left" />
                   </div>
                 </div>
                 <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border",
+                  "px-2 py-0.5 rounded-full text-xs font-semibold capitalize border",
                   colors.bg, colors.border, colors.text,
                 )}>
                   {LEVEL_LABELS[m.level]}
@@ -1916,7 +1798,7 @@ function DoraTab({ runs }: { runs: WorkflowRun[] }) {
                 <p className="text-xs text-slate-400 mt-0.5">{m.sub}</p>
               </div>
               <div className="pt-2 border-t border-slate-700/40">
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   <span className="text-slate-400 font-medium">Benchmark:</span> {m.detail}
                 </p>
               </div>
@@ -1931,9 +1813,9 @@ function DoraTab({ runs }: { runs: WorkflowRun[] }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-700/50">
-                <th className="text-left px-3 py-2 text-slate-400 uppercase tracking-wider font-medium">Metric</th>
+                <th className="text-left px-3 py-2 text-slate-400 font-medium">Metric</th>
                 {LEVEL_ORDER_DISPLAY.map((lvl) => (
-                  <th key={lvl} className={cn("text-center px-3 py-2 uppercase tracking-wider font-medium", LEVEL_COLORS[lvl].text)}>
+                  <th key={lvl} className={cn("text-center px-3 py-2 font-medium", LEVEL_COLORS[lvl].text)}>
                     {LEVEL_LABELS[lvl]}
                   </th>
                 ))}
@@ -1991,7 +1873,7 @@ function ChartCard({ title, sub, tooltip, children }: { title: string; sub?: str
     try {
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: "#0f172a",
+        backgroundColor: "#13171D",
         scale: 2,
         useCORS: true,
         logging: false,

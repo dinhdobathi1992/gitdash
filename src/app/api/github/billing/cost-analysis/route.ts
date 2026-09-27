@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOrg, safeError } from "@/lib/validation";
 import { calculateBurnRate, type BurnRateProjection } from "@/lib/cost";
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute, recordGitHubCall } from "@/lib/github-telemetry";
+import { withCache, hashKey } from "@/lib/cache";
+import { foldUsageDetail, type BillingUsageDetailItem, type DailySpend, type RepoSpend } from "@/lib/cost-detail";
+
+export type { DailySpend, RepoSpend } from "@/lib/cost-detail";
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -23,6 +29,7 @@ interface BillingUsageItem {
 interface BillingUsageSummary {
   usageItems: BillingUsageItem[];
 }
+
 
 // ── Runner SKU → display name mapping ────────────────────────────────────────
 
@@ -71,6 +78,13 @@ export interface CostAnalysisResponse {
   burn_rate: BurnRateProjection;
   /** Year/month this data is for */
   period: { year: number; month: number };
+  /**
+   * Net spend per day split by runner OS, from the detailed usage endpoint.
+   * Absent when that endpoint is unavailable (the totals above still hold).
+   */
+  daily?: DailySpend[];
+  /** Spend per repository this period, highest first (detailed endpoint). */
+  repos?: RepoSpend[];
 }
 
 export interface CostAnalysisError {
@@ -94,9 +108,10 @@ async function fetchBillingUsageSummary(
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     },
-    // Next.js server fetch — no cache; we cache via Cache-Control header
+    // Next.js server fetch — no fetch cache; results are cached via withCache
     cache: "no-store",
   });
+  recordGitHubCall(hashKey(token), "GET", url, res.status, Object.fromEntries(res.headers));
   if (!res.ok) {
     let message = "";
     try { message = ((await res.json()) as { message?: string }).message ?? ""; } catch { /* ignore */ }
@@ -106,9 +121,31 @@ async function fetchBillingUsageSummary(
   return { ok: true, status: 200, data };
 }
 
+async function fetchBillingUsageDetail(
+  token: string,
+  path: string,
+  year: number,
+  month: number,
+): Promise<{ ok: boolean; items: BillingUsageDetailItem[] }> {
+  const url = `https://api.github.com/${path}?year=${year}&month=${month}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    cache: "no-store",
+  });
+  recordGitHubCall(hashKey(token), "GET", url, res.status, Object.fromEntries(res.headers));
+  if (!res.ok) return { ok: false, items: [] };
+  const data = (await res.json()) as { usageItems?: BillingUsageDetailItem[] };
+  return { ok: true, items: data.usageItems ?? [] };
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/billing/cost-analysis");
   const token = await getTokenFromSession();
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -127,13 +164,25 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const year = parseInt(url.searchParams.get("year") ?? String(now.getFullYear()), 10);
   const month = parseInt(url.searchParams.get("month") ?? String(now.getMonth() + 1), 10);
+  // Validated before use: both values go into the GitHub URL and the cache key.
+  if (!Number.isInteger(year) || year < 2020 || year > now.getFullYear() + 1) {
+    return NextResponse.json({ error: "Invalid year" }, { status: 400 });
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return NextResponse.json({ error: "Invalid month" }, { status: 400 });
+  }
 
   try {
     const apiPath = org
       ? `organizations/${org}/settings/billing/usage/summary`
-      : `users/${await getAuthenticatedLogin(token)}/settings/billing/usage/summary`;
+      : `users/${await withCache(`github/login:${hashKey(token)}`, CACHE_TTL, () => getAuthenticatedLogin(token), { shared: true, shouldCache: (l) => l !== "" })}/settings/billing/usage/summary`;
 
-    const result = await fetchBillingUsageSummary(token, apiPath, year, month);
+    const result = await withCache(
+      `github/billing/cost-analysis:${hashKey(token)}:${apiPath}:${year}:${month}`,
+      CACHE_TTL,
+      () => fetchBillingUsageSummary(token, apiPath, year, month),
+      { shared: true, shouldCache: (r) => r.ok },
+    );
 
     if (!result.ok || !result.data) {
       const status = result.status;
@@ -194,6 +243,18 @@ export async function GET(req: NextRequest) {
     // For burn rate we use totalMinutes; included_minutes unknown from new API so use 0
     const burnRate = calculateBurnRate(totalMinutes, 0, dayOfMonth, daysInMonth);
 
+    // Detailed usage (per day, per repository) powers the daily chart and the
+    // top-repositories list. Same permission as the summary; failure is not
+    // fatal — the page then shows totals only.
+    const detailPath = apiPath.replace(/\/usage\/summary$/, "/usage");
+    const detail = await withCache(
+      `github/billing/cost-detail:${hashKey(token)}:${detailPath}:${year}:${month}`,
+      CACHE_TTL,
+      () => fetchBillingUsageDetail(token, detailPath, year, month).catch(() => ({ ok: false, items: [] as BillingUsageDetailItem[] })),
+      { shared: true, shouldCache: (r) => r.ok },
+    );
+    const folded = detail.ok ? foldUsageDetail(detail.items) : null;
+
     const response: CostAnalysisResponse = {
       kind: org ? "org" : "user",
       login: org ?? "",
@@ -204,11 +265,12 @@ export async function GET(req: NextRequest) {
       total_discount_amount: totalDiscount,
       burn_rate: burnRate,
       period: { year, month },
+      ...(folded ? { daily: folded.daily, repos: folded.repos } : {}),
     };
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=600`,
+        ...gatedCacheHeaders(),
       },
     });
   } catch (e) {
@@ -226,6 +288,7 @@ async function getAuthenticatedLogin(token: string): Promise<string> {
     },
     cache: "no-store",
   });
+  recordGitHubCall(hashKey(token), "GET", "https://api.github.com/user", res.status, Object.fromEntries(res.headers));
   if (!res.ok) return "";
   const data = await res.json() as { login?: string };
   return data.login ?? "";

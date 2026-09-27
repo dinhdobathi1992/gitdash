@@ -75,13 +75,13 @@ export function ReviewerLoadMatrix({
         <table className="border-collapse">
           <thead>
             <tr>
-              <th className="py-1.5 px-2 text-[10px] text-slate-500 text-left font-normal">
+              <th className="py-1.5 px-2 text-xs text-slate-500 text-left font-normal">
                 Author \ Reviewer
               </th>
               {reviewers.map((r) => (
                 <th
                   key={r}
-                  className="py-1.5 px-1 text-[10px] text-slate-400 font-medium"
+                  className="py-1.5 px-1 text-xs text-slate-400 font-medium"
                   style={{ writingMode: "vertical-lr", transform: "rotate(180deg)", maxHeight: 80 }}
                 >
                   <span className="truncate block max-w-[80px]">{r}</span>
@@ -92,7 +92,7 @@ export function ReviewerLoadMatrix({
           <tbody>
             {authors.map((author) => (
               <tr key={author}>
-                <td className="py-0.5 px-2 text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                <td className="py-0.5 px-2 text-xs text-slate-400 font-medium whitespace-nowrap">
                   {author}
                 </td>
                 {reviewers.map((reviewer) => {
@@ -103,7 +103,7 @@ export function ReviewerLoadMatrix({
                       <div
                         title={`${author} → ${reviewer}: ${count} review${count !== 1 ? "s" : ""}`}
                         className={cn(
-                          "w-7 h-7 rounded-sm flex items-center justify-center text-[9px] font-mono transition-colors",
+                          "w-7 h-7 rounded-sm flex items-center justify-center text-xs font-mono transition-colors",
                           getCellColor(count),
                           count > 0 ? "text-slate-200" : "text-transparent"
                         )}
@@ -121,13 +121,13 @@ export function ReviewerLoadMatrix({
 
       {/* Legend */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[9px] text-slate-600">Fewer</span>
+        <span className="text-xs text-slate-600">Fewer</span>
         <div className="w-4 h-4 rounded-sm bg-slate-800/30" />
         <div className="w-4 h-4 rounded-sm bg-violet-900/40" />
         <div className="w-4 h-4 rounded-sm bg-violet-700/50" />
         <div className="w-4 h-4 rounded-sm bg-violet-500/50" />
         <div className="w-4 h-4 rounded-sm bg-violet-400/60" />
-        <span className="text-[9px] text-slate-600">More reviews</span>
+        <span className="text-xs text-slate-600">More reviews</span>
       </div>
     </div>
   );

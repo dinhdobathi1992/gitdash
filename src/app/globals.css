@@ -1,54 +1,292 @@
 @import "tailwindcss";
 
-/* ── Design system tokens ──────────────────────────────────────────────────── */
+/*
+ * GitDash design tokens — "Graphite console" (design contract v1, 2026-09-27)
+ *
+ * Drop-in for the token block at the top of src/app/globals.css (Tailwind v4).
+ * Existing variable names are kept so nothing that reads them breaks; new
+ * tokens are added alongside. The @theme block exposes every token to Tailwind
+ * utilities: bg-surface, text-muted, border-line, text-status-fail, …
+ *
+ * Source of truth: design/DESIGN-CONTRACT.md §3. Keep this file and
+ * tokens.json in sync with it.
+ */
+
 :root {
-  /* Surfaces */
-  --background: #020617;
-  --surface-1: #0f172a;   /* app background */
-  --surface-2: #1e293b;   /* card / sidebar */
-  --surface-3: #334155;   /* hover / active */
-  --border:     #334155;
-  --border-subtle: #1e293b;
+  /* ── Surfaces (darkest → lightest) ─────────────────────────────────────── */
+  --background: #0B0D11;      /* ground: page */
+  --surface-1: #0F1217;       /* panel: sidebar, inputs, table header */
+  --surface-2: #13171D;       /* surface: cards, tables */
+  --surface-3: #1C2230;       /* raised: selected nav, active row, avatar */
+  --surface-card-top: #161B23;    /* card gradient, top stop */
+  --surface-card-bottom: #12161C; /* card gradient, bottom stop */
 
-  /* Foreground */
-  --foreground: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-faint: #475569;
+  /* ── Lines ─────────────────────────────────────────────────────────────── */
+  --border-subtle: #1E242D;   /* card borders, row dividers */
+  --border: #232A34;          /* control borders: buttons, inputs, chips */
+  --border-strong: #2A313C;   /* form fields inside cards */
 
-  /* Brand */
-  --brand:      #7c3aed;   /* violet-700 */
-  --brand-soft: #4c1d95;
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --foreground: #EDEAE3;      /* primary — 15.0:1 on surface */
+  --text-muted: #A3A9B4;      /* secondary — 7.6:1 on surface */
+  --text-faint: #7A818D;      /* tertiary, captions — 4.6:1 on surface (floor) */
+  --text-disabled: #4B525E;   /* disabled only — not for information */
 
-  /* Status semantics */
-  --status-success: #22c55e;
-  --status-failure: #ef4444;
-  --status-warning: #f59e0b;
-  --status-info:    #3b82f6;
-  --status-neutral: #94a3b8;
+  /* ── Brand ─────────────────────────────────────────────────────────────── */
+  --brand: #6D4AFF;           /* primary button fill — white text 5.2:1 */
+  --brand-gradient-top: #8163FF;
+  --brand-gradient-bottom: #6440F5; /* white text at midpoint #7251FA: 4.9:1 */
+  --brand-soft: #221C45;      /* selected chip fill */
+  --brand-fg: #A48BFF;        /* active marks, focus ring, icons */
+  --brand-link: #B9A6FF;      /* links — 8.5:1 on surface */
+  --accent: #4FD1E8;          /* cyan: data series, running, info */
 
-  /* Chart palette (8-color cycle) */
-  --chart-1: #7c3aed;
-  --chart-2: #2563eb;
-  --chart-3: #06b6d4;
-  --chart-4: #10b981;
-  --chart-5: #f59e0b;
-  --chart-6: #ef4444;
-  --chart-7: #ec4899;
-  --chart-8: #8b5cf6;
+  /* ── Status: graphic colour (dots, bars, squares, lines) ──────────────── */
+  --status-success: #3DD68C;
+  --status-failure: #FF6B6B;
+  --status-warning: #F5B544;
+  --status-info: #4FD1E8;     /* running / in progress */
+  --status-neutral: #626A77;  /* cancelled / skipped — 3.3:1, meets 3:1 for graphics */
 
-  /* Spacing rhythm */
-  --page-padding: 2rem;
-  --section-gap: 1.5rem;
+  /* ── Status: text colour on tinted pills (all ≥ 7.9:1 on surface) ─────── */
+  --status-success-text: #5BE0A0;
+  --status-failure-text: #FF8A8A;
+  --status-warning-text: #F5B544;
+  --status-info-text: #6FDBEE;
+  --status-neutral-text: #A3A9B4;
 
-  /* Transition */
+  /* ── Status: pill / icon-box tints ─────────────────────────────────────── */
+  --status-success-tint: rgba(61, 214, 140, 0.12);
+  --status-failure-tint: rgba(255, 107, 107, 0.12);
+  --status-warning-tint: rgba(245, 181, 68, 0.14);
+  --status-info-tint: rgba(79, 209, 232, 0.12);
+  --status-neutral-tint: rgba(163, 169, 180, 0.10);
+
+  /* ── Chart series (categorical, in this order) ─────────────────────────── */
+  --chart-1: #A48BFF;  /* violet */
+  --chart-2: #4FD1E8;  /* cyan */
+  --chart-3: #F5B544;  /* amber */
+  --chart-4: #3DD68C;  /* green — avoid next to chart-5 without a shape cue */
+  --chart-5: #FF6B6B;  /* coral */
+  --chart-6: #74B6F4;  /* blue */
+  --chart-7: #8E9BFA;  /* periwinkle */
+  --chart-8: #A3A9B4;  /* grey, for "other" */
+  --chart-grid: #1E242D;
+  --chart-area-opacity: 0.12;
+
+  /* ── Heatmap ramp (sequential, violet) ─────────────────────────────────── */
+  --heat-0: #1A1F27;
+  --heat-1: #2E2660;
+  --heat-2: #4B3B99;
+  --heat-3: #7C5CFF;
+  --heat-4: #B9A6FF;   /* text on this step: #14102B, 8.7:1 */
+
+  /* ── Page atmosphere ──────────────────────────────────────────────────── */
+  --page-glow:
+    radial-gradient(900px 480px at 78% -8%, rgba(124, 92, 255, 0.13), transparent 70%),
+    radial-gradient(700px 420px at 28% -12%, rgba(79, 209, 232, 0.07), transparent 70%);
+
+  /* ── Layout ────────────────────────────────────────────────────────────── */
+  --sidebar-width: 232px;
+  --topbar-height: 56px;
+  --page-padding: 40px;      /* horizontal, desktop */
+  --page-padding-top: 32px;
+  --section-gap: 28px;
+  --card-gap: 16px;
+
+  /* ── Motion ────────────────────────────────────────────────────────────── */
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
 }
 
+@theme inline {
+  --color-ground: var(--background);
+  --color-panel: var(--surface-1);
+  --color-surface: var(--surface-2);
+  --color-raised: var(--surface-3);
+  --color-line: var(--border-subtle);
+  --color-control: var(--border);
+  --color-control-strong: var(--border-strong);
+  --color-fg: var(--foreground);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-disabled: var(--text-disabled);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
+  --color-link: var(--brand-link);
+  --color-accent: var(--accent);
+  --color-status-pass: var(--status-success);
+  --color-status-fail: var(--status-failure);
+  --color-status-warn: var(--status-warning);
+  --color-status-run: var(--status-info);
+  --color-status-neutral: var(--status-neutral);
+  --color-status-pass-text: var(--status-success-text);
+  --color-status-fail-text: var(--status-failure-text);
+  --color-status-warn-text: var(--status-warning-text);
+  --color-status-run-text: var(--status-info-text);
+  --color-status-neutral-text: var(--status-neutral-text);
+  --color-status-pass-tint: var(--status-success-tint);
+  --color-status-fail-tint: var(--status-failure-tint);
+  --color-status-warn-tint: var(--status-warning-tint);
+  --color-status-run-tint: var(--status-info-tint);
+  --color-status-neutral-tint: var(--status-neutral-tint);
+  --color-heat-0: var(--heat-0);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  /* Type — Geist and Geist Mono come from next/font in src/app/layout.tsx,
+   * which sets these variables on <body>. `inline` makes the utilities
+   * resolve the variable where they are used. */
+  --font-sans: var(--font-geist-sans), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Literal-valued theme tokens: Tailwind emits these as :root variables too,
+ * so var(--radius-card) and utilities like rounded-card, shadow-card,
+ * font-mono all work. Declared here only (not in :root) to avoid
+ * self-referencing names. */
+@theme {
+  /* ── Radius ────────────────────────────────────────────────────────────── */
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 20px;  /* sign-in card, modals */
+
+  /* ── Elevation ─────────────────────────────────────────────────────────── */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 16px 36px -20px rgba(0, 0, 0, 0.85);
+  --shadow-float: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 48px -16px rgba(0, 0, 0, 0.85);
+  --shadow-primary: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 20px -8px rgba(109, 74, 255, 0.75);
+}
+
+/* Focus ring — every interactive element, keyboard only. */
+:focus-visible {
+  outline: 2px solid var(--brand-fg);
+  outline-offset: 2px;
+}
+
+/* ── Palette bridge (design contract §10 step 2) ─────────────────────────────
+ * Remaps Tailwind's slate / violet / status scales onto the graphite palette
+ * so every page re-skins at once, including screens that were not redrawn.
+ * New or touched code uses the role tokens above (bg-surface, text-muted, …),
+ * never these scales. Text steps are chosen so no bridged text colour falls
+ * below the #7A818D contrast floor except slate-700+, which the codebase only
+ * uses for dividers and decorative icons.
+ */
+@theme {
+  --color-slate-50: #F5F3EE;
+  --color-slate-100: #EDEAE3;
+  --color-slate-200: #DDDCD6;
+  --color-slate-300: #C4C8CF;
+  --color-slate-400: #A3A9B4;
+  --color-slate-500: #8E95A1;
+  --color-slate-600: #7A818D;
+  --color-slate-700: #262D38;
+  --color-slate-800: #1C2230;
+  --color-slate-900: #13171D;
+  --color-slate-950: #0B0D11;
+
+  --color-violet-50: #F3EFFF;
+  --color-violet-100: #E6DEFF;
+  --color-violet-200: #D3C7FF;
+  --color-violet-300: #B9A6FF;
+  --color-violet-400: #A48BFF;
+  --color-violet-500: #7C5CFF;
+  --color-violet-600: #6D4AFF;
+  --color-violet-700: #5A3BE0;
+  --color-violet-800: #3D2D99;
+  --color-violet-900: #2A2350;
+  --color-violet-950: #1A1535;
+
+  --color-green-300: #8CEBBE;
+  --color-green-400: #5BE0A0;
+  --color-green-500: #3DD68C;
+  --color-green-600: #2FB574;
+  --color-emerald-200: #B5F3D5;
+  --color-emerald-300: #8CEBBE;
+  --color-emerald-400: #5BE0A0;
+  --color-emerald-500: #3DD68C;
+  --color-emerald-600: #2FB574;
+
+  --color-red-200: #FFC4C4;
+  --color-red-300: #FFA8A8;
+  --color-red-400: #FF8A8A;
+  --color-red-500: #FF6B6B;
+  --color-red-600: #E65555;
+  --color-rose-300: #FFA8A8;
+  --color-rose-400: #FF8A8A;
+
+  --color-amber-100: #FDEBC8;
+  --color-amber-200: #FADB9F;
+  --color-amber-300: #F8C972;
+  --color-amber-400: #F5B544;
+  --color-amber-500: #F5B544;
+  --color-amber-600: #D99A2B;
+  --color-yellow-300: #F8C972;
+  --color-yellow-400: #F5B544;
+  --color-yellow-500: #F5B544;
+
+  --color-cyan-300: #8FE3F1;
+  --color-cyan-400: #6FDBEE;
+  --color-cyan-500: #4FD1E8;
+  --color-sky-300: #8FE3F1;
+  --color-sky-400: #6FDBEE;
+  --color-sky-500: #4FD1E8;
+
+  --color-orange-300: #F8C972;
+  --color-orange-400: #F5B544;
+  --color-orange-500: #F5B544;
+  --color-teal-500: #4FD1E8;
+  --color-pink-500: #8E9BFA;
+
+  --color-blue-300: #A3CDF8;
+  --color-blue-400: #74B6F4;
+  --color-blue-500: #5AA3EE;
+}
+
+/* ── Composite surfaces ─────────────────────────────────────────────────── */
+
+/* Card: border-line + top-lit gradient + shadow-card (contract §3.3). */
+@utility card {
+  background: linear-gradient(180deg, var(--surface-card-top) 0%, var(--surface-card-bottom) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Primary button fill: gradient with the label on the #7251FA midpoint. */
+@utility bg-primary {
+  background: linear-gradient(180deg, var(--brand-gradient-top) 0%, var(--brand-gradient-bottom) 100%);
+  box-shadow: var(--shadow-primary);
+}
+
+/* Float card / toast / popover. */
+@utility float-card {
+  background: linear-gradient(180deg, #1B212B 0%, #151A22 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-float);
+}
+
+/* Main-column atmosphere: two faint radial lights at the top. */
+@utility page-glow {
+  background: var(--page-glow), var(--background);
+}
+
 /* Presentation mode — larger spacing and cleaner chrome */
 .presentation-mode {
-  --page-padding: 3rem;
-  --section-gap: 2.5rem;
+  --page-padding: 56px;
+  --section-gap: 40px;
   font-size: 1.05rem;
 }
 
@@ -62,9 +300,14 @@
   margin: 0 auto;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
 /* Scrollbar */
@@ -76,16 +319,16 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--text-disabled);
 }
 
 /* ── Shimmer skeleton ────────────────────────────────────────────────────────
    Usage: add class="skeleton" to any placeholder shape.
-   The highlight sweeps left→right over a dark base.
+   The highlight sweeps left→right over the surface colour.
    ─────────────────────────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% center; }
@@ -95,11 +338,32 @@ body {
 .skeleton {
   background: linear-gradient(
     90deg,
-    #1e293b 25%,   /* slate-800 — base */
-    #334155 50%,   /* slate-700 — highlight peak */
-    #1e293b 75%    /* slate-800 — base again */
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
   /* border-radius intentionally omitted — use rounded-* Tailwind classes per shape */
+}
+
+/* Native checkbox tint for the access matrix and forms. */
+input[type="checkbox"] {
+  accent-color: #7C5CFF;
+}
+
+/* Contract §8: no shimmer, and no transition longer than 120 ms. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

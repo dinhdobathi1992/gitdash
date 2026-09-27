@@ -1,606 +1,127 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+/**
+ * Repository overview — `Repo` / `MobileRepo` artboards, contract §9.
+ * AI summary · delivery performance (4 DORA cards + estimation note) ·
+ * run duration + outcomes · workflows preview. Pull request lifecycle now
+ * lives on its own tab (/pulls).
+ */
+
+import { useState } from "react";
 import dynamic from "next/dynamic";
-import useSWR from "swr";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import useSWR from "swr";
+import { useParams } from "next/navigation";
+import { BarChart3 } from "lucide-react";
 import { fetcher } from "@/lib/swr";
-import { WorkflowOverview } from "@/lib/github";
+import type { WorkflowOverview } from "@/lib/github";
 import type { RepoDoraSummaryWithFetchStatus } from "@/lib/github-dora";
-import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
-import { RunHistoryBars, TrendSparkline, StatusBadge, HealthScoreRing } from "@/components/WorkflowMetrics";
 import { DoraKpiCards, DoraKpiSkeleton } from "@/components/DoraKpiCards";
 import PartialDataBadge from "@/components/PartialDataBadge";
 import AiInsightsCard from "@/components/AiInsightsCard";
 import DeploymentsPanel from "@/components/DeploymentsPanel";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import type { OpenPrHealthResponse } from "@/app/api/github/open-pr-health/route";
-import {
-  AlertCircle, ExternalLink, GitBranch, FileCode, RefreshCw,
-  Search, X, ChevronRight, Zap, Shield, Users, ShieldCheck, CircleDot, BarChart3,
-} from "lucide-react";
-import { cn, fuzzyMatch, highlightSegments } from "@/lib/utils";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from "@/components/charts";
+import { RepoPage } from "@/components/repo/RepoHeader";
+import { RunDurationChart } from "@/components/repo/RunDurationChart";
+import { OutcomesCard } from "@/components/repo/OutcomesCard";
+import { WorkflowsTable } from "@/components/repo/WorkflowsTable";
+import { ErrorBanner } from "@/components/ui/Card";
+import { useNow } from "@/lib/use-alerts";
 
-// ── Lazily-loaded chart sections ──────────────────────────────────────────────
-// Both are collapsed by default (behind "Show ..." toggles below) and pull in
-// Recharts — loading them only when the user actually expands the section
-// keeps them out of this page's initial JS payload.
+// Collapsed by default and Recharts-heavy: load only when expanded.
 const DoraDrillDown = dynamic(
   () => import("@/components/DoraDrillDown").then((m) => m.DoraDrillDown),
   { ssr: false },
 );
-const PrLifecycleExtension = dynamic(
-  () => import("@/components/PrLifecycleExtension").then((m) => m.PrLifecycleExtension),
-  { ssr: false, loading: () => <PrLifecycleInlineSkeleton /> },
-);
 
-function PrLifecycleInlineSkeleton() {
-  return (
-    <div className="mt-3 space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-            <div className="h-3 w-20 rounded skeleton mb-3" />
-            <div className="h-6 w-12 rounded skeleton" />
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-            <div className="h-4 w-40 rounded skeleton mb-2" />
-            <div className="h-3 w-56 rounded skeleton mb-4" />
-            <div className="h-32 rounded skeleton" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Colour palette for up to 10 workflow lines ────────────────────────────────
-const LINE_COLORS = [
-  "#7c3aed", "#2563eb", "#0891b2", "#059669",
-  "#d97706", "#dc2626", "#db2777", "#0d9488",
-  "#4f46e5", "#6366f1",
-];
-
-// ── Highlighted text ──────────────────────────────────────────────────────────
-function Highlighted({ text, indices }: { text: string; indices: number[] }) {
-  const segments = highlightSegments(text, indices);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.highlight
-          ? <mark key={i} className="bg-transparent text-violet-300 font-semibold">{seg.text}</mark>
-          : <span key={i}>{seg.text}</span>
-      )}
-    </>
-  );
-}
-
-// ── Duration chart (multi-workflow lines) ─────────────────────────────────────
-function DurationChart({ workflows }: { workflows: WorkflowOverview[] }) {
-  // Build a unified dataset bucketed by calendar day (YYYY-MM-DD).
-  // Multiple runs on the same day are averaged per workflow so lines connect
-  // across days even when workflows don't fire at the exact same instant.
-  const withData = workflows.filter((wf) => wf.dur_points.length > 0);
-
-  if (withData.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-40 text-slate-600 text-sm italic">
-        No completed runs to display
-      </div>
-    );
-  }
-
-  // Collect all days across all workflows, sorted
-  const allDays = Array.from(
-    new Set(withData.flatMap((wf) => wf.dur_points.map((p) => p.created_at.slice(0, 10))))
-  ).sort();
-
-  // Build chart data: each row = one calendar day, value = avg duration in min
-  const data = allDays.map((day) => {
-    const row: Record<string, string | number> = {
-      time: new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    };
-    for (const wf of withData) {
-      const pts = wf.dur_points.filter((p) => p.created_at.startsWith(day));
-      if (pts.length > 0) {
-        const avg = pts.reduce((sum, p) => sum + p.duration_ms, 0) / pts.length;
-        row[wf.name] = Math.round(avg / 60000 * 100) / 100;
-      }
-    }
-    return row;
-  });
-
-  // Only show last 30 days for legibility
-  const sliced = data.slice(-30);
-
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={sliced} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-        <XAxis
-          dataKey="time"
-          tick={{ fill: "#64748b", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          unit="m"
-          width={32}
-        />
-        <Tooltip
-          contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-          labelStyle={{ color: "#94a3b8", marginBottom: 4 }}
-          formatter={(val) => val !== undefined ? [`${val} min`, ""] : ["—", ""]}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 8 }}
-        />
-        {withData.map((wf, i) => (
-          <Line
-            key={wf.id}
-            type="monotone"
-            dataKey={wf.name}
-            stroke={LINE_COLORS[i % LINE_COLORS.length]}
-            strokeWidth={1.5}
-            dot={false}
-            connectNulls
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
-// ── Workflow table row ────────────────────────────────────────────────────────
-function WorkflowRow({
-  owner, repo, wf, nameIndices, active,
-}: {
-  owner: string;
-  repo: string;
-  wf: WorkflowOverview;
-  nameIndices: number[];
-  active: boolean;
-}) {
-  const ref = useRef<HTMLTableRowElement>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView({ block: "nearest" });
-  }, [active]);
-
-  return (
-    <tr
-      ref={ref}
-      className={cn(
-        "group border-b border-slate-800 hover:bg-slate-800/50 transition-colors",
-        active && "bg-slate-800/60 ring-1 ring-inset ring-violet-500/30"
-      )}
-    >
-      {/* Workflow name + path */}
-      <td className="py-3.5 pl-5 pr-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-            <Zap className="w-3.5 h-3.5 text-violet-400" />
-          </div>
-          <div className="min-w-0">
-            <Link
-              href={`/repos/${owner}/${repo}/workflows/${wf.id}`}
-              className="text-sm font-semibold text-white hover:text-violet-300 transition-colors truncate block"
-            >
-              <Highlighted text={wf.name} indices={nameIndices} />
-            </Link>
-            <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-              <FileCode className="w-3 h-3 shrink-0" />
-              {wf.path}
-            </p>
-          </div>
-        </div>
-      </td>
-
-      {/* Status */}
-      <td className="py-3.5 px-4 w-36">
-        <StatusBadge summary={wf.summary} />
-      </td>
-
-      {/* Health Score */}
-      <td className="py-3.5 px-4 w-36">
-        <HealthScoreRing summary={wf.summary} />
-      </td>
-
-      {/* Run History (10) */}
-      <td className="py-3.5 px-4 w-48">
-        <RunHistoryBars runs={wf.summary.recent_runs} />
-      </td>
-
-      {/* Trend (30d) */}
-      <td className="py-3.5 px-4 w-36">
-        <TrendSparkline points={wf.summary.trend_30d} />
-      </td>
-
-      {/* Arrow */}
-      <td className="py-3.5 pr-5 w-10 text-right">
-        <Link
-          href={`/repos/${owner}/${repo}/workflows/${wf.id}`}
-          className="inline-flex text-slate-600 group-hover:text-slate-300 transition-colors"
-          aria-label={`Open ${wf.name}`}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Link>
-      </td>
-    </tr>
-  );
-}
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-function Skeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Chart skeleton */}
-      <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5">
-        <div className="h-4 w-40 rounded skeleton mb-1.5" />
-        <div className="h-3 w-56 rounded skeleton mb-5" />
-        <div className="h-48 rounded skeleton" />
-      </div>
-      {/* Table skeleton */}
-      <div className="rounded-xl border border-slate-700/50 overflow-hidden">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-slate-700/50 bg-slate-900/60">
-              {["Workflow", "Status", "Health", "Run History (10)", "Trend (30d)", ""].map((h, i) => (
-                <th key={i} className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <tr key={i} className="border-b border-slate-700/30">
-                <td className="py-4 pl-5 pr-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg skeleton" />
-                    <div>
-                      <div className="h-4 w-32 rounded skeleton mb-1.5" />
-                      <div className="h-3 w-48 rounded skeleton" />
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4"><div className="h-5 w-16 rounded-full skeleton" /></td>
-                <td className="py-4 px-4"><div className="h-5 w-12 rounded skeleton" /></td>
-                <td className="py-4 px-4">
-                  <div className="flex items-end gap-0.5 h-6">
-                    {Array.from({ length: 10 }).map((_, j) => (
-                      <div key={j} className="w-2.5 h-full rounded-sm skeleton" />
-                    ))}
-                  </div>
-                </td>
-                <td className="py-4 px-4"><div className="h-8 w-28 rounded skeleton" /></td>
-                <td className="py-4 pr-5" />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function RepoDetailPage() {
   const { owner, repo } = useParams<{ owner: string; repo: string }>();
-  const router = useRouter();
   const { flags } = useFeatureFlags();
-
-  const {
-    data: overview, error, isLoading, isValidating, mutate,
-  } = useSWR<WorkflowOverview[]>(
-    `/api/github/repo-overview?owner=${owner}&repo=${repo}`,
-    fetcher<WorkflowOverview[]>
-  );
-
-  const {
-    data: dora, isLoading: doraLoading,
-  } = useSWR<RepoDoraSummaryWithFetchStatus>(
-    flags.dora ? `/api/github/repo-dora?owner=${owner}&repo=${repo}` : null,
-    fetcher<RepoDoraSummaryWithFetchStatus>
-  );
-
-  const {
-    data: prHealth, isLoading: prHealthLoading,
-  } = useSWR<OpenPrHealthResponse>(
-    flags.prLifecycle ? `/api/github/open-pr-health?owner=${owner}&repo=${repo}` : null,
-    fetcher<OpenPrHealthResponse>
-  );
-
+  const now = useNow();
   const [showDrillDown, setShowDrillDown] = useState(false);
-  const [showPrLifecycle, setShowPrLifecycle] = useState(false);
 
-  const [search, setSearch] = useState("");
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const { data: overview, error, isLoading, mutate } = useSWR<WorkflowOverview[]>(
+    `/api/github/repo-overview?owner=${owner}&repo=${repo}`,
+    fetcher<WorkflowOverview[]>,
+  );
+  const { data: dora, isLoading: doraLoading, error: doraError } = useSWR<RepoDoraSummaryWithFetchStatus>(
+    flags.dora ? `/api/github/repo-dora?owner=${owner}&repo=${repo}` : null,
+    fetcher<RepoDoraSummaryWithFetchStatus>,
+  );
 
-  // Fuzzy filter
-  type Match = { wf: WorkflowOverview; nameIndices: number[] };
-  const filtered = useMemo<Match[]>(() => {
-    if (!overview) return [];
-    const q = search.trim();
-    return overview.flatMap((wf) => {
-      if (!q) return [{ wf, nameIndices: [] }];
-      const nameResult = fuzzyMatch(wf.name, q);
-      const pathResult = fuzzyMatch(wf.path, q);
-      if (nameResult.match) return [{ wf, nameIndices: nameResult.indices }];
-      if (pathResult.match) return [{ wf, nameIndices: [] }];
-      return [];
-    });
-  }, [overview, search]);
-
-  const clampedActiveIndex = Math.min(activeIndex, filtered.length - 1);
-
-  // "/" shortcut
-  const handleGlobalKey = useCallback((e: KeyboardEvent) => {
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleGlobalKey);
-    return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, [handleGlobalKey]);
-
-  function handleSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Escape") {
-      if (search) { setSearch(""); setActiveIndex(-1); }
-      else searchRef.current?.blur();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, -1));
-    } else if (e.key === "Enter" && clampedActiveIndex >= 0) {
-      const hit = filtered[clampedActiveIndex];
-      if (hit) router.push(`/repos/${owner}/${repo}/workflows/${hit.wf.id}`);
-    }
-  }
-
-  const totalWorkflows = overview?.length ?? 0;
+  const workflows = overview ?? [];
+  const noWorkflows = !isLoading && !error && workflows.length === 0;
 
   return (
-    <div className="p-8">
-      <RepoWorkflowBreadcrumb owner={owner} repo={repo} />
-
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white font-mono">{owner}/{repo}</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {isLoading
-              ? "Loading workflows..."
-              : search
-                ? `${filtered.length} of ${totalWorkflows} workflows`
-                : `${totalWorkflows} workflow${totalWorkflows !== 1 ? "s" : ""} found`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/repos/${owner}/${repo}/audit`}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <Shield className="w-3.5 h-3.5" /> Audit Trail
-          </Link>
-          <Link
-            href={`/repos/${owner}/${repo}/team`}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <Users className="w-3.5 h-3.5" /> Team
-          </Link>
-          <Link
-            href={`/repos/${owner}/${repo}/issues`}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <CircleDot className="w-3.5 h-3.5" /> Issues
-          </Link>
-          <Link
-            href={`/repos/${owner}/${repo}/security`}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" /> Security
-          </Link>
-          <button
-            onClick={() => mutate()}
-            disabled={isValidating}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", isValidating && "animate-spin")} />
-            Refresh
-          </button>
-          <a
-            href={`https://github.com/${owner}/${repo}/actions`}
-            target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> View on GitHub
-          </a>
-        </div>
-      </div>
-
-      {/* Error */}
+    <RepoPage owner={owner} repo={repo}>
       {error && (
-        <div className="mb-4 flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-300 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error.message ?? "Failed to load workflows"}
-        </div>
+        <ErrorBanner message={`Couldn't load workflows: ${(error as Error).message}`} onRetry={() => mutate()} />
       )}
 
-      {isLoading ? (
-        <Skeleton />
-      ) : totalWorkflows === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-          <GitBranch className="w-10 h-10 text-slate-600" />
-          <p className="text-slate-400 text-sm">No GitHub Actions workflows found in this repository.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* AI Insights — renders nothing unless the server has provider keys */}
-          <AiInsightsCard surface="repo" owner={owner} repo={repo} />
+      {/* Renders nothing unless the server has AI provider keys. */}
+      {!noWorkflows && <AiInsightsCard surface="repo" owner={owner} repo={repo} />}
 
-          {/* DORA KPI Cards */}
-          {flags.dora ? (
-            doraLoading ? (
-              <DoraKpiSkeleton />
-            ) : dora ? (
-              <div className="space-y-4">
-                {dora.partial && (
-                  <PartialDataBadge fetched={dora.fetched_prs} total={dora.total_prs_attempted} unit="PRs" />
-                )}
-                <DoraKpiCards data={dora} />
-                <CollapsibleSection
-                  icon={BarChart3}
-                  tone="violet"
-                  title="DORA drill-down"
-                  subtitle="Cycle time breakdown, PR size vs velocity, throughput and workflow stability — what the four numbers above are made of"
-                  open={showDrillDown}
-                  onToggle={() => setShowDrillDown(v => !v)}
-                >
-                  {overview ? (
-                    <DoraDrillDown dora={dora} overview={overview} />
-                  ) : (
-                    <p className="text-xs text-slate-500">Workflow data is still loading.</p>
-                  )}
-                </CollapsibleSection>
-              </div>
-            ) : null
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-800 bg-slate-900/30 text-xs text-slate-500">
-              <Zap className="w-3.5 h-3.5 shrink-0" />
-              DORA Metrics are disabled — enable in <a href="/settings" className="text-violet-400 hover:underline ml-1">Settings → Feature Flags</a>
+      {flags.dora && (
+        <section id="delivery" aria-labelledby="delivery-title" className="flex flex-col gap-3 scroll-mt-20">
+          <div className="flex items-baseline justify-between gap-4 flex-wrap">
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <h2 id="delivery-title" className="text-[15px] font-semibold text-fg">Delivery performance</h2>
+              <span className="text-[13px] text-faint">DORA · last {dora?.deployment_frequency.period_days ?? 30} days</span>
             </div>
-          )}
-
-          {/* Deployments — sits directly beneath the DORA cards because it
-              qualifies them: measured figures when the repo uses GitHub
-              deployments, otherwise an explanation of what "estimated" means. */}
-          {flags.dora && <DeploymentsPanel owner={owner} repo={repo} />}
-
-          {/* PR Lifecycle Extension */}
-          {flags.prLifecycle ? (
-            <CollapsibleSection
-              icon={GitBranch}
-              tone="cyan"
-              title="PR Lifecycle Analytics"
-              subtitle="Open PR health, review response times, abandon rate and age distribution"
-              open={showPrLifecycle}
-              onToggle={() => setShowPrLifecycle(v => !v)}
-            >
-              {prHealthLoading ? (
-                <PrLifecycleInlineSkeleton />
-              ) : prHealth ? (
-                <PrLifecycleExtension data={prHealth} />
-              ) : (
-                <p className="text-xs text-slate-500">PR lifecycle data is unavailable.</p>
-              )}
-            </CollapsibleSection>
+            {dora && (
+              <p className="text-xs text-muted">
+                {dora.releases_analysed > 0
+                  ? `Deploys counted from ${dora.releases_analysed} GitHub releases.`
+                  : "Estimated from merged pull requests — this repo doesn't publish GitHub releases."}{" "}
+                <Link href="/docs#metrics-dora" className="font-medium text-link hover:text-violet-200">How it&apos;s measured</Link>
+              </p>
+            )}
+          </div>
+          {doraLoading ? (
+            <DoraKpiSkeleton />
+          ) : doraError ? (
+            <ErrorBanner message="Couldn't load delivery metrics for this repository." />
+          ) : dora ? (
+            <>
+              {dora.partial && <PartialDataBadge fetched={dora.fetched_prs} total={dora.total_prs_attempted} unit="PRs" />}
+              <DoraKpiCards data={dora} />
+              <DeploymentsPanel owner={owner} repo={repo} />
+              <CollapsibleSection
+                icon={BarChart3}
+                tone="violet"
+                title="DORA drill-down"
+                subtitle="Cycle time breakdown, pull request size against speed, throughput and workflow stability"
+                open={showDrillDown}
+                onToggle={() => setShowDrillDown((v) => !v)}
+              >
+                {overview ? <DoraDrillDown dora={dora} overview={overview} /> : <p className="text-sm text-muted">Workflow data is still loading.</p>}
+              </CollapsibleSection>
+            </>
           ) : null}
-
-          {/* Duration chart */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-            <h2 className="text-sm font-semibold text-white mb-0.5">Action Duration Trend</h2>
-            <p className="text-xs text-slate-500 mb-4">Run time per workflow (minutes) — last 30 runs each</p>
-            <DurationChart workflows={overview ?? []} />
-          </div>
-
-          {/* Search — only when >1 workflow */}
-          {totalWorkflows > 1 && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                ref={searchRef}
-                type="text"
-                placeholder="Search workflows… (press / to focus)"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={handleSearchKey}
-                className="w-full pl-9 pr-9 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50"
-              />
-              {search && (
-                <button
-                  onClick={() => { setSearch(""); searchRef.current?.focus(); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
-                  aria-label="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Workflow table */}
-          <div className="rounded-xl border border-slate-800 overflow-hidden">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/60">
-                  <th className="py-2.5 pl-5 pr-4 text-left text-xs font-medium text-slate-400 tracking-wide">
-                    Workflow
-                  </th>
-                  <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
-                    Status
-                  </th>
-                  <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
-                    Health
-                  </th>
-                  <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-48">
-                    Run History (10)
-                  </th>
-                  <th className="py-2.5 px-4 text-left text-xs font-medium text-slate-400 tracking-wide w-36">
-                    Trend (30d)
-                  </th>
-                  <th className="py-2.5 pr-5 w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-16 text-center text-slate-500 text-sm">
-                      {search ? (
-                        <span>
-                          No workflows match &ldquo;{search}&rdquo;{" "}
-                          <button onClick={() => setSearch("")} className="text-violet-400 hover:text-violet-300 ml-1">
-                            Clear
-                          </button>
-                        </span>
-                      ) : "No workflows found."}
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map(({ wf, nameIndices }, i) => (
-                    <WorkflowRow
-                      key={wf.id}
-                      owner={owner}
-                      repo={repo}
-                      wf={wf}
-                      nameIndices={nameIndices}
-                      active={i === clampedActiveIndex}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        </section>
       )}
-    </div>
+
+      {noWorkflows ? (
+        <p className="card px-5 py-5 text-sm text-muted">This repository has no GitHub Actions workflows.</p>
+      ) : (
+        <>
+          <div className="hidden sm:grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-4">
+            {isLoading ? (
+              <>
+                <div className="card h-[330px] skeleton" />
+                <div className="card h-[330px] skeleton" />
+              </>
+            ) : (
+              <>
+                <RunDurationChart workflows={workflows} />
+                <OutcomesCard owner={owner} repo={repo} workflows={workflows} now={now} jobsEnabled={flags.performanceTab} />
+              </>
+            )}
+          </div>
+          <WorkflowsTable owner={owner} repo={repo} workflows={workflows} now={now} limit={6} loading={isLoading} />
+        </>
+      )}
+    </RepoPage>
   );
 }

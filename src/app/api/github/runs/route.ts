@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { listWorkflowRuns } from "@/lib/github";
 import { validateOwner, validateRepo, validateId, validatePerPage, safeError } from "@/lib/validation";
+import { polledCacheHeaders, wantsFresh } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { withCache, hashKey } from "@/lib/cache";
 
-const CACHE_TTL = 120; // 2 min — runs update infrequently; 30s caused excessive GitHub API calls
+// Server-side TTL. The workflow page polls every 30s while a run is in
+// progress, so this stays short; unchanged re-fetches are free via ETag 304s.
+const CACHE_TTL = 15;
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/runs");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -24,15 +30,14 @@ export async function GET(req: NextRequest) {
   if (!perPageResult.ok) return perPageResult.response;
 
   try {
-    const runs = await listWorkflowRuns(
-      token,
-      ownerResult.data,
-      repoResult.data,
-      workflowIdResult.data,
-      perPageResult.data
+    const runs = await withCache(
+      `github/runs:${hashKey(token)}:${ownerResult.data}:${repoResult.data}:${workflowIdResult.data}:${perPageResult.data}`,
+      CACHE_TTL,
+      () => listWorkflowRuns(token, ownerResult.data, repoResult.data, workflowIdResult.data, perPageResult.data),
+      { shared: true, refresh: wantsFresh(req) },
     );
     return NextResponse.json(runs, {
-      headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=300` },
+      headers: polledCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch workflow runs");

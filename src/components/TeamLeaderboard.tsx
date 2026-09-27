@@ -115,7 +115,7 @@ export function TeamLeaderboard({
               >
                 <td className="py-3 pl-5 pr-4 sticky left-0 bg-slate-950/90 z-10">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-[10px] text-slate-600 font-mono w-4 text-right shrink-0">
+                    <span className="text-xs text-slate-600 font-mono w-4 text-right shrink-0">
                       {i + 1}
                     </span>
                     {/* eslint-disable-next-line @next/next/no-img-element */}

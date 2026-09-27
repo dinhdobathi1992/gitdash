@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [4.5.0] - 2026-09-27
+
+### Added
+- **"Graphite console" redesign** (`design/DESIGN-CONTRACT.md`): new tokens and palette, grouped sidebar with
+  org switcher, pinned repos and API budget; top bar with ⌘K search, refresh and alerts; phone tab bar;
+  redesigned Repositories, repository overview (new Workflows and Pull requests tabs), workflow detail,
+  Team, Cost (daily spend by runner, top repositories, savings estimates), Alerts, Settings (access by
+  group, members, audit log, my features) and sign-in. App footer removed.
+- **GitHub API caching:** every GitHub read route is cached per token; a shared Postgres layer
+  (`api_cache`) lets replicas reuse results; rate-limit telemetry (`GITDASH_GH_LOG=1`) and a
+  low-budget warning; Refresh buttons bypass all caches.
+- **Organization-mode permissions:** fixed groups (`devops`, `security`, `dev`, `pm`, `admin`),
+  per-group feature grants managed at `/admin` (users, permission matrix, audit log), server-side
+  enforcement in `src/proxy.ts`, `/pending` for users without a group.
+- **PAT sign-in in organization mode** on `/login`, and `GITDASH_ALLOWED_ORGS` to restrict sign-in.
+
+### Changed — **breaking for organization mode**
+- Organization mode now **requires** `DATABASE_URL` and `GITDASH_ADMIN_GITHUB_IDS`; the app refuses
+  to start and `/api/health` returns 503 without them. Roll out with `GITDASH_RBAC_ENFORCE=false`.
+- Alert rule destinations, AI/email settings and manual DB sync are admin-only in organization mode.
+- `src/middleware.ts` is replaced by `src/proxy.ts` (Next.js 16 convention).
+- Browser caching: per-user API responses send `Vary: Cookie`; routes behind Refresh buttons are not
+  browser-cached.
+
+### Migrations
+- v8 `api_cache`, v9 `users` / `user_groups` / `group_flags` / `permission_audit` (additive).
+  Migrations now run in one locked transaction each, safe with several replicas.
+
+---
 ## [4.2.9] — 2026-09-04
 
 ### Overview

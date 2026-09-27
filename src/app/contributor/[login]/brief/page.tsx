@@ -27,12 +27,12 @@ function DeltaStat({
 
   return (
     <div className="bg-slate-900/50 rounded-lg p-3">
-      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
       <div className="flex items-baseline gap-2">
         <span className="text-xl font-bold text-white">{recent}{unit}</span>
         <span className="text-xs text-slate-600">was {prior}{unit}</span>
       </div>
-      <div className={cn("flex items-center gap-1 text-[11px] mt-0.5", tone)}>
+      <div className={cn("flex items-center gap-1 text-xs mt-0.5", tone)}>
         <Icon className="w-3 h-3" />
         {delta === 0 ? "No change" : `${delta > 0 ? "+" : ""}${delta}${unit} vs. prior period`}
       </div>
@@ -78,7 +78,7 @@ export default function OneOnOneBriefPage() {
   const talkingPoints = data ? generateTalkingPoints(data) : [];
 
   return (
-    <div className="p-8 max-w-3xl space-y-6 print:p-0">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 max-w-3xl space-y-7 print:p-0">
       <div className="print:hidden">
         <Breadcrumb
           items={[
@@ -91,7 +91,7 @@ export default function OneOnOneBriefPage() {
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">1:1 Prep Sheet</h1>
+          <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg mb-1">1:1 Prep Sheet</h1>
           {data && (
             <p className="text-sm text-slate-400">
               {data.name ?? data.login} · this period vs. the prior {data.period_comparison.window_days} days

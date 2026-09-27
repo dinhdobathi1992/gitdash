@@ -23,9 +23,12 @@ import { aiEnabled, generateJson, type AiFailureReason } from "@/lib/ai";
 import { buildRootCauseSnapshot } from "@/lib/ai-snapshots";
 import { ROOT_CAUSE_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import { parseRootCauseContent, type RootCauseContent } from "@/lib/ai-schema";
-import { withCache, cacheGet, cacheDelete, hashKey } from "@/lib/cache";
+import { withCache, cacheGet, hashKey, partialAwareTtl } from "@/lib/cache";
 import { aiRateLimit } from "@/lib/ratelimit";
 import { validateOwner, validateRepo, validateId, safeError } from "@/lib/validation";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export const maxDuration = 60;
 
@@ -65,6 +68,7 @@ function failureResponse(reason: AiFailureReason): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("ai/root-cause");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -107,6 +111,7 @@ export async function GET(req: NextRequest) {
       `ai:root-cause-snap:${tokenHash}:${scopeKey}`,
       SNAPSHOT_TTL,
       () => buildRootCauseSnapshot(token, { owner, repo, workflowId }),
+      { ttlFor: partialAwareTtl(SNAPSHOT_TTL) },
     );
 
     // Guard 2: enforced server-side, not just hidden in the UI.
@@ -122,7 +127,7 @@ export async function GET(req: NextRequest) {
           partial: snapshot.partial,
           content: null,
         } satisfies AiRootCauseResponse,
-        { headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` } },
+        { headers: gatedCacheHeaders() },
       );
     }
 
@@ -156,15 +161,13 @@ export async function GET(req: NextRequest) {
       };
     };
 
-    const payload = await withCache(cacheKey, CACHE_TTL, generate);
-    if (!("ok" in payload)) {
-      cacheDelete(cacheKey);
-      return failureResponse(payload.failed);
-    }
+    // Never cache a failure: it would poison the key for its whole TTL.
+    const payload = await withCache(cacheKey, CACHE_TTL, generate, { shouldCache: (p) => "ok" in p });
+    if (!("ok" in payload)) return failureResponse(payload.failed);
 
     return NextResponse.json(
       { ...payload, cached: hit },
-      { headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` } },
+      { headers: gatedCacheHeaders() },
     );
   } catch (e) {
     return safeError(e, "Failed to generate root-cause hypotheses");

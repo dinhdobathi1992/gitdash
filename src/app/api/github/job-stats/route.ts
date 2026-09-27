@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getJobStats } from "@/lib/github";
 import { validateOwner, validateRepo, validateId, validatePerPage, safeError } from "@/lib/validation";
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { withCache, hashKey } from "@/lib/cache";
 
 const CACHE_TTL = 300; // 5 min
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/job-stats");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -24,15 +28,14 @@ export async function GET(req: NextRequest) {
   if (!perPageResult.ok) return perPageResult.response;
 
   try {
-    const stats = await getJobStats(
-      token,
-      ownerResult.data,
-      repoResult.data,
-      workflowIdResult.data,
-      perPageResult.data
+    const stats = await withCache(
+      `github/job-stats:${hashKey(token)}:${ownerResult.data}:${repoResult.data}:${workflowIdResult.data}:${perPageResult.data}`,
+      CACHE_TTL,
+      () => getJobStats(token, ownerResult.data, repoResult.data, workflowIdResult.data, perPageResult.data),
+      { shared: true },
     );
     return NextResponse.json(stats, {
-      headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=120` },
+      headers: gatedCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch job statistics");

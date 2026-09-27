@@ -1,15 +1,15 @@
 "use client";
 
+import { RepoPage, SubPageIntro } from "@/components/repo/RepoHeader";
+import { LinkButton } from "@/components/ui/Button";
 import useSWR from "swr";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { fetcher } from "@/lib/swr";
 import type { WorkflowFileCommit } from "@/lib/github";
-import { RepoWorkflowBreadcrumb } from "@/components/Sidebar";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle, ExternalLink, FileCode, GitCommit, User,
-  RefreshCw, Shield, Calendar, ArrowLeft,
+  Calendar,
 } from "lucide-react";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ export default function AuditPage() {
   // ── Data: workflow file commits ───────────────────────────────────────────
   const {
     data: commits, error: commitsError, isLoading: commitsLoading,
-    isValidating: commitsValidating, mutate: mutateCommits,
   } = useSWR<WorkflowFileCommit[]>(
     `/api/github/audit-log?owner=${owner}&repo=${repo}&limit=50`,
     fetcher<WorkflowFileCommit[]>,
@@ -53,45 +52,16 @@ export default function AuditPage() {
   const hasError = commitsError;
 
   return (
-    <div className="p-8">
-      <RepoWorkflowBreadcrumb owner={owner} repo={repo} workflowName="Audit Trail" />
-
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <Shield className="w-6 h-6 text-violet-400" />
-            <h1 className="text-2xl font-bold text-white">Audit Trail</h1>
-          </div>
-          <p className="text-sm text-slate-400">
-            Workflow file change history and deployment tracking for{" "}
-            <span className="font-mono text-slate-300">{owner}/{repo}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/repos/${owner}/${repo}`}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to repo
-          </Link>
-          <button
-            onClick={() => mutateCommits()}
-            disabled={commitsValidating}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", commitsValidating && "animate-spin")} />
-            Refresh
-          </button>
-          <a
-            href={`https://github.com/${owner}/${repo}/tree/main/.github/workflows`}
-            target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> Workflows on GitHub
-          </a>
-        </div>
-      </div>
+    <RepoPage owner={owner} repo={repo}>
+      <SubPageIntro
+        title="Audit trail"
+        description="Workflow file change history and deployment tracking."
+        actions={
+          <LinkButton href={`https://github.com/${owner}/${repo}/tree/HEAD/.github/workflows`} external>
+            Workflows on GitHub <ExternalLink className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
+          </LinkButton>
+        }
+      />
 
       {/* Error */}
       {hasError && (
@@ -156,7 +126,7 @@ export default function AuditPage() {
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {recentChanges.map(c => (
-                    <span key={c.sha} className="text-[10px] text-amber-300/70 font-mono">
+                    <span key={c.sha} className="text-xs text-amber-300/70 font-mono">
                       {c.file_path.replace(".github/workflows/", "")} by @{c.author_login ?? "unknown"}
                     </span>
                   ))}
@@ -170,7 +140,7 @@ export default function AuditPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <FileCode className="w-4 h-4 text-violet-400" />
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Total Changes</span>
+                <span className="text-xs text-slate-400 font-medium">Total Changes</span>
               </div>
               <p className="text-2xl font-bold text-white tabular-nums">{commits?.length ?? 0}</p>
               <p className="text-xs text-slate-500 mt-0.5">Workflow file commits</p>
@@ -178,7 +148,7 @@ export default function AuditPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <User className="w-4 h-4 text-blue-400" />
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Contributors</span>
+                <span className="text-xs text-slate-400 font-medium">Contributors</span>
               </div>
               <p className="text-2xl font-bold text-white tabular-nums">
                 {new Set(commits?.map(c => c.author_login).filter(Boolean)).size}
@@ -188,7 +158,7 @@ export default function AuditPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Calendar className="w-4 h-4 text-amber-400" />
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Last 24h</span>
+                <span className="text-xs text-slate-400 font-medium">Last 24h</span>
               </div>
               <p className="text-2xl font-bold text-white tabular-nums">{recentChanges.length}</p>
               <p className="text-xs text-slate-500 mt-0.5">Recent changes</p>
@@ -196,7 +166,7 @@ export default function AuditPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <FileCode className="w-4 h-4 text-green-400" />
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">Files Tracked</span>
+                <span className="text-xs text-slate-400 font-medium">Files Tracked</span>
               </div>
               <p className="text-2xl font-bold text-white tabular-nums">
                 {new Set(commits?.map(c => c.file_path)).size}
@@ -266,7 +236,7 @@ export default function AuditPage() {
                               {timeAgo(commit.date)}
                             </span>
                             <span className="text-slate-600">·</span>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-700/50 text-[10px] text-slate-400 font-mono">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-700/50 text-xs text-slate-400 font-mono">
                               <FileCode className="w-3 h-3" />
                               {commit.file_path.replace(".github/workflows/", "")}
                             </span>
@@ -292,6 +262,6 @@ export default function AuditPage() {
           </div>
         </div>
       )}
-    </div>
+    </RepoPage>
   );
 }

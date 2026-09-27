@@ -35,19 +35,19 @@ export function MetricTooltip({ text, className, align = "center" }: MetricToolt
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="ml-1 text-slate-600 hover:text-slate-400 transition-colors focus:outline-none"
+        className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-faint hover:text-muted transition-colors"
         aria-label="What does this mean?"
         type="button"
       >
-        <HelpCircle className="w-3 h-3" />
+        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
 
       {open && (
         <div
+          role="tooltip"
           className={cn(
-            "absolute bottom-full mb-2 z-50 w-60 px-3 py-2.5 rounded-lg",
-            "bg-slate-800 border border-slate-700 shadow-xl",
-            "text-xs text-slate-300 leading-relaxed pointer-events-none whitespace-normal",
+            "absolute bottom-full mb-2 z-50 w-64 px-3 py-2.5 float-card !rounded-control",
+            "text-xs font-normal text-muted leading-relaxed pointer-events-none whitespace-normal normal-case tracking-normal",
             positionClass,
           )}
         >
@@ -55,7 +55,7 @@ export function MetricTooltip({ text, className, align = "center" }: MetricToolt
           {/* caret */}
           <div
             className={cn(
-              "absolute top-full border-4 border-transparent border-t-slate-700",
+              "absolute top-full border-4 border-transparent border-t-control",
               arrowClass,
             )}
           />

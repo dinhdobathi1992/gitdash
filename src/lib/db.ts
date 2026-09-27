@@ -5,21 +5,68 @@
  * Schema is applied via explicit versioned migrations tracked in schema_migrations.
  */
 
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { buildPayload, dispatchAlert, METRIC_LABELS as _METRIC_LABELS } from "./notifier";
 import { detectAnomalies } from "./anomaly";
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
-let _client: ReturnType<typeof neon> | null = null;
+export type DbClient = ReturnType<typeof neon>;
 
-function getDb(): ReturnType<typeof neon> {
+let _client: DbClient | null = null;
+
+/**
+ * Local development only: route the Neon HTTP driver to a local Neon HTTP
+ * proxy (Docker Postgres + local-neon-http-proxy) instead of Neon's cloud
+ * endpoint, so `pnpm dev` and a local `next start` exercise the same driver
+ * code as production without touching a remote database. Never set in a real
+ * deployment; the loopback-only check below is the safety boundary.
+ *
+ * HTTP driver only: the app never uses Pool/WebSocket, so the Neon local-dev
+ * settings for those (useSecureWebSocket, poolQueryViaFetch) are not needed.
+ * Only loopback hosts are accepted, because the driver sends the full
+ * connection string (including the password) to this endpoint.
+ */
+function applyLocalNeonEndpoint(): void {
+  const endpoint = process.env.NEON_LOCAL_FETCH_ENDPOINT;
+  if (!endpoint) return;
+  let host: string;
+  try {
+    host = new URL(endpoint).hostname;
+  } catch {
+    throw new Error("NEON_LOCAL_FETCH_ENDPOINT is not a valid URL");
+  }
+  if (host !== "localhost" && host !== "127.0.0.1") {
+    throw new Error("NEON_LOCAL_FETCH_ENDPOINT must point at localhost or 127.0.0.1");
+  }
+  if (process.env.NODE_ENV === "production") {
+    // Expected for a local `next start`; anywhere else it means production
+    // traffic is going to a loopback proxy (e.g. a sidecar) — make it visible.
+    console.warn(`[db] NEON_LOCAL_FETCH_ENDPOINT is active in a production build (${host})`);
+  }
+  neonConfig.fetchEndpoint = endpoint;
+}
+
+export function getDb(): DbClient {
   if (!_client) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
+    applyLocalNeonEndpoint();
     _client = neon(url);
   }
   return _client;
+}
+
+/**
+ * Test hook: swap in a client that mimics the neon() interface (tagged
+ * template, `.query`, `.transaction`) — e.g. the PGlite adapter in
+ * tests/setup/pglite.ts. Passing null restores the real driver. Also resets
+ * the schema-applied flag so each injected database is migrated afresh.
+ */
+export function __setDbClientForTests(client: DbClient | null): void {
+  _client = client;
+  schemaEnsured = false;
+  schemaPromise = null;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -157,8 +204,13 @@ export interface PrFactUpsertRow {
 /**
  * Each migration has a unique integer version. Migrations are idempotent and
  * applied in ascending order. Once applied, they are recorded in schema_migrations.
+ *
+ * ensureSchema() runs each migration inside one transaction, so every statement
+ * must be transaction-safe and idempotent: use IF NOT EXISTS, and never
+ * CREATE INDEX CONCURRENTLY, VACUUM, ALTER TYPE ... ADD VALUE, or anything else
+ * that cannot run inside a transaction block.
  */
-const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
+export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
   {
     version: 1,
     name: "initial_schema",
@@ -326,22 +378,103 @@ const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> = [
       `ALTER TABLE sync_cursors ADD COLUMN IF NOT EXISTS pr_backfill_complete BOOLEAN NOT NULL DEFAULT FALSE`,
     ],
   },
+  {
+    // Shared second-level cache (src/lib/cache-l2.ts) so replicas share
+    // GitHub DTO hits. Keys are token-scoped; rows expire and are purged.
+    version: 8,
+    name: "api_cache",
+    up: [
+      `CREATE TABLE IF NOT EXISTS api_cache (
+        key         TEXT PRIMARY KEY,
+        value       JSONB NOT NULL,
+        expires_at  TIMESTAMPTZ NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_api_cache_expires ON api_cache(expires_at)`,
+    ],
+  },
+  {
+    // Organization-mode access control: GitHub users (by numeric id), their
+    // fixed groups, per-group feature-flag grants, and an audit trail.
+    version: 9,
+    name: "rbac",
+    up: [
+      `CREATE TABLE IF NOT EXISTS users (
+        github_id     BIGINT PRIMARY KEY,
+        login         VARCHAR(100) NOT NULL,
+        avatar_url    TEXT,
+        first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        last_seen_at  TIMESTAMPTZ DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS user_groups (
+        github_id   BIGINT REFERENCES users ON DELETE CASCADE,
+        group_name  VARCHAR(20) CHECK (group_name IN ('devops','security','dev','pm','admin')),
+        PRIMARY KEY (github_id, group_name)
+      )`,
+      `CREATE TABLE IF NOT EXISTS group_flags (
+        group_name  VARCHAR(20) CHECK (group_name IN ('devops','security','dev','pm')),
+        flag_key    VARCHAR(50) NOT NULL,
+        PRIMARY KEY (group_name, flag_key)
+      )`,
+      `CREATE TABLE IF NOT EXISTS permission_audit (
+        id               BIGSERIAL PRIMARY KEY,
+        actor_github_id  BIGINT NOT NULL,
+        action           VARCHAR(40) NOT NULL,
+        target           TEXT NOT NULL,
+        details          JSONB,
+        created_at       TIMESTAMPTZ DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_perm_audit_created ON permission_audit(created_at DESC)`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
 
-export async function ensureSchema(): Promise<void> {
-  if (schemaEnsured) return;
+/**
+ * Arbitrary constant key for pg_advisory_xact_lock. Every instance that runs
+ * migrations takes this lock inside its migration transaction, so replicas
+ * starting together serialize instead of racing on the same DDL.
+ */
+const MIGRATION_LOCK_KEY = 718_204_551;
+
+const BOOTSTRAP_SQL = `
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INT PRIMARY KEY,
+    name        VARCHAR(200) NOT NULL,
+    applied_at  TIMESTAMPTZ DEFAULT NOW()
+  )`;
+
+let schemaPromise: Promise<void> | null = null;
+
+/**
+ * Apply pending migrations once per process. Concurrent callers share one
+ * run; a failed run is forgotten so the next caller retries.
+ */
+export function ensureSchema(): Promise<void> {
+  if (schemaEnsured) return Promise.resolve();
+  schemaPromise ??= runMigrations().catch((err) => {
+    schemaPromise = null;
+    throw err;
+  });
+  return schemaPromise;
+}
+
+async function runMigrations(): Promise<void> {
   const db = getDb();
 
-  // Bootstrap migration tracking table
-  await db`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version     INT PRIMARY KEY,
-      name        VARCHAR(200) NOT NULL,
-      applied_at  TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
+  // Bootstrap the tracking table under the same lock — concurrent
+  // CREATE TABLE IF NOT EXISTS can still collide on the pg_type row. Skip the
+  // lock when the table already exists, so warm cold-starts don't queue behind
+  // another replica's in-progress migration just to confirm it.
+  const [{ exists }] = await db`
+    SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists
+  ` as { exists: boolean }[];
+  if (!exists) {
+    await db.transaction([
+      db`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`,
+      db.query(BOOTSTRAP_SQL),
+    ]);
+  }
 
   const applied = await db`SELECT version FROM schema_migrations ORDER BY version` as { version: number }[];
   const appliedSet = new Set(applied.map((r) => r.version));
@@ -349,18 +482,24 @@ export async function ensureSchema(): Promise<void> {
   for (const migration of MIGRATIONS) {
     if (appliedSet.has(migration.version)) continue;
 
-    for (const sql of migration.up) {
-      // db.query() executes a raw SQL string. Do NOT use db.unsafe() here —
-      // in the @neondatabase/serverless HTTP driver it returns a non-thenable
-      // UnsafeRawSql fragment (for interpolation), so `await db.unsafe(...)`
-      // silently executes nothing while the migration is still recorded.
-      await db.query(sql);
-    }
-
-    await db`
-      INSERT INTO schema_migrations (version, name) VALUES (${migration.version}, ${migration.name})
-      ON CONFLICT (version) DO NOTHING
-    `;
+    // One transaction per migration: lock, DDL, record. A failure part-way
+    // rolls back both the DDL and the version row, so a half-applied
+    // migration can never be recorded as done. If another instance applied it
+    // while we waited on the lock, the IF NOT EXISTS DDL and ON CONFLICT
+    // insert are no-ops.
+    //
+    // db.query() executes a raw SQL string. Do NOT use db.unsafe() here —
+    // in the @neondatabase/serverless HTTP driver it returns a non-thenable
+    // UnsafeRawSql fragment (for interpolation), so it would silently execute
+    // nothing while the migration is still recorded.
+    await db.transaction([
+      db`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`,
+      ...migration.up.map((sql) => db.query(sql)),
+      db`
+        INSERT INTO schema_migrations (version, name) VALUES (${migration.version}, ${migration.name})
+        ON CONFLICT (version) DO NOTHING
+      `,
+    ]);
   }
 
   schemaEnsured = true;
@@ -1190,4 +1329,230 @@ export async function saveAiSettings(input: {
       updated_by = EXCLUDED.updated_by,
       updated_at = NOW()
   `;
+}
+
+// ── Users (organization-mode access control) ──────────────────────────────────
+
+export interface DbUser {
+  github_id: number;
+  login: string;
+  avatar_url: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+/** Record a successful org-mode login (insert, or refresh login/avatar/last seen). */
+export async function upsertUser(u: { id: number; login: string; avatar_url: string | null }): Promise<void> {
+  await ensureSchema();
+  await getDb()`
+    INSERT INTO users (github_id, login, avatar_url, last_seen_at)
+    VALUES (${u.id}, ${u.login}, ${u.avatar_url}, NOW())
+    ON CONFLICT (github_id) DO UPDATE
+      SET login = EXCLUDED.login, avatar_url = EXCLUDED.avatar_url, last_seen_at = NOW()
+  `;
+}
+
+
+/**
+ * Delete users who never received a group and have not signed in for 30 days,
+ * so abandoned sign-ups do not pile up in the admin "pending" list. The audit
+ * log keeps any history. Returns the number removed.
+ */
+export async function pruneStalePendingUsers(): Promise<number> {
+  await ensureSchema();
+  const rows = await getDb()`
+    DELETE FROM users u
+    WHERE u.last_seen_at < NOW() - interval '30 days'
+      AND NOT EXISTS (SELECT 1 FROM user_groups g WHERE g.github_id = u.github_id)
+    RETURNING github_id
+  ` as { github_id: number }[];
+  return rows.length;
+}
+
+/** Groups stored for a user (bootstrap admins are added by src/lib/permissions.ts). */
+export async function getUserGroups(githubId: number): Promise<string[]> {
+  await ensureSchema();
+  const rows = await getDb()`
+    SELECT group_name FROM user_groups WHERE github_id = ${githubId}
+  ` as { group_name: string }[];
+  return rows.map((r) => r.group_name);
+}
+
+/** Flags granted to any of the given groups. */
+export async function getGroupFlags(groups: string[]): Promise<string[]> {
+  if (!groups.length) return [];
+  await ensureSchema();
+  const rows = await getDb()`
+    SELECT DISTINCT flag_key FROM group_flags WHERE group_name = ANY(${groups})
+  ` as { flag_key: string }[];
+  return rows.map((r) => r.flag_key);
+}
+
+// ── Admin: users, grants, audit (organization mode) ──────────────────────────
+
+/**
+ * Serializes permission changes so the "never zero admins" guard sees committed
+ * state. Relies on READ COMMITTED (pinned on each transaction): the guard
+ * statement then takes a fresh snapshot after the lock is granted.
+ */
+const PERMISSION_LOCK_KEY = 718_204_552;
+
+export interface AdminUserRow {
+  github_id: number;
+  login: string;
+  avatar_url: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  groups: string[];
+}
+
+/** Users with their groups; users without any group ("pending") first, then by login. */
+export async function listUsers(opts: { q?: string; group?: string; limit?: number; offset?: number } = {}): Promise<AdminUserRow[]> {
+  await ensureSchema();
+  const q = opts.q ? `%${opts.q.replace(/[\\%_]/g, (c) => "\\" + c)}%` : null;
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const rows = await getDb()`
+    SELECT u.github_id, u.login, u.avatar_url, u.first_seen_at, u.last_seen_at,
+           COALESCE(array_agg(g.group_name::text ORDER BY g.group_name) FILTER (WHERE g.group_name IS NOT NULL), '{}') AS groups
+    FROM users u
+    LEFT JOIN user_groups g ON g.github_id = u.github_id
+    WHERE (${q}::text IS NULL OR u.login ILIKE ${q})
+    GROUP BY u.github_id
+    HAVING (${opts.group ?? null}::text IS NULL OR ${opts.group ?? null}::text = ANY(array_agg(g.group_name::text)))
+    ORDER BY (COUNT(g.group_name) = 0) DESC, u.login
+    LIMIT ${limit} OFFSET ${offset}
+  ` as AdminUserRow[];
+  return rows.map((r) => ({ ...r, github_id: Number(r.github_id) }));
+}
+
+/**
+ * Replace a user's groups and write one audit row, atomically. Refuses (returns
+ * ok=false) a change that would leave no admin at all when there are no
+ * bootstrap admins. The advisory lock runs as its own statement first so the
+ * guard's count sees every committed change (READ COMMITTED takes a fresh
+ * snapshot per statement).
+ */
+export async function setUserGroups(
+  actorId: number,
+  githubId: number,
+  groups: string[],
+  bootstrapAdminIds: number[],
+): Promise<{ ok: boolean; before: string[]; after: string[] }> {
+  await ensureSchema();
+  const db = getDb();
+  const after = [...new Set(groups)].sort();
+  const [, rows] = await db.transaction([
+    db`SELECT pg_advisory_xact_lock(${PERMISSION_LOCK_KEY})`,
+    db`
+      WITH before AS (
+        SELECT COALESCE(array_agg(group_name::text ORDER BY group_name), '{}') AS g
+        FROM user_groups WHERE github_id = ${githubId}
+      ),
+      guard AS (
+        SELECT NOT (
+          (SELECT 'admin' = ANY(g) FROM before)
+          AND NOT ('admin' = ANY(${after}::text[]))
+          AND (SELECT count(*) FROM user_groups WHERE group_name = 'admin' AND github_id <> ${githubId}) = 0
+          AND cardinality(${bootstrapAdminIds}::bigint[]) = 0
+        ) AS ok
+      ),
+      del AS (
+        DELETE FROM user_groups
+        WHERE github_id = ${githubId} AND (SELECT ok FROM guard) AND NOT (group_name = ANY(${after}::text[]))
+        RETURNING 1
+      ),
+      ins AS (
+        INSERT INTO user_groups (github_id, group_name)
+        SELECT ${githubId}, x FROM unnest(${after}::text[]) AS x WHERE (SELECT ok FROM guard)
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+      ),
+      audit AS (
+        INSERT INTO permission_audit (actor_github_id, action, target, details)
+        SELECT ${actorId}, 'user_groups_set', ${String(githubId)},
+               jsonb_build_object('before', (SELECT g FROM before), 'after', ${after}::text[])
+        WHERE (SELECT ok FROM guard) AND (SELECT g FROM before) IS DISTINCT FROM ${after}::text[]
+        RETURNING 1
+      )
+      SELECT (SELECT ok FROM guard) AS ok, (SELECT g FROM before) AS before
+    `,
+  ], { isolationLevel: "ReadCommitted" }) as [unknown, { ok: boolean; before: string[] }[]];
+  return { ok: rows[0].ok, before: rows[0].before, after };
+}
+
+export interface GrantRow {
+  group_name: string;
+  flag_key: string;
+}
+
+export async function listGrants(): Promise<GrantRow[]> {
+  await ensureSchema();
+  return await getDb()`SELECT group_name, flag_key FROM group_flags ORDER BY group_name, flag_key` as GrantRow[];
+}
+
+/** Grant or revoke one flag for one group; audit row only when something changed. Returns whether it was granted before. */
+export async function setGrant(actorId: number, group: string, flag: string, granted: boolean): Promise<{ before: boolean }> {
+  await ensureSchema();
+  const db = getDb();
+  const [, rows] = await db.transaction([
+    db`SELECT pg_advisory_xact_lock(${PERMISSION_LOCK_KEY})`,
+    db`
+      WITH before AS (
+        SELECT EXISTS (SELECT 1 FROM group_flags WHERE group_name = ${group} AND flag_key = ${flag}) AS had
+      ),
+      ins AS (
+        INSERT INTO group_flags (group_name, flag_key)
+        SELECT ${group}, ${flag} WHERE ${granted}::boolean
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+      ),
+      del AS (
+        DELETE FROM group_flags
+        WHERE NOT ${granted}::boolean AND group_name = ${group} AND flag_key = ${flag}
+        RETURNING 1
+      ),
+      audit AS (
+        INSERT INTO permission_audit (actor_github_id, action, target, details)
+        SELECT ${actorId}, CASE WHEN ${granted}::boolean THEN 'group_grant' ELSE 'group_revoke' END,
+               ${group + ":" + flag},
+               jsonb_build_object('before', (SELECT had FROM before), 'after', ${granted}::boolean)
+        WHERE (SELECT had FROM before) IS DISTINCT FROM ${granted}::boolean
+        RETURNING 1
+      )
+      SELECT (SELECT had FROM before) AS had
+    `,
+  ], { isolationLevel: "ReadCommitted" }) as [unknown, { had: boolean }[]];
+  return { before: rows[0].had };
+}
+
+export interface AuditRow {
+  id: number;
+  actor_github_id: number;
+  actor_login: string | null;
+  action: string;
+  target: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** Newest first; pass the last seen id as `before` to page backwards. */
+export async function listAudit(opts: { before?: number; limit?: number } = {}): Promise<AuditRow[]> {
+  await ensureSchema();
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const rows = await getDb()`
+    SELECT a.id, a.actor_github_id, u.login AS actor_login, a.action, a.target, a.details, a.created_at
+    FROM permission_audit a
+    LEFT JOIN users u ON u.github_id = a.actor_github_id
+    WHERE (${opts.before ?? null}::bigint IS NULL OR a.id < ${opts.before ?? null})
+    ORDER BY a.id DESC
+    LIMIT ${limit}
+  ` as AuditRow[];
+  return rows.map((r) => ({ ...r, id: Number(r.id), actor_github_id: Number(r.actor_github_id) }));
+}
+
+export async function userExists(githubId: number): Promise<boolean> {
+  await ensureSchema();
+  const rows = await getDb()`SELECT 1 FROM users WHERE github_id = ${githubId}` as unknown[];
+  return rows.length > 0;
 }

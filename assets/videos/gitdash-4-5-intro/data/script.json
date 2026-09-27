@@ -1,0 +1,49 @@
+{
+  "release": "GitDash 4.5",
+  "source": "docs/intro-video-prompt.md (feature inventory from src/app/docs/page.tsx and the 4.5 redesign)",
+  "voice": {
+    "model": "gemini-3.8-flash-tts",
+    "voice": "Puck",
+    "style": "Calm, confident tech product narrator. Warm, precise, unhurried, crisp diction, a quiet smile in the voice. No hype."
+  },
+  "outroStyle": "Calm, warm and assured, slower, a quiet promise at the end.",
+  "scenes": [
+    { "id": "s01-cover", "lines": [
+      { "en": "Your CI already knows how your team ships.", "vi": "Your CI already knows how your team ships." },
+      { "en": "GitDash makes it readable.", "say": "Git Dash makes it readable.", "vi": "GitDash makes it readable." }
+    ]},
+    { "id": "s02-monitor", "lines": [
+      { "en": "Open GitDash, and the first thing you see is what's wrong right now.", "say": "Open Git Dash, and the first thing you see is what's wrong right now.", "vi": "Open GitDash, and the first thing you see is what's wrong right now." },
+      { "en": "Then everything else.", "vi": "Then everything else." }
+    ]},
+    { "id": "s03-table", "lines": [
+      { "en": "Every repository: status, success rate, the last ten runs, p95 time.", "say": "Every repository: status, success rate, the last ten runs, p ninety-five time.", "vi": "Every repository: status, success rate, the last ten runs, p95 time." },
+      { "en": "Filter, sort and pin, all from the keyboard.", "vi": "Filter, sort and pin, all from the keyboard." }
+    ]},
+    { "id": "s04-repo", "lines": [
+      { "en": "Each repository gets DORA metrics, run duration and the jobs that fail most.", "say": "Each repository gets DORA metrics, run duration and the jobs that fail most.", "vi": "Each repository gets DORA metrics, run duration and the jobs that fail most." },
+      { "en": "Plus tabs for pull requests, issues, security and the audit trail.", "vi": "Plus tabs for pull requests, issues, security and the audit trail." }
+    ]},
+    { "id": "s05-workflow", "lines": [
+      { "en": "Drill into a workflow to see why it fails, and where the time goes.", "vi": "Drill into a workflow to see why it fails, and where the time goes." }
+    ]},
+    { "id": "s06-team", "lines": [
+      { "en": "See review load, bus factor, and who's working too late,", "vi": "See review load, bus factor, and who's working too late," },
+      { "en": "before it becomes a resignation.", "vi": "before it becomes a resignation." }
+    ]},
+    { "id": "s07-cost", "lines": [
+      { "en": "Real Actions billing, a month-end projection, and concrete ways to spend less.", "vi": "Real Actions billing, a month-end projection, and concrete ways to spend less." }
+    ]},
+    { "id": "s08-alerts", "lines": [
+      { "en": "Alerts in plain language, sent to Slack, email, the browser or a daily digest.", "vi": "Alerts in plain language, sent to Slack, email, the browser or a daily digest." }
+    ]},
+    { "id": "s09-montage", "lines": [
+      { "en": "Group permissions and audit logs. A phone layout. Org scorecards,", "vi": "Group permissions and audit logs. A phone layout. Org scorecards," },
+      { "en": "one-to-one prep, and a weekly leadership digest.", "vi": "one-to-one prep, and a weekly leadership digest." }
+    ]},
+    { "id": "s10-outro", "outro": true, "lines": [
+      { "en": "GitDash. Everything metrics, measured.", "say": "Git Dash. Everything metrics, measured.", "vi": "GitDash. Everything metrics, measured." },
+      { "en": "Open source, on your infrastructure.", "vi": "Open source, on your infrastructure." }
+    ]}
+  ]
+}

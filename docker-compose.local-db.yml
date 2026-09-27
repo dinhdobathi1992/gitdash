@@ -1,0 +1,39 @@
+# Local-only development database for GitDash. Not for deployment.
+#
+#   docker compose -f docker-compose.local-db.yml up -d
+#
+# Postgres plus a local Neon HTTP proxy, so the app's @neondatabase/serverless
+# HTTP driver runs unchanged against a local database. Point the app at it with:
+#   DATABASE_URL="postgres://postgres:postgres@localhost:55432/gitdash"
+#   NEON_LOCAL_FETCH_ENDPOINT="http://localhost:4444/sql"
+name: gitdash-local-db
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gitdash
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - gitdash-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gitdash"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  neon-proxy:
+    image: ghcr.io/timowilhelm/local-neon-http-proxy@sha256:cd2ae14edf2feafbc3330492de5c80506f77274c3bd013154cdef697bdeb768a
+    environment:
+      PG_CONNECTION_STRING: postgres://postgres:postgres@postgres:5432/gitdash
+    ports:
+      - "127.0.0.1:4444:4444"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  gitdash-pgdata:

@@ -15,10 +15,13 @@ import { aiEnabled, generateJson, type AiFailureReason } from "@/lib/ai";
 import { buildAnomalySnapshot } from "@/lib/ai-snapshots";
 import { ANOMALY_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import { parseAnomalyContent, type AnomalyExplanationContent } from "@/lib/ai-schema";
-import { withCache, cacheGet, cacheSet, cacheDelete, hashKey } from "@/lib/cache";
+import { withCache, cacheGet, hashKey } from "@/lib/cache";
 import { aiRateLimit } from "@/lib/ratelimit";
 import { validateOwner, validateRepo, validateId, safeError } from "@/lib/validation";
 import type { AnomalyMetric } from "@/lib/anomaly";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export const maxDuration = 60;
 
@@ -54,6 +57,7 @@ function failureResponse(reason: AiFailureReason): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("ai/anomaly-explanation");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -142,16 +146,13 @@ export async function GET(req: NextRequest) {
       };
     };
 
-    const payload = await withCache(cacheKey, CACHE_TTL, generate);
-    if (!("ok" in payload)) {
-      cacheDelete(cacheKey); // never let a failure occupy the key for its TTL
-      return failureResponse(payload.failed);
-    }
-    if (!hit) cacheSet(cacheKey, payload, CACHE_TTL);
+    // Never cache a failure: it would occupy the key for its whole TTL.
+    const payload = await withCache(cacheKey, CACHE_TTL, generate, { shouldCache: (p) => "ok" in p });
+    if (!("ok" in payload)) return failureResponse(payload.failed);
 
     return NextResponse.json(
       { ...payload, cached: hit },
-      { headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` } },
+      { headers: gatedCacheHeaders() },
     );
   } catch (e) {
     return safeError(e, "Failed to generate anomaly explanation");

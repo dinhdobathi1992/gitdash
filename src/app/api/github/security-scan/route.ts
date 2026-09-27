@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { getOctokit } from "@/lib/github";
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { withCache, hashKey, PARTIAL_TTL_SECONDS } from "@/lib/cache";
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -278,6 +281,7 @@ function scanWorkflow(filePath: string, content: string): WorkflowSecurityResult
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/security-scan");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -293,117 +297,134 @@ export async function GET(req: NextRequest) {
   const repo = repoResult.data;
 
   try {
-    const octokit = getOctokit(token);
-
-    // 1. List .github/workflows directory
-    let workflowFiles: { path: string; sha: string }[] = [];
-    try {
-      const { data } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: ".github/workflows",
-      });
-      if (Array.isArray(data)) {
-        workflowFiles = data
-          .filter((f) => f.type === "file" && /\.(ya?ml)$/i.test(f.name))
-          .map((f) => ({ path: f.path, sha: f.sha }));
-      }
-    } catch {
-      // Directory doesn't exist → return empty scan
-      const empty: SecurityScanResponse = {
-        owner,
-        repo,
-        workflows_scanned: 0,
-        total_findings: 0,
-        critical_count: 0,
-        high_count: 0,
-        medium_count: 0,
-        info_count: 0,
-        overall_score: 100,
-        results: [],
-      };
-      return NextResponse.json(empty, {
-        headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=300` },
-      });
-    }
-
-    if (workflowFiles.length === 0) {
-      const empty: SecurityScanResponse = {
-        owner,
-        repo,
-        workflows_scanned: 0,
-        total_findings: 0,
-        critical_count: 0,
-        high_count: 0,
-        medium_count: 0,
-        info_count: 0,
-        overall_score: 100,
-        results: [],
-      };
-      return NextResponse.json(empty, {
-        headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=300` },
-      });
-    }
-
-    // 2. Fetch content of each workflow file in parallel
-    const contentResults = await Promise.allSettled(
-      workflowFiles.map(async ({ path }) => {
-        const { data } = await octokit.rest.repos.getContent({ owner, repo, path });
-        if (Array.isArray(data) || data.type !== "file") {
-          throw new Error("Not a file");
-        }
-        // GitHub returns base64-encoded content
-        const content = Buffer.from(data.content, "base64").toString("utf-8");
-        return { path, content };
-      })
+    const { response } = await withCache(
+      `github/security-scan:${hashKey(token)}:${owner}:${repo}`,
+      CACHE_TTL,
+      () => buildSecurityScan(token, owner, repo),
+      { shared: true, ttlFor: (b) => (b.complete ? CACHE_TTL : PARTIAL_TTL_SECONDS) },
     );
-
-    // 3. Scan each file
-    const results: WorkflowSecurityResult[] = [];
-    for (const r of contentResults) {
-      if (r.status === "fulfilled") {
-        results.push(scanWorkflow(r.value.path, r.value.content));
-      }
-    }
-
-    // 4. Aggregate counts
-    let critical_count = 0;
-    let high_count = 0;
-    let medium_count = 0;
-    let info_count = 0;
-
-    for (const result of results) {
-      for (const f of result.findings) {
-        if (f.severity === "critical") critical_count++;
-        else if (f.severity === "high") high_count++;
-        else if (f.severity === "medium") medium_count++;
-        else info_count++;
-      }
-    }
-
-    const total_findings = critical_count + high_count + medium_count + info_count;
-    const overall_score =
-      results.length > 0
-        ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length)
-        : 100;
-
-    const response: SecurityScanResponse = {
-      owner,
-      repo,
-      workflows_scanned: results.length,
-      total_findings,
-      critical_count,
-      high_count,
-      medium_count,
-      info_count,
-      overall_score,
-      results,
-    };
-
     return NextResponse.json(response, {
-      headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=300` },
+      headers: gatedCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to scan workflow security");
   }
+}
+
+/** `complete` is false when any workflow file failed to fetch — never cache that. */
+interface SecurityScanBuild {
+  response: SecurityScanResponse;
+  complete: boolean;
+}
+
+async function buildSecurityScan(token: string, owner: string, repo: string): Promise<SecurityScanBuild> {
+  const octokit = getOctokit(token);
+
+  // 1. List .github/workflows directory
+  let workflowFiles: { path: string; sha: string }[] = [];
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: ".github/workflows",
+    });
+    if (Array.isArray(data)) {
+      workflowFiles = data
+        .filter((f) => f.type === "file" && /\.(ya?ml)$/i.test(f.name))
+        .map((f) => ({ path: f.path, sha: f.sha }));
+    }
+  } catch (err) {
+    // Only a missing directory means "no workflows". Any other failure (rate
+    // limit, 5xx) must surface — otherwise a transient error would be cached
+    // as a perfect score.
+    if ((err as { status?: number }).status !== 404) throw err;
+    const empty: SecurityScanResponse = {
+      owner,
+      repo,
+      workflows_scanned: 0,
+      total_findings: 0,
+      critical_count: 0,
+      high_count: 0,
+      medium_count: 0,
+      info_count: 0,
+      overall_score: 100,
+      results: [],
+    };
+    return { response: empty, complete: true };
+  }
+
+  if (workflowFiles.length === 0) {
+    const empty: SecurityScanResponse = {
+      owner,
+      repo,
+      workflows_scanned: 0,
+      total_findings: 0,
+      critical_count: 0,
+      high_count: 0,
+      medium_count: 0,
+      info_count: 0,
+      overall_score: 100,
+      results: [],
+    };
+    return { response: empty, complete: true };
+  }
+
+  // 2. Fetch content of each workflow file in parallel
+  const contentResults = await Promise.allSettled(
+    workflowFiles.map(async ({ path }) => {
+      const { data } = await octokit.rest.repos.getContent({ owner, repo, path });
+      if (Array.isArray(data) || data.type !== "file") {
+        throw new Error("Not a file");
+      }
+      // GitHub returns base64-encoded content
+      const content = Buffer.from(data.content, "base64").toString("utf-8");
+      return { path, content };
+    })
+  );
+
+  // 3. Scan each file
+  const results: WorkflowSecurityResult[] = [];
+  for (const r of contentResults) {
+    if (r.status === "fulfilled") {
+      results.push(scanWorkflow(r.value.path, r.value.content));
+    }
+  }
+
+  // 4. Aggregate counts
+  let critical_count = 0;
+  let high_count = 0;
+  let medium_count = 0;
+  let info_count = 0;
+
+  for (const result of results) {
+    for (const f of result.findings) {
+      if (f.severity === "critical") critical_count++;
+      else if (f.severity === "high") high_count++;
+      else if (f.severity === "medium") medium_count++;
+      else info_count++;
+    }
+  }
+
+  const total_findings = critical_count + high_count + medium_count + info_count;
+  const overall_score =
+    results.length > 0
+      ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length)
+      : 100;
+
+  const response: SecurityScanResponse = {
+    owner,
+    repo,
+    workflows_scanned: results.length,
+    total_findings,
+    critical_count,
+    high_count,
+    medium_count,
+    info_count,
+    overall_score,
+    results,
+  };
+
+
+  const complete = contentResults.every((r) => r.status === "fulfilled");
+  return { response, complete };
 }

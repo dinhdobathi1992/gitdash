@@ -52,7 +52,7 @@ export default function AnomalyExplanation({
     return (
       <button
         onClick={() => setAsked(true)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
       >
         <Sparkles className="w-3 h-3" />
         Why did {METRIC_LABELS[metric]} spike?
@@ -62,7 +62,7 @@ export default function AnomalyExplanation({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-violet-200">
+      <div className="flex items-center gap-2 text-xs text-violet-200">
         <Loader2 className="w-3 h-3 animate-spin shrink-0" />
         Looking at the surrounding signals…
       </div>
@@ -72,7 +72,7 @@ export default function AnomalyExplanation({
   if (error) {
     const status = error instanceof FetchError ? error.status : null;
     return (
-      <p className="text-[11px] text-slate-500 italic">
+      <p className="text-xs text-slate-500 italic">
         {status === 404
           ? "No outliers to explain for this metric."
           : status === 429
@@ -87,11 +87,11 @@ export default function AnomalyExplanation({
   return (
     <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.05] p-3 space-y-2">
       <p className="text-xs text-slate-200 leading-relaxed">{data.content.explanation}</p>
-      <div className="flex items-start gap-1.5 text-[11px] text-slate-400">
+      <div className="flex items-start gap-1.5 text-xs text-slate-400">
         <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-violet-400" />
         <span>{data.content.check}</span>
       </div>
-      <p className="text-[10px] text-slate-600">
+      <p className="text-xs text-slate-600">
         {data.provider} · {data.model}
         {data.cached && " · cached"} · generated from run metadata, not logs
       </p>

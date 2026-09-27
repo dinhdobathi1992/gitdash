@@ -10,7 +10,7 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap } from "lucide-react";
+import { LogoMark } from "@/components/shell/Logo";
 
 export default function DemoPage() {
   const router = useRouter();
@@ -24,16 +24,14 @@ export default function DemoPage() {
   }, [router, tour]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950">
+    <div className="min-h-screen flex items-center justify-center bg-ground page-glow" aria-busy="true">
       <div className="text-center space-y-5">
         <div className="flex items-center justify-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
-            <Zap className="w-5 h-5 text-violet-400" />
-          </div>
-          <span className="text-2xl font-bold text-white tracking-tight">GitDash Demo</span>
+          <LogoMark size={40} />
+          <span className="text-2xl font-semibold text-fg tracking-tight">GitDash demo</span>
         </div>
 
-        <p className="text-slate-400 text-sm max-w-xs">
+        <p className="text-muted text-sm max-w-xs">
           Loading demo environment with sample data. No GitHub credentials required.
         </p>
 
@@ -41,7 +39,7 @@ export default function DemoPage() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-2 h-2 rounded-full bg-violet-500 animate-bounce"
+              className="w-2 h-2 rounded-full bg-brand-fg animate-bounce"
               style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}

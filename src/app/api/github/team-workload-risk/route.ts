@@ -22,6 +22,9 @@ import { getOctokit } from "@/lib/github";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { withCache, hashKey } from "@/lib/cache";
 
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+
 const CACHE_TTL = 900; // 15 min
 const WINDOW_DAYS = 42; // recent 14d + prior 28d baseline
 const RECENT_DAYS = 14;
@@ -59,6 +62,7 @@ export interface TeamWorkloadRiskResponse {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/team-workload-risk");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -73,13 +77,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const response = await withCache<TeamWorkloadRiskResponse>(
-      `team-workload-risk:${hashKey(token)}:${owner}/${repo}`,
+      `github/team-workload-risk:${hashKey(token)}:${owner}/${repo}`,
       CACHE_TTL,
       () => computeWorkloadRisk(token, owner, repo),
+      { shared: true },
     );
 
     return NextResponse.json(response, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=300` },
+      headers: gatedCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to compute team workload risk");

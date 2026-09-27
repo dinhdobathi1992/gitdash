@@ -13,8 +13,11 @@ import { getTokenFromSession } from "@/lib/session";
 import { getAllAlertRules } from "@/lib/db";
 import { buildPayload, dispatchAlert } from "@/lib/notifier";
 import { safeError } from "@/lib/validation";
+import { requireAccess } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

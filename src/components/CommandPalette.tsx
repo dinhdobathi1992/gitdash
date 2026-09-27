@@ -41,8 +41,8 @@ interface Command {
 
 const STATIC_COMMANDS: Command[] = [
   { id: "nav-repos", label: "Repositories", href: "/", icon: LayoutGrid, group: "Go to" },
-  { id: "nav-team", label: "Team Insights", href: "/team", icon: Users, group: "Go to" },
-  { id: "nav-cost", label: "Cost Analytics", href: "/cost-analytics", icon: DollarSign, group: "Go to" },
+  { id: "nav-team", label: "Team insights", href: "/team", icon: Users, group: "Go to" },
+  { id: "nav-cost", label: "Cost", href: "/cost-analytics", icon: DollarSign, group: "Go to" },
   { id: "nav-reports", label: "Reports", href: "/reports", icon: TrendingUp, group: "Go to" },
   { id: "nav-alerts", label: "Alerts", href: "/alerts", icon: Bell, group: "Go to" },
   { id: "nav-docs", label: "Documentation", href: "/docs", icon: Book, group: "Go to" },
@@ -56,6 +56,13 @@ function currentRepo(path: string): { owner: string; repo: string } | null {
 }
 
 const MAX_REPO_RESULTS = 8;
+
+/** Event the top-bar search button dispatches to open the palette. */
+export const OPEN_PALETTE_EVENT = "gitdash:open-palette";
+
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+}
 
 export default function CommandPalette() {
   const router = useRouter();
@@ -83,10 +90,11 @@ export default function CommandPalette() {
       const base = `/repos/${inRepo.owner}/${inRepo.repo}`;
       list.push(
         { id: "r-overview", label: "Overview", hint: inRepo.repo, href: base, icon: BarChart3, group: "This repository" },
-        { id: "r-team", label: "Team Analytics", hint: inRepo.repo, href: `${base}/team`, icon: Trophy, group: "This repository" },
-        { id: "r-issues", label: "Issue & Triage Health", hint: inRepo.repo, href: `${base}/issues`, icon: CircleDot, group: "This repository" },
+        { id: "r-pulls", label: "Pull requests", hint: inRepo.repo, href: `${base}/pulls`, icon: GitBranch, group: "This repository" },
+        { id: "r-team", label: "Team", hint: inRepo.repo, href: `${base}/team`, icon: Trophy, group: "This repository" },
+        { id: "r-issues", label: "Issues", hint: inRepo.repo, href: `${base}/issues`, icon: CircleDot, group: "This repository" },
         { id: "r-security", label: "Security", hint: inRepo.repo, href: `${base}/security`, icon: ShieldCheck, group: "This repository" },
-        { id: "r-audit", label: "Audit Trail", hint: inRepo.repo, href: `${base}/audit`, icon: FileText, group: "This repository" },
+        { id: "r-audit", label: "Audit trail", hint: inRepo.repo, href: `${base}/audit`, icon: FileText, group: "This repository" },
       );
     }
 
@@ -161,8 +169,16 @@ export default function CommandPalette() {
       }
       if (e.key === "Escape" && open) close();
     }
+    function onOpen() {
+      setEverOpened(true);
+      setOpen(true);
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
+    };
   }, [open, close]);
 
   useEffect(() => {
@@ -203,27 +219,28 @@ export default function CommandPalette() {
       aria-label="Command palette"
     >
       <div
-        className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden"
+        className="w-full max-w-xl float-card overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 border-b border-slate-800">
-          <Search className="w-4 h-4 text-slate-500 shrink-0" />
+        <div className="flex items-center gap-3 px-4 border-b border-line">
+          <Search className="w-4 h-4 text-faint shrink-0" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActive(0); }}
             onKeyDown={onInputKey}
             placeholder="Search repositories and pages…"
-            className="flex-1 bg-transparent py-3.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none"
+            aria-label="Search repositories and pages"
+            className="flex-1 bg-transparent py-3.5 text-sm text-fg placeholder:text-faint focus:outline-none"
           />
-          <kbd className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded text-slate-500">
+          <kbd className="shrink-0 px-1.5 py-0.5 text-xs font-mono bg-panel border border-control rounded-chip text-faint">
             ESC
           </kbd>
         </div>
 
         <div ref={listRef} className="max-h-[52vh] overflow-y-auto py-2">
           {results.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">
+            <p className="px-4 py-8 text-center text-sm text-muted">
               No matches for “{query}”.
             </p>
           )}
@@ -239,7 +256,7 @@ export default function CommandPalette() {
             return (
               <div key={cmd.id}>
                 {showGroup && (
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                  <div className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
                     {cmd.group}
                   </div>
                 )}
@@ -249,30 +266,30 @@ export default function CommandPalette() {
                   onClick={() => run(cmd)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                    i === clamped ? "bg-violet-500/15" : "hover:bg-slate-800/60",
+                    i === clamped ? "bg-brand-soft" : "hover:bg-raised",
                   )}
                 >
-                  <Icon className={cn("w-4 h-4 shrink-0", i === clamped ? "text-violet-300" : "text-slate-500")} />
-                  <span className="flex-1 min-w-0 text-sm text-slate-200 truncate">
+                  <Icon className={cn("w-4 h-4 shrink-0", i === clamped ? "text-brand-fg" : "text-faint")} />
+                  <span className="flex-1 min-w-0 text-sm text-fg truncate">
                     {segments.map((s, si) =>
                       s.highlight
-                        ? <mark key={si} className="bg-transparent text-violet-300 font-semibold">{s.text}</mark>
+                        ? <mark key={si} className="bg-transparent text-link font-semibold">{s.text}</mark>
                         : <span key={si}>{s.text}</span>,
                     )}
                   </span>
                   {cmd.hint && (
-                    <span className="shrink-0 font-mono text-[11px] text-slate-600 truncate max-w-[40%]">
+                    <span className="shrink-0 font-mono text-xs text-faint truncate max-w-[40%]">
                       {cmd.hint}
                     </span>
                   )}
-                  {i === clamped && <CornerDownLeft className="w-3.5 h-3.5 shrink-0 text-slate-500" />}
+                  {i === clamped && <CornerDownLeft className="w-3.5 h-3.5 shrink-0 text-faint" aria-hidden="true" />}
                 </button>
               </div>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-slate-800 text-[11px] text-slate-600">
+        <div className="flex items-center gap-4 px-4 py-2 border-t border-line text-xs text-faint">
           <span className="flex items-center gap-1"><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> navigate</span>
           <span className="flex items-center gap-1"><CornerDownLeft className="w-3 h-3" /> open</span>
           <span className="ml-auto font-mono">⌘K</span>

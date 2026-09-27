@@ -53,7 +53,7 @@ export function DocTable({
         <thead>
           <tr className="border-b border-slate-700/50 bg-slate-800/60">
             {headers.map((h) => (
-              <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400">
                 {h}
               </th>
             ))}

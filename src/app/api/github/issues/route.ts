@@ -16,6 +16,9 @@ import { getIssuesSummary } from "@/lib/issues";
 import { withCache, hashKey } from "@/lib/cache";
 import { validateOwner, validateRepo, validatePerPage, safeError } from "@/lib/validation";
 
+import { privateCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+
 export type { IssuesSummary, IssueRef, LabelCount } from "@/lib/issues";
 
 export const maxDuration = 60;
@@ -23,6 +26,7 @@ export const maxDuration = 60;
 const CACHE_TTL = 300; // 5 min
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/issues");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -38,12 +42,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await withCache(
-      `issues:${hashKey(token)}:${ownerResult.data}/${repoResult.data}:${periodDays}`,
+      `github/issues:${hashKey(token)}:${ownerResult.data}/${repoResult.data}:${periodDays}`,
       CACHE_TTL,
       () => getIssuesSummary(token, ownerResult.data, repoResult.data, periodDays),
+      { shared: true },
     );
     return NextResponse.json(data, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` },
+      headers: privateCacheHeaders(CACHE_TTL),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch issue metrics");

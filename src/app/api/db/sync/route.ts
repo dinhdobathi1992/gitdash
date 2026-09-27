@@ -13,8 +13,13 @@ import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { syncRepo } from "@/lib/sync";
 import { safeError } from "@/lib/validation";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { requireAccess } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
+  labelGitHubRoute("db/sync");
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

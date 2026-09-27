@@ -39,7 +39,7 @@ export default function RunnerUtilization({ data }: { data: RunnerStatsResponse 
                   <Server className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   <span className="text-sm font-medium text-white truncate">{r.runner_name}</span>
                   {r.runner_group_name && (
-                    <span className="text-[10px] font-mono text-slate-500 px-1.5 py-0.5 rounded bg-slate-800 shrink-0">
+                    <span className="text-xs font-mono text-slate-500 px-1.5 py-0.5 rounded bg-slate-800 shrink-0">
                       {r.runner_group_name}
                     </span>
                   )}
@@ -66,7 +66,7 @@ export default function RunnerUtilization({ data }: { data: RunnerStatsResponse 
         })}
       </div>
 
-      <p className="text-[11px] text-slate-600">
+      <p className="text-xs text-slate-600">
         {data.unique_runners} runner{data.unique_runners === 1 ? "" : "s"} · {data.total_jobs} jobs across {data.fetched_runs} runs
       </p>
     </div>

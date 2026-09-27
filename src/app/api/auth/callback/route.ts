@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
-import { getOctokit } from "@/lib/github";
+import { getSession, resetSession } from "@/lib/session";
+import { assertOrgModeConfig, lookupWhoAmI } from "@/lib/identity";
+import { upsertUser } from "@/lib/db";
 import { publicUrl } from "@/lib/url";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("auth/callback");
+  assertOrgModeConfig();
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -64,17 +68,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(publicUrl("/login?error=token_exchange", req));
     }
 
-    // Fetch user identity
-    const octokit = getOctokit(tokenData.access_token);
-    const { data: user } = await octokit.rest.users.getAuthenticated();
+    // Fetch user identity + allowed-org membership
+    const { identity, allowed } = await lookupWhoAmI(tokenData.access_token);
+    if (!allowed) {
+      await session.save(); // persist the cleared one-time state
+      return NextResponse.redirect(publicUrl("/login?error=org_not_allowed", req));
+    }
 
-    // Persist into encrypted session cookie
+    // Record the user before issuing the session (see /api/auth/setup)
+    await upsertUser({ id: identity.id, login: identity.login, avatar_url: identity.avatar_url });
+
+    // Fresh session holding only this login (no leftover PAT from an earlier sign-in)
+    resetSession(session);
     session.accessToken = tokenData.access_token;
     session.user = {
-      login: user.login,
-      name: user.name ?? null,
-      avatar_url: user.avatar_url,
-      email: user.email ?? null,
+      id: identity.id,
+      login: identity.login,
+      name: identity.name,
+      avatar_url: identity.avatar_url,
+      email: identity.email,
     };
     await session.save();
 

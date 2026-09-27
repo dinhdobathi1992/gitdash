@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { throttling } from "@octokit/plugin-throttling";
 import { retry } from "@octokit/plugin-retry";
 import { createHash } from "crypto";
+import { recordGitHubCall } from "./github-telemetry";
 
 const OctokitWithPlugins = Octokit.plugin(throttling, retry);
 
@@ -63,12 +64,27 @@ export function getOctokit(token?: string): Octokit {
     },
   });
 
-  // ETag layer for GET requests.
+  // Telemetry for every request + ETag layer for GET requests.
   octokit.hook.wrap("request", async (request, options) => {
-    if (options.method !== "GET") return request(options);
-
     // Fully-resolved URL (path params substituted, query string appended).
     const resolvedUrl: string = octokit.request.endpoint(options as never).url;
+
+    // Record the real GitHub exchange (including 304s, which carry the
+    // rate-limit headers) before any ETag replay rewrites the response.
+    const observed = async (opts: typeof options) => {
+      try {
+        const res = await request(opts);
+        recordGitHubCall(tokenKey, opts.method, resolvedUrl, res.status, res.headers);
+        return res;
+      } catch (error) {
+        const e = error as { status?: number; response?: { headers?: Record<string, string> } };
+        recordGitHubCall(tokenKey, opts.method, resolvedUrl, e.status ?? 0, e.response?.headers);
+        throw error;
+      }
+    };
+
+    if (options.method !== "GET") return observed(options);
+
     const key = `${tokenKey}:${resolvedUrl}`;
     const prev = etagStore.get(key);
     if (prev) {
@@ -76,7 +92,7 @@ export function getOctokit(token?: string): Octokit {
     }
 
     try {
-      const response = await request(options);
+      const response = await observed(options);
       const etag = response.headers?.etag;
       if (etag) {
         // Callers must not mutate response.data — all our helpers map to DTOs.
@@ -220,6 +236,11 @@ export interface RepoRunPoint {
   conclusion: string | null;
   status: string | null;
   created_at: string;
+  /** Completed runs only: updated_at − run_started_at. */
+  duration_ms?: number | null;
+  /** run_started_at − created_at, when both are known. */
+  queue_ms?: number | null;
+  head_branch?: string | null;
 }
 
 export interface TrendPoint {
@@ -238,6 +259,57 @@ export interface RepoSummary {
   recent_runs: RepoRunPoint[];   // last 10
   trend_30d: TrendPoint[];       // one bucket per calendar day (last 30 days)
   success_rate: number;          // 0-100, last 10 completed runs
+  /** Branch of the latest run. */
+  latest_branch?: string | null;
+  /** 0-100 over completed runs in the last 30 days (of the 30 most recent runs); null when none. */
+  success_rate_30d?: number | null;
+  /** Completed runs in the last 30 days (of the 30 most recent runs). */
+  runs_30d?: number;
+  /** p95 duration of completed runs in the last 30 days, ms; null when none. */
+  p95_duration_ms?: number | null;
+  /** Durations and queue waits for the fetched window, newest first — fleet KPIs aggregate these. */
+  window_runs?: RepoRunPoint[];
+}
+
+// ── Run points shared by repo and workflow summaries ─────────────────────────
+
+type ListedRun = {
+  id: number;
+  conclusion?: string | null;
+  status?: string | null;
+  created_at: string;
+  updated_at: string;
+  run_started_at?: string | null;
+  head_branch?: string | null;
+};
+
+/** One run as a summary point, with duration (completed only) and queue wait. */
+export function toRunPoint(r: ListedRun): RepoRunPoint {
+  const created = new Date(r.created_at).getTime();
+  const started = r.run_started_at ? new Date(r.run_started_at).getTime() : NaN;
+  const updated = new Date(r.updated_at).getTime();
+  return {
+    id: r.id,
+    conclusion: r.conclusion ?? null,
+    status: r.status ?? null,
+    created_at: r.created_at,
+    duration_ms: r.status === "completed" && Number.isFinite(started) && updated >= started ? updated - started : null,
+    queue_ms: Number.isFinite(started) && started >= created ? started - created : null,
+    head_branch: r.head_branch ?? null,
+  };
+}
+
+/** 30-day success rate, run count and p95 duration over completed runs since `cutoff`. */
+export function windowFields(points: RepoRunPoint[], cutoff: number): Pick<RepoSummary, "success_rate_30d" | "runs_30d" | "p95_duration_ms" | "window_runs"> {
+  const win = points.filter((p) => p.status === "completed" && new Date(p.created_at).getTime() >= cutoff);
+  const pass = win.filter((p) => p.conclusion === "success").length;
+  const durations = win.map((p) => p.duration_ms).filter((d): d is number => typeof d === "number").sort((a, b) => a - b);
+  return {
+    success_rate_30d: win.length ? Math.round((pass / win.length) * 1000) / 10 : null,
+    runs_30d: win.length,
+    p95_duration_ms: durations.length ? durations[Math.min(durations.length - 1, Math.ceil(0.95 * durations.length) - 1)] : null,
+    window_runs: points,
+  };
 }
 
 export async function getRepoSummary(
@@ -258,13 +330,10 @@ export async function getRepoSummary(
   // Latest run (first in list, most recent)
   const latest = runs[0] ?? null;
 
+  const points = runs.map(toRunPoint);
+
   // Recent 10 for history bars
-  const recent_runs: RepoRunPoint[] = runs.slice(0, 10).map((r) => ({
-    id: r.id,
-    conclusion: r.conclusion ?? null,
-    status: r.status ?? null,
-    created_at: r.created_at,
-  }));
+  const recent_runs: RepoRunPoint[] = points.slice(0, 10);
 
   // Success rate over last 10 completed runs
   const completed10 = runs.filter((r) => r.status === "completed").slice(0, 10);
@@ -293,6 +362,8 @@ export async function getRepoSummary(
     .map(([date, { success, total }]) => ({ date, success, total }));
 
   return {
+    ...windowFields(points, cutoff),
+    latest_branch: latest?.head_branch ?? null,
     latest_conclusion: latest?.conclusion ?? null,
     latest_status: latest?.status ?? null,
     latest_run_at: latest?.created_at ?? null,
@@ -350,12 +421,8 @@ export async function getRepoOverview(
 
         // Build summary (same logic as getRepoSummary)
         const latest = runs[0] ?? null;
-        const recent_runs: RepoRunPoint[] = runs.slice(0, 10).map((r) => ({
-          id: r.id,
-          conclusion: r.conclusion ?? null,
-          status: r.status ?? null,
-          created_at: r.created_at,
-        }));
+        const points = runs.map(toRunPoint);
+        const recent_runs: RepoRunPoint[] = points.slice(0, 10);
 
         const completed10 = runs.filter((r) => r.status === "completed").slice(0, 10);
         const successCount = completed10.filter((r) => r.conclusion === "success").length;
@@ -379,6 +446,8 @@ export async function getRepoOverview(
           .map(([date, { success, total }]) => ({ date, success, total }));
 
         const summary: RepoSummary = {
+          ...windowFields(points, cutoff),
+          latest_branch: latest?.head_branch ?? null,
           latest_conclusion: latest?.conclusion ?? null,
           latest_status: latest?.status ?? null,
           latest_run_at: latest?.created_at ?? null,

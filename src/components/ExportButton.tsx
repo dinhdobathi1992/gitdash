@@ -49,9 +49,13 @@ interface ExportButtonProps {
   /** If provided, also offer CSV export. Each call should return the flattened rows. */
   csvRows?: () => Record<string, string | number>[];
   className?: string;
+  /** Button text; defaults to "Export". */
+  label?: string;
+  /** Skip the JSON/CSV menu and download CSV directly. */
+  csvOnly?: boolean;
 }
 
-export function ExportButton({ data, filenameBase, csvRows, className }: ExportButtonProps) {
+export function ExportButton({ data, filenameBase, csvRows, className, label = "Export", csvOnly }: ExportButtonProps) {
   const [open, setOpen] = useState(false);
 
   function exportJson() {
@@ -71,31 +75,30 @@ export function ExportButton({ data, filenameBase, csvRows, className }: ExportB
 
   if (!data) return null;
 
+  const trigger = "inline-flex items-center gap-2 h-9 px-3.5 rounded-control bg-surface border border-control text-[13px] font-semibold text-fg hover:bg-raised transition-colors duration-100";
+
+  if (csvOnly && csvRows) {
+    return (
+      <button type="button" onClick={exportCsv} className={`${trigger} ${className ?? ""}`}>
+        <Download className="w-4 h-4 text-muted" aria-hidden="true" />
+        {label}
+      </button>
+    );
+  }
+
   return (
     <div className={`relative inline-block ${className ?? ""}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-      >
-        <Download className="w-3.5 h-3.5" />
-        Export
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={trigger}>
+        <Download className="w-4 h-4 text-muted" aria-hidden="true" />
+        {label}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
-          <button
-            type="button"
-            onClick={exportJson}
-            className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-          >
+        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[128px] float-card py-1 overflow-hidden">
+          <button type="button" onClick={exportJson} className="w-full text-left px-3 h-9 text-[13px] text-muted hover:bg-raised hover:text-fg">
             JSON
           </button>
           {csvRows && (
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors border-t border-slate-700"
-            >
+            <button type="button" onClick={exportCsv} className="w-full text-left px-3 h-9 text-[13px] text-muted hover:bg-raised hover:text-fg">
               CSV
             </button>
           )}

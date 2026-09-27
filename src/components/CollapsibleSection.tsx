@@ -1,15 +1,9 @@
 "use client";
 
 /**
- * Collapsible section header (extracted to shared in v4.2.5).
- *
- * Introduced in v4.0.11 for Team Analytics but left as a local function in
- * that one page, so every other collapsible on the app kept its original bare
- * "› Show …" text toggle. That inconsistency became obvious once polished
- * cards were added next to those toggles on the repository overview.
- *
- * Design reference: claude.ai/design "Scorecard board redesign" project,
- * adapted to the app's lucide icons and Tailwind tokens.
+ * Collapsible section — a card whose header row toggles its body.
+ * Graphite style (contract §3.3): card surface, 32 px tinted icon box,
+ * 15/600 title, 13 muted subtitle, secondary "Show / Hide" control.
  */
 
 import { ChevronRight } from "lucide-react";
@@ -17,26 +11,16 @@ import { cn } from "@/lib/utils";
 
 export type SectionTone = "violet" | "cyan" | "amber" | "green" | "red";
 
-export const SECTION_TONES: Record<
-  SectionTone,
-  { text: string; bg: string; border: string; stripe: string }
-> = {
-  violet: { text: "text-violet-300", bg: "bg-violet-500/[0.14]", border: "border-violet-500/30", stripe: "bg-gradient-to-b from-violet-400 to-violet-600" },
-  cyan:   { text: "text-cyan-300",   bg: "bg-cyan-500/[0.14]",   border: "border-cyan-500/30",   stripe: "bg-gradient-to-b from-cyan-400 to-cyan-600" },
-  amber:  { text: "text-amber-300",  bg: "bg-amber-500/[0.14]",  border: "border-amber-500/30",  stripe: "bg-gradient-to-b from-amber-400 to-amber-600" },
-  green:  { text: "text-emerald-300", bg: "bg-emerald-500/[0.14]", border: "border-emerald-500/30", stripe: "bg-gradient-to-b from-emerald-400 to-emerald-600" },
-  red:    { text: "text-red-300",    bg: "bg-red-500/[0.14]",    border: "border-red-500/30",    stripe: "bg-gradient-to-b from-red-400 to-red-600" },
+export const SECTION_TONES: Record<SectionTone, { text: string; bg: string; border: string; stripe: string }> = {
+  violet: { text: "text-brand-fg", bg: "bg-brand-soft", border: "border-brand-fg/30", stripe: "bg-brand-fg" },
+  cyan: { text: "text-status-run-text", bg: "bg-status-run-tint", border: "border-status-run/30", stripe: "bg-status-run" },
+  amber: { text: "text-status-warn-text", bg: "bg-status-warn-tint", border: "border-status-warn/30", stripe: "bg-status-warn" },
+  green: { text: "text-status-pass-text", bg: "bg-status-pass-tint", border: "border-status-pass/30", stripe: "bg-status-pass" },
+  red: { text: "text-status-fail-text", bg: "bg-status-fail-tint", border: "border-status-fail/30", stripe: "bg-status-fail" },
 };
 
 export default function CollapsibleSection({
-  icon: Icon,
-  tone,
-  title,
-  badge,
-  subtitle,
-  open,
-  onToggle,
-  children,
+  icon: Icon, tone, title, badge, subtitle, open, onToggle, children,
 }: {
   icon: React.ElementType;
   tone: SectionTone;
@@ -50,36 +34,36 @@ export default function CollapsibleSection({
 }) {
   const t = SECTION_TONES[tone];
   return (
-    <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/50 to-slate-950/70 shadow-[0_40px_80px_-55px_rgba(0,0,0,1)] overflow-hidden">
+    <section className="card overflow-hidden">
       <button
+        type="button"
         onClick={onToggle}
         aria-expanded={open}
         className={cn(
-          "w-full relative flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-800/40",
-          open && "border-b border-slate-800",
+          "w-full flex items-center gap-4 px-5 py-4 text-left transition-colors duration-100 hover:bg-raised/40",
+          open && "border-b border-line",
         )}
       >
-        <span className={cn("absolute inset-y-0 left-0 w-[2px]", t.stripe)} />
-        <span className={cn("shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center", t.bg, t.border)}>
-          <Icon className={cn("w-4 h-4", t.text)} />
+        <span className={cn("shrink-0 w-8 h-8 rounded-control flex items-center justify-center", t.bg)}>
+          <Icon className={cn("w-4 h-4", t.text)} aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-[15px] font-semibold text-white">{title}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-[15px] font-semibold text-fg">{title}</span>
             {badge && (
-              <span className={cn("font-mono text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap", t.bg, t.border, t.text)}>
+              <span className={cn("font-mono text-xs h-[22px] inline-flex items-center px-2 rounded-chip whitespace-nowrap", t.bg, t.text)}>
                 {badge}
               </span>
             )}
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
-        </div>
-        <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 text-xs text-slate-300">
+          </span>
+          <span className="block text-[13px] text-muted mt-0.5">{subtitle}</span>
+        </span>
+        <span className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-control border border-control bg-surface text-[13px] font-medium text-fg">
           {open ? "Hide" : "Show"}
-          <ChevronRight className={cn("w-3 h-3 transition-transform", open && "rotate-90")} />
+          <ChevronRight className={cn("w-3.5 h-3.5 transition-transform duration-100", open && "rotate-90")} aria-hidden="true" />
         </span>
       </button>
       {open && <div className="p-5">{children}</div>}
-    </div>
+    </section>
   );
 }

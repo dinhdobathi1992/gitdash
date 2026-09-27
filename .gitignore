@@ -53,3 +53,7 @@ k8s/secret.yaml
 .codex
 .cursor
 .claude
+
+# Local planning and design working files (kept on disk, not published)
+/plans/
+/design/

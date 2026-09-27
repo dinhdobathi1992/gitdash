@@ -5,6 +5,9 @@ import { validateOrg, validatePerPage, safeError } from "@/lib/validation";
 import { withCache, hashKey } from "@/lib/cache";
 import { pLimitSettled } from "@/lib/concurrency";
 
+import { privateCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+
 const CACHE_TTL = 900; // 15 min — this is an expensive multi-request call
 
 // ── Response types ───────────────────────────────────────────────────────────
@@ -34,6 +37,7 @@ export interface OrgOverviewResponse {
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/org-overview");
   const token = await getTokenFromSession();
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -53,7 +57,7 @@ export async function GET(req: NextRequest) {
   try {
     // Scope the key by token hash: the response reflects THIS user's private-repo
     // visibility, so it must never be served to a different user (cross-tenant leak).
-    const cacheKey = `org-overview:${hashKey(token)}:${org}:${limit}`;
+    const cacheKey = `github/org-overview:${hashKey(token)}:${org}:${limit}`;
     const response = await withCache<OrgOverviewResponse>(cacheKey, CACHE_TTL, async () => {
     // 1. List all org repos (already sorted by updated desc)
     const allRepos = await listOrgRepos(token, org);
@@ -112,11 +116,11 @@ export async function GET(req: NextRequest) {
       },
       repos: results,
     } satisfies OrgOverviewResponse;
-    }); // end withCache
+    }, { shared: true }); // end withCache
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=1800`,
+        ...privateCacheHeaders(0),
       },
     });
   } catch (e) {

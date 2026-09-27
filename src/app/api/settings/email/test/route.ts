@@ -15,6 +15,7 @@ import { sendTestEmail } from "@/lib/notifier";
 import { aiRateLimit } from "@/lib/ratelimit";
 import { hashKey } from "@/lib/cache";
 import { safeError } from "@/lib/validation";
+import { requireAccess } from "@/lib/permissions";
 
 export const maxDuration = 60;
 
@@ -22,6 +23,8 @@ const RATE_LIMIT_PER_MIN = 3;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

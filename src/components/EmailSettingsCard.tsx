@@ -187,7 +187,7 @@ export default function EmailSettingsCard() {
                   <option key={p} value={p}>{PROVIDER_META[p].label}</option>
                 ))}
               </select>
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Both use their HTTP API — no SMTP server or port required.
               </p>
             </Field>
@@ -201,7 +201,7 @@ export default function EmailSettingsCard() {
                 onChange={(e) => patch({ apiKey: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-900/70 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Stored encrypted and never shown again. Get one at{" "}
                 <a href={meta.docs} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">
                   {meta.label}
@@ -217,7 +217,7 @@ export default function EmailSettingsCard() {
                 onChange={(e) => patch({ from: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-900/70 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Must be on a domain you have verified with {meta.label}.
               </p>
             </Field>
@@ -253,7 +253,7 @@ export default function EmailSettingsCard() {
           </button>
 
           {data.updated_by && (
-            <span className="text-[11px] text-slate-600">
+            <span className="text-xs text-slate-600">
               Last changed by @{data.updated_by}
               {data.updated_at && ` · ${new Date(data.updated_at).toLocaleDateString()}`}
             </span>
@@ -300,13 +300,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function StatusPill({ data }: { data: EmailSettingsResponse }) {
   if (data.effective_source === "none") {
     return (
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border border-slate-700 bg-slate-800/60 text-slate-400">
+      <span className="shrink-0 text-xs font-semibold px-2 py-1 rounded-full border border-slate-700 bg-slate-800/60 text-slate-400">
         Not configured
       </span>
     );
   }
   return (
-    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
+    <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
       <CheckCircle2 className="w-3 h-3" />
       {data.effective_source === "settings" ? "Active" : "Active (env)"}
     </span>

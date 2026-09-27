@@ -31,12 +31,12 @@ function fmtMs(ms: number): string {
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: "#1e293b",
-    border: "1px solid #334155",
+    background: "#1E242D",
+    border: "1px solid #2A313C",
     borderRadius: 8,
     fontSize: 12,
   },
-  labelStyle: { color: "#94a3b8", marginBottom: 4 },
+  labelStyle: { color: "#A3A9B4", marginBottom: 4 },
 };
 
 function SectionCard({
@@ -60,7 +60,7 @@ function SectionCard({
           {tooltip && <MetricTooltip text={tooltip} align="left" />}
         </div>
         {source && (
-          <span className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-800/60 border border-slate-700/40 rounded-full px-2 py-0.5 shrink-0">
+          <span className="flex items-center gap-1 text-xs text-slate-500 bg-slate-800/60 border border-slate-700/40 rounded-full px-2 py-0.5 shrink-0">
             <Database className="w-2.5 h-2.5" />
             {source}
           </span>
@@ -79,25 +79,25 @@ const CYCLE_PHASES = [
     key: "avg_time_to_open_ms" as const,
     label: "Time to Open",
     desc: "First commit → PR created",
-    color: "#7c3aed",
+    color: "#A48BFF",
   },
   {
     key: "avg_pickup_ms" as const,
     label: "Pickup Time",
     desc: "PR created → first review",
-    color: "#2563eb",
+    color: "#74B6F4",
   },
   {
     key: "avg_review_ms" as const,
     label: "Review Time",
     desc: "First review → approval",
-    color: "#0891b2",
+    color: "#4FD1E8",
   },
   {
     key: "avg_merge_ms" as const,
     label: "Merge Time",
     desc: "Approval → merged",
-    color: "#059669",
+    color: "#3DD68C",
   },
 ] as const;
 
@@ -143,13 +143,13 @@ function PrCycleBreakdown({
                 <span className="text-xs font-semibold text-white">{fmtMs(phase.ms)}</span>
                 <span className="text-xs text-slate-400">{phase.label}</span>
               </div>
-              <p className="text-[10px] text-slate-600 mt-0.5">{phase.desc}</p>
+              <p className="text-xs text-slate-600 mt-0.5">{phase.desc}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <p className="text-[11px] text-slate-600 border-t border-slate-800 pt-3">
+      <p className="text-xs text-slate-600 border-t border-slate-800 pt-3">
         Avg total lead time:{" "}
         <span className="text-slate-400 font-medium">{fmtMs(total)}</span>
         {" · "}
@@ -214,27 +214,27 @@ function PrSizeScatter({ points }: { points: RepoDoraSummary["pr_scatter"] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" />
         <XAxis
           dataKey="loc"
           type="number"
           name="Lines changed"
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           label={{
             value: "Lines changed",
             position: "insideBottom",
             offset: -2,
-            fill: "#475569",
-            fontSize: 10,
+            fill: "#626A77",
+            fontSize: 11,
           }}
         />
         <YAxis
           dataKey="hours_to_merge"
           type="number"
           name="Hours to merge"
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           unit="h"
@@ -250,7 +250,7 @@ function PrSizeScatter({ points }: { points: RepoDoraSummary["pr_scatter"] }) {
                 style={TOOLTIP_STYLE.contentStyle}
                 className="max-w-[200px]"
               >
-                <p className="text-slate-400 text-[10px] mb-1">PR #{d.number}</p>
+                <p className="text-slate-400 text-xs mb-1">PR #{d.number}</p>
                 <p className="text-white font-medium text-xs truncate">{d.title}</p>
                 <p className="text-slate-300 text-xs mt-1">
                   {d.loc.toLocaleString()} lines · {d.hours_to_merge}h to merge
@@ -259,7 +259,7 @@ function PrSizeScatter({ points }: { points: RepoDoraSummary["pr_scatter"] }) {
             );
           }}
         />
-        <Scatter data={data} fill="#7c3aed" opacity={0.8} r={4} />
+        <Scatter data={data} fill="#A48BFF" opacity={0.8} r={4} />
 
         {/* Trend line as a second scatter with lines */}
         {trendLine && (
@@ -267,7 +267,7 @@ function PrSizeScatter({ points }: { points: RepoDoraSummary["pr_scatter"] }) {
             data={trendLine}
             dataKey="trend"
             fill="none"
-            line={{ stroke: "#94a3b8", strokeWidth: 1.5, strokeDasharray: "4 3" }}
+            line={{ stroke: "#A3A9B4", strokeWidth: 1.5, strokeDasharray: "4 3" }}
             shape={() => null as unknown as React.ReactElement}
           />
         )}
@@ -292,16 +292,16 @@ function PrThroughput({ weeks }: { weeks: RepoDoraSummary["throughput_by_week"] 
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
         <XAxis
           dataKey="label"
-          tick={{ fill: "#64748b", fontSize: 9 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           width={24}
@@ -314,7 +314,7 @@ function PrThroughput({ weeks }: { weeks: RepoDoraSummary["throughput_by_week"] 
         <Bar
           dataKey="PRs"
           radius={[3, 3, 0, 0]}
-          fill="#7c3aed"
+          fill="#A48BFF"
           // Shade intensity by count
           label={false}
         >
@@ -366,16 +366,16 @@ function WorkflowStability({ overview }: { overview: WorkflowOverview[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={aggregate} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
         <XAxis
           dataKey="label"
-          tick={{ fill: "#64748b", fontSize: 9 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           domain={[0, 100]}
@@ -389,23 +389,23 @@ function WorkflowStability({ overview }: { overview: WorkflowOverview[] }) {
         {/* Elite threshold */}
         <ReferenceLine
           y={95}
-          stroke="#10b981"
+          stroke="#3DD68C"
           strokeDasharray="4 3"
           strokeWidth={1}
-          label={{ value: "Elite 95%", fill: "#10b981", fontSize: 9, position: "right" }}
+          label={{ value: "Elite 95%", fill: "#3DD68C", fontSize: 11, position: "right" }}
         />
         {/* High threshold */}
         <ReferenceLine
           y={80}
-          stroke="#3b82f6"
+          stroke="#74B6F4"
           strokeDasharray="4 3"
           strokeWidth={1}
-          label={{ value: "High 80%", fill: "#3b82f6", fontSize: 9, position: "right" }}
+          label={{ value: "High 80%", fill: "#74B6F4", fontSize: 11, position: "right" }}
         />
         <Line
           type="monotone"
           dataKey="rate"
-          stroke="#7c3aed"
+          stroke="#A48BFF"
           strokeWidth={2}
           dot={false}
           connectNulls

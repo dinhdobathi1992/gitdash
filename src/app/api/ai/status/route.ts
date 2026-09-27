@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { aiEnabled, configuredProviders } from "@/lib/ai";
+import { privateCacheHeaders } from "@/lib/http-cache";
 
 export const maxDuration = 60;
 
@@ -30,6 +31,6 @@ export async function GET() {
   };
 
   return NextResponse.json(body, {
-    headers: { "Cache-Control": "private, max-age=60" },
+    headers: privateCacheHeaders(60),
   });
 }
