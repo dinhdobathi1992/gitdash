@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitDash Caching and Permissions Plan</title>
+<meta name="description" content="Implementation plan: GitHub API caching hardening and org-mode group permissions for GitDash. Red-teamed and validated 2026-09-27.">
+<style>
+:root{
+  --paper:#faf7f2; --panel:#f0ebe1; --ink:#0a0a0a; --ink-2:#2b2723; --muted:#6b6258; --rule:#d9d1c3; --accent:#b8232c;
+  --gd-bg:#020617; --gd-card:#0f172a; --gd-border:#334155; --gd-border-subtle:#1e293b; --gd-fg:#f1f5f9; --gd-muted:#94a3b8; --gd-faint:#475569; --gd-brand:#7c3aed; --gd-brand-soft:#4c1d95; --gd-warn:#f59e0b;
+  --serif:"Iowan Old Style","Charter","Palatino Linotype","Book Antiqua",Georgia,serif;
+  --sans:"Avenir Next","Segoe UI","Helvetica Neue",Helvetica,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:64px;--s9:96px;
+  --t-xs:.75rem;--t-sm:.875rem;--t-md:1.0625rem;--t-lg:1.333rem;--t-xl:1.777rem;--t-2xl:2.369rem;--t-display:clamp(2.75rem,5vw + 1rem,5.25rem);
+  --ease:cubic-bezier(0.22,1,0.36,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 var(--t-md)/1.6 var(--sans);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(rgba(107,98,88,.05) 1px,transparent 1px);background-size:4px 4px}
+a{color:var(--ink);text-decoration-color:var(--accent);text-underline-offset:3px}
+a:hover{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--s5)}
+.folio{font:500 var(--t-xs)/1 var(--mono);color:var(--muted);letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;border-top:1px solid var(--ink);padding-top:var(--s2);margin-bottom:var(--s6)}
+section{padding:var(--s9) 0 var(--s8)}
+h1,h2,h3{font-family:var(--serif);font-weight:400;text-wrap:balance;margin:0}
+h2{font-size:var(--t-2xl);line-height:1.15;margin-bottom:var(--s5)}
+h2 em,h1 em{color:var(--accent)}
+h3{font-size:var(--t-lg);line-height:1.2}
+p{max-width:68ch;text-wrap:pretty}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px 4px;overflow-wrap:anywhere}
+.cover>*,.phase>*,.flow>*,.mock-wrap>*,.two>*,.band .wrap>*{min-width:0}
+/* cover */
+.cover{min-height:min(100dvh,880px);display:grid;grid-template-columns:7fr 5fr;gap:var(--s7);align-items:end;padding:var(--s8) 0 var(--s7)}
+.cover h1{font-size:var(--t-display);line-height:1.05;letter-spacing:-.02em}
+.cover .lede{font-size:var(--t-lg);color:var(--ink-2);margin-top:var(--s5);max-width:40ch}
+.cover aside{border-top:1px solid var(--ink);padding-top:var(--s4);font-size:var(--t-sm);color:var(--ink-2)}
+.cover aside dl{display:grid;grid-template-columns:auto 1fr;gap:var(--s2) var(--s4);margin:0}
+.cover aside dt{font-family:var(--mono);font-size:var(--t-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding-top:3px}
+.cover aside dd{margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:var(--s7)}
+.stats div{padding:var(--s4) var(--s4) var(--s4) 0}
+.stats b{display:block;font:400 var(--t-2xl)/1 var(--serif);font-variant-numeric:tabular-nums}
+.stats span{font:500 var(--t-xs)/1.4 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+/* constraint band */
+.band{background:var(--ink);color:var(--paper);padding:var(--s7) 0}
+.band .wrap{display:grid;grid-template-columns:4fr 8fr;gap:var(--s7)}
+.band h2{color:var(--paper);font-style:italic}
+.band ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:var(--s4) var(--s6)}
+.band li{border-top:1px solid #4a443d;padding-top:var(--s3);font-size:var(--t-sm)}
+.band code{background:#2b2723;color:var(--paper)}
+/* diagram */
+.diagram{border-top:1px solid var(--ink);padding-top:var(--s5);overflow-x:auto}
+.diagram svg{width:100%;min-width:760px;height:auto;display:block}
+.legend{display:flex;gap:var(--s5);font:500 var(--t-xs)/1 var(--mono);color:var(--muted);margin-top:var(--s4);flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;height:0;border-top:2px solid var(--ink);vertical-align:middle;margin-right:6px}
+.legend i.dash{border-top-style:dashed;border-color:var(--accent)}
+/* roadmap */
+.roadmap{list-style:none;margin:0;padding:0;border-top:1px solid var(--ink)}
+.phase{display:grid;grid-template-columns:64px 5fr 4fr 132px;gap:var(--s5);padding:var(--s5) 0;border-bottom:1px solid var(--rule);align-items:start}
+.phase .num{font:400 var(--t-2xl)/1 var(--serif);color:var(--accent);font-variant-numeric:tabular-nums}
+.phase h3{margin-bottom:var(--s2)}
+.phase .obj{color:var(--ink-2);font-size:var(--t-sm);margin:0 0 var(--s3)}
+.phase ul{margin:0;padding-left:1.1em;font-size:var(--t-sm);color:var(--ink-2)}
+.phase ul li{margin-bottom:var(--s1)}
+.meta{font:500 var(--t-xs)/1.7 var(--mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+.files{font:400 var(--t-xs)/1.6 var(--mono);color:var(--ink-2);word-break:break-word}
+.gate{margin-top:var(--s3);font-size:var(--t-sm);border-top:1px dotted var(--rule);padding-top:var(--s2)}
+.gate strong{font-family:var(--mono);font-size:var(--t-xs);color:var(--accent);font-weight:500;margin-right:6px}
+.checkpoint{grid-column:1/-1;font:italic var(--t-md)/1.4 var(--serif);color:var(--accent);padding:var(--s3) 0;border-bottom:1px solid var(--accent)}
+.btn{font:500 var(--t-sm)/1 var(--sans);background:transparent;color:var(--ink);border:1px solid var(--ink);padding:var(--s3) var(--s4);min-height:44px;cursor:pointer;transition:transform 120ms var(--ease),background-color 200ms var(--ease),color 200ms var(--ease)}
+.btn:hover{background:var(--ink);color:var(--paper);transform:translateY(-2px)}
+.btn:active{transform:translateY(1px)}
+/* flow */
+.flow{display:grid;grid-template-columns:5fr 7fr;gap:var(--s7)}
+.flow pre{margin:0;background:var(--panel);padding:var(--s5);font:400 var(--t-xs)/1.7 var(--mono);overflow-x:auto;border-top:2px solid var(--ink)}
+.flow ol{margin:0;padding-left:1.2em}
+.flow ol li{margin-bottom:var(--s3);font-size:var(--t-sm)}
+/* mockups */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--ink);margin-bottom:var(--s6);flex-wrap:wrap}
+.tabs button{font:500 var(--t-sm)/1 var(--sans);background:none;border:0;border-bottom:2px solid transparent;padding:var(--s3) var(--s4);min-height:44px;cursor:pointer;color:var(--muted);transition:color 200ms var(--ease),border-color 200ms var(--ease)}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+.mock-wrap{display:grid;grid-template-columns:7fr 5fr;gap:var(--s6);align-items:start}
+.screen{overflow-x:auto;background:var(--gd-bg);color:var(--gd-fg);font:400 13px/1.5 var(--sans);padding:var(--s5);border:1px solid var(--gd-border)}
+.screen .bar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--gd-border-subtle);padding-bottom:var(--s3);margin-bottom:var(--s4)}
+.screen .bar b{font-size:15px;font-weight:600}
+.screen .sub{color:var(--gd-muted);font-size:12px}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border:1px solid var(--gd-border);color:var(--gd-muted);border-radius:999px}
+.pill.on{border-color:var(--gd-brand);color:#ddd6fe;background:var(--gd-brand-soft)}
+.pill.warn{border-color:var(--gd-warn);color:var(--gd-warn)}
+.gtabs{display:flex;gap:var(--s4);font-size:12px;color:var(--gd-muted);margin-bottom:var(--s4)}
+.gtabs span.act{color:var(--gd-fg);border-bottom:2px solid var(--gd-brand);padding-bottom:4px}
+.matrix{width:100%;border-collapse:collapse;font-size:12px}
+.matrix th,.matrix td{padding:6px 8px;border-bottom:1px solid var(--gd-border-subtle);text-align:center}
+.matrix th:first-child,.matrix td:first-child{text-align:left}
+.matrix th{color:var(--gd-muted);font-weight:500}
+.tg{display:inline-block;width:26px;height:14px;border-radius:999px;border:1.5px solid var(--gd-faint);position:relative;vertical-align:middle}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:7px;height:7px;border-radius:50%;background:var(--gd-faint)}
+.tg.on{border-color:var(--gd-brand)}
+.tg.on::after{left:13px;background:#a78bfa}
+.tg.lock{opacity:.55}
+.banner{border:1px solid var(--gd-warn);color:var(--gd-warn);padding:6px 10px;font-size:12px;margin-bottom:var(--s3)}
+.anno{position:relative}
+.marker{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--paper);font:600 10px/1 var(--mono);margin-left:6px;vertical-align:middle}
+.callouts{list-style:none;margin:0;padding:0;counter-reset:c}
+.callouts li{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);padding:var(--s3) 0;border-bottom:1px solid var(--rule);font-size:var(--t-sm)}
+.callouts li span{font:600 var(--t-xs)/1 var(--mono);color:var(--paper);background:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.callouts code{font-size:.8em}
+.pending{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:var(--s3)}
+.avatar{width:48px;height:48px;border-radius:50%;background:var(--gd-brand-soft);border:1px solid var(--gd-brand)}
+.flags{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.flag{border:1px solid var(--gd-border);padding:var(--s3);display:flex;justify-content:space-between;gap:var(--s2)}
+.flag small{display:block;color:var(--gd-muted);font-size:11px}
+.hidden-note{grid-column:1/-1;color:var(--gd-faint);font-size:11px;border-top:1px dashed var(--gd-border);padding-top:var(--s2)}
+[role=tabpanel][hidden]{display:none}
+/* decisions */
+.dec{width:100%;border-collapse:collapse;font-size:var(--t-sm)}
+.dec th{text-align:left;font:500 var(--t-xs)/1.4 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:var(--s2) var(--s3) var(--s2) 0;border-bottom:1px solid var(--ink)}
+.dec td{padding:var(--s3) var(--s3) var(--s3) 0;border-bottom:1px solid var(--rule);vertical-align:top}
+.dec td:first-child{font-family:var(--serif);font-size:var(--t-md);width:22%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s7)}
+details{border-bottom:1px solid var(--rule);padding:var(--s3) 0}
+summary{cursor:pointer;font-family:var(--serif);font-size:var(--t-md);list-style:none;display:flex;justify-content:space-between;gap:var(--s3);min-height:32px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-family:var(--mono);color:var(--accent)}
+details[open] summary::after{content:"-"}
+details p{font-size:var(--t-sm);color:var(--ink-2);margin:var(--s2) 0 0}
+.sev{font:500 var(--t-xs)/1 var(--mono);color:var(--accent);margin-right:var(--s2)}
+.pull{font:italic var(--t-xl)/1.3 var(--serif);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:var(--s5) 0;margin:var(--s6) 0;max-width:none}
+.pull em{color:var(--accent)}
+footer{padding:var(--s7) 0;font:500 var(--t-xs)/1.6 var(--mono);color:var(--muted);border-top:1px solid var(--ink)}
+/* dialog */
+dialog{max-width:860px;width:calc(100% - 32px);max-height:88dvh;padding:0;border:1px solid var(--ink);background:var(--paper);color:var(--ink)}
+dialog::backdrop{background:rgba(10,10,10,.45)}
+dialog header{position:sticky;top:0;background:var(--paper);display:flex;justify-content:space-between;align-items:center;padding:var(--s4) var(--s5);border-bottom:1px solid var(--ink);gap:var(--s4)}
+dialog .body{padding:var(--s5) var(--s6) var(--s7);overflow:auto;max-height:calc(88dvh - 80px)}
+.md h1{font-size:var(--t-2xl);margin:0 0 var(--s4)}
+.md h2{font-size:var(--t-xl);margin:var(--s6) 0 var(--s3);padding-top:var(--s3);border-top:1px solid var(--rule)}
+.md h3{font-size:var(--t-lg);margin:var(--s5) 0 var(--s2)}
+.md h4{font:600 var(--t-sm)/1.4 var(--sans);margin:var(--s4) 0 var(--s2)}
+.md p,.md li{font-size:var(--t-sm)}
+.md ul,.md ol{padding-left:1.3em}
+.md li{margin-bottom:var(--s1)}
+.md li.task{list-style:none;margin-left:-1.3em}
+.md li.task input{margin-right:var(--s2);accent-color:var(--accent)}
+.md pre{background:var(--panel);padding:var(--s4);overflow-x:auto;font:400 var(--t-xs)/1.6 var(--mono);border-top:2px solid var(--ink)}
+.md pre code{background:none;padding:0}
+.md table{border-collapse:collapse;width:100%;font-size:var(--t-xs);margin:var(--s3) 0;display:block;overflow-x:auto}
+.md th,.md td{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:left;vertical-align:top}
+.md th{border-bottom:1px solid var(--ink);font-family:var(--mono);font-weight:500}
+.md blockquote{margin:var(--s3) 0;padding-left:var(--s4);border-left:1px solid var(--accent);color:var(--ink-2)}
+.md hr{border:0;border-top:1px solid var(--rule)}
+.fm{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);font:500 var(--t-xs)/1.4 var(--mono);color:var(--muted);margin-bottom:var(--s5);padding-bottom:var(--s3);border-bottom:1px solid var(--rule)}
+.fm b{color:var(--ink);font-weight:500}
+@media (max-width:860px){
+  .cover,.band .wrap,.flow,.mock-wrap,.two{grid-template-columns:minmax(0,1fr)}
+  .cover{min-height:auto;padding-top:var(--s7)}
+  .band ul{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .phase{grid-template-columns:44px minmax(0,1fr)}
+  .phase > .meta-col,.phase > .files-col{grid-column:2}
+  section{padding:var(--s8) 0 var(--s7)}
+  .flags{grid-template-columns:1fr}
+  .screen{padding:var(--s3)}
+  .matrix th,.matrix td{padding:6px 4px}
+  dialog .body{padding:var(--s4)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="cover" id="top">
+    <div>
+      <div class="folio"><span>GitDash / plan 260926-1724</span><span>Validated 2026-09-27</span></div>
+      <h1>Cache the <em>GitHub</em> calls. Gate the features by group.</h1>
+      <p class="lede">Two tracks for GitDash in organization mode: stop burning the GitHub rate limit, then turn browser-only feature flags into permissions an admin grants per group.</p>
+    </div>
+    <aside aria-label="Plan metadata">
+      <dl>
+        <dt>Branch</dt><dd><code>dinhdobathi1992/new-update</code></dd>
+        <dt>Status</dt><dd>Pending, ready for implementation</dd>
+        <dt>Delivery</dt><dd>Local only. No commit, push, PR, or deploy.</dd>
+        <dt>Gates</dt><dd>Red team: 15 findings applied. Validation: 4 decisions, 0 contradictions.</dd>
+        <dt>Source</dt><dd><a href="../reports/brainstorm-260927-0022-caching-and-rbac.md">Brainstorm contract</a> · <a href="plan.md">plan.md</a></dd>
+      </dl>
+    </aside>
+  </header>
+  <div class="stats" role="list">
+    <div role="listitem"><b>8</b><span>Phases, 0 to 7</span></div>
+    <div role="listitem"><b>9.5 to 11.5d</b><span>Estimated effort</span></div>
+    <div role="listitem"><b>8 of 28</b><span>GitHub routes cached today</span></div>
+    <div role="listitem"><b>60s</b><span>Revocation contract</span></div>
+  </div>
+</div>
+
+<div class="band" aria-labelledby="constraint">
+  <div class="wrap">
+    <h2 id="constraint">Everything stays on this machine.</h2>
+    <ul>
+      <li>No git commit, no push, no PR, no Vercel deploy. Edits stay uncommitted in the worktree.</li>
+      <li>Env vars come from <code>vercel env pull</code>, Production, read-only. The production <code>DATABASE_URL</code> is stripped.</li>
+      <li>Database: Docker Postgres behind a local Neon HTTP proxy, so the real Neon driver path runs. PGlite only in unit tests.</li>
+      <li>Local org-mode login uses a PAT. No dev OAuth app. Evidence goes to <code>reports/</code> and the daily note.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="wrap">
+  <section aria-labelledby="flow-h">
+    <div class="folio"><span>Implementation workflow</span><span>Phases and dependencies</span></div>
+    <h2 id="flow-h">Caching lands first. RBAC <em>reuses</em> it.</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 1120 330" role="img" aria-labelledby="dg-t dg-d">
+        <title id="dg-t">Phase dependency diagram</title>
+        <desc id="dg-d">Phase 0 local env and harness, and phase 1 telemetry run first. Phase 2 withCache coverage depends on 1. Phase 3 L2 cache depends on 0 and 2, followed by a review checkpoint. Phase 4 identity depends on 0 and 3. Phase 5 permission core depends on 4. Phases 6 admin and 7 client depend on 5 and ship together with 4 and 5 behind the enforce flag.</desc>
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0a0a0a"/></marker>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b8232c"/></marker></defs>
+        <g font-family="SF Mono,Menlo,monospace" font-size="11" fill="#6b6258">
+          <text x="20" y="24">TRACK 1 · CACHING</text><text x="620" y="24">TRACK 2 · PERMISSIONS (one release, enforce off)</text>
+        </g>
+        <line x1="596" y1="10" x2="596" y2="320" stroke="#d9d1c3"/>
+        <rect x="608" y="36" width="500" height="284" fill="none" stroke="#b8232c" stroke-dasharray="4 4"/>
+        <g font-family="Iowan Old Style,Georgia,serif" font-size="15" fill="#0a0a0a">
+          <rect x="20" y="50" width="160" height="64" fill="#f0ebe1" stroke="#0a0a0a"/><text x="32" y="76">0 · Local env</text><text x="32" y="98" font-size="12" fill="#6b6258">Vercel pull, harness</text>
+          <rect x="20" y="200" width="160" height="64" fill="#f0ebe1" stroke="#0a0a0a"/><text x="32" y="226">1 · Telemetry</text><text x="32" y="248" font-size="12" fill="#6b6258">headers, Vary</text>
+          <rect x="220" y="200" width="160" height="64" fill="#f0ebe1" stroke="#0a0a0a"/><text x="232" y="226">2 · Coverage</text><text x="232" y="248" font-size="12" fill="#6b6258">withCache, keys</text>
+          <rect x="420" y="125" width="160" height="64" fill="#f0ebe1" stroke="#0a0a0a"/><text x="432" y="151">3 · L2 cache</text><text x="432" y="173" font-size="12" fill="#6b6258">opt-in, v8</text>
+          <rect x="630" y="125" width="150" height="64" fill="#faf7f2" stroke="#0a0a0a"/><text x="642" y="151">4 · Identity</text><text x="642" y="173" font-size="12" fill="#6b6258">whoami, PAT, v9</text>
+          <rect x="810" y="125" width="130" height="64" fill="#faf7f2" stroke="#0a0a0a"/><text x="822" y="151">5 · Core</text><text x="822" y="173" font-size="12" fill="#6b6258">proxy, registry</text>
+          <rect x="968" y="60" width="126" height="64" fill="#faf7f2" stroke="#0a0a0a"/><text x="980" y="86">6 · Admin</text><text x="980" y="108" font-size="12" fill="#6b6258">matrix, audit</text>
+          <rect x="968" y="200" width="126" height="64" fill="#faf7f2" stroke="#0a0a0a"/><text x="980" y="226">7 · Client</text><text x="980" y="248" font-size="12" fill="#6b6258">flags, pending</text>
+        </g>
+        <g stroke="#0a0a0a" stroke-width="1.5" fill="none" marker-end="url(#ar)">
+          <path d="M180 232 H216"/><path d="M380 232 H400 V170 H416"/><path d="M180 82 H400 V145 H416"/>
+          <path d="M580 157 H626"/><path d="M780 157 H806"/><path d="M940 150 H954 V92 H964"/><path d="M940 165 H954 V232 H964"/>
+          <path d="M100 114 V140 H560 V180 H700 V193" stroke-dasharray="2 3"/>
+        </g>
+        <g>
+          <line x1="596" y1="120" x2="596" y2="200" stroke="#b8232c" stroke-width="3"/>
+          <text x="470" y="296" font-family="Iowan Old Style,Georgia,serif" font-style="italic" font-size="14" fill="#b8232c">Checkpoint: Thi reviews caching before phase 4</text>
+          <path d="M540 282 C 560 260, 580 230, 594 204" stroke="#b8232c" fill="none" marker-end="url(#arr)"/>
+        </g>
+      </svg>
+    </div>
+    <div class="legend"><span><i></i>depends on</span><span><i class="dash"></i>ships together behind GITDASH_RBAC_ENFORCE=false</span></div>
+  </section>
+
+  <section aria-labelledby="road-h">
+    <div class="folio"><span>Phase roadmap</span><span>Open a phase for the full markdown</span></div>
+    <h2 id="road-h">Eight phases, one checkpoint.</h2>
+    <ol class="roadmap" id="roadmap"></ol>
+  </section>
+
+  <section aria-labelledby="req-h">
+    <div class="folio"><span>User flow</span><span>Org mode, after phase 5</span></div>
+    <h2 id="req-h">What happens on every request.</h2>
+    <div class="flow">
+      <ol>
+        <li><strong>Public path?</strong> Matched by whole segment, so <code>/docsX</code> is not public. Pass through.</li>
+        <li><strong>Cross-site write?</strong> Non-GET to <code>/api</code> with a foreign <code>Origin</code> gets 403.</li>
+        <li><strong>Who is this?</strong> <code>whoami(token)</code> calls GitHub <code>/user</code> with the token in use, cached 60s, and checks allowed-org membership. The cookie is never trusted for identity.</li>
+        <li><strong>What may they do?</strong> Groups from the DB plus env bootstrap admins. Flags are the union of group grants. Cached 60s.</li>
+        <li><strong>Decide.</strong> Admin routes always enforced. With enforcement off, everything else behaves as today.</li>
+        <li><strong>Infra down?</strong> Last known answer for up to 10 minutes, then 503 <code>authz_unavailable</code>. Never a login redirect, never fail open.</li>
+      </ol>
+      <pre aria-label="Request flow pseudocode">request → proxy.ts (Node runtime)
+  ├─ public (segment match) ─────────→ next()
+  ├─ non-GET, foreign Origin ────────→ 403
+  ├─ token? no ──────────────────────→ /login | 401
+  ├─ whoami(token)   [L1 60s]
+  │    401            → clear → /login
+  │    not in org     → 403
+  │    5xx / timeout  → last-known ≤10m | 503
+  ├─ resolveAccess(id) [L1 60s → DB]
+  ├─ decide(classify(path), access, ENFORCE)
+  │    no groups      → /pending | 403 no_groups
+  │    unregistered   → 403
+  │    not granted    → / | 403 forbidden
+  └─ handler → withCache: L1 → L2(shared) → GitHub</pre>
+    </div>
+  </section>
+
+  <section aria-labelledby="ui-h">
+    <div class="folio"><span>Interface previews</span><span>Rendered in GitDash tokens from globals.css</span></div>
+    <h2 id="ui-h">Three screens change.</h2>
+    <div class="tabs" role="tablist" aria-label="Mockups">
+      <button role="tab" id="tab-a" aria-controls="p-a" aria-selected="true">Admin permissions</button>
+      <button role="tab" id="tab-b" aria-controls="p-b" aria-selected="false" tabindex="-1">Pending access</button>
+      <button role="tab" id="tab-c" aria-controls="p-c" aria-selected="false" tabindex="-1">Settings flags</button>
+    </div>
+
+    <div role="tabpanel" id="p-a" aria-labelledby="tab-a" class="mock-wrap">
+      <div class="screen" aria-label="Admin permissions mockup">
+        <div class="bar"><b>Admin</b><span class="sub">thi · admin</span></div>
+        <div class="gtabs"><span>Users <span class="pill warn">3 pending</span></span><span class="act">Permissions</span><span>Audit</span></div>
+        <div class="banner">Enforcement OFF. Changes take effect when GITDASH_RBAC_ENFORCE=true <span class="marker">1</span></div>
+        <table class="matrix">
+          <thead><tr><th>Flag</th><th>devops</th><th>security</th><th>dev</th><th>pm</th><th>admin <span class="marker">2</span></th></tr></thead>
+          <tbody>
+            <tr><td>DORA Metrics</td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg on"></span></td><td><span class="tg on"></span></td><td><span class="tg on lock"></span></td></tr>
+            <tr><td>Security Scan</td><td><span class="tg on"></span></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg on lock"></span></td></tr>
+            <tr><td>Cost Analytics <span class="marker">3</span></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg on"></span></td><td><span class="tg on lock"></span></td></tr>
+            <tr><td>Runner Utilization</td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg on lock"></span></td></tr>
+            <tr><td>File Anomaly as Issue <span class="pill">write</span> <span class="marker">4</span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg on lock"></span></td></tr>
+          </tbody>
+        </table>
+        <p class="sub" style="margin:12px 0 0">Applies to new requests within 60s <span class="marker">5</span></p>
+      </div>
+      <ol class="callouts">
+        <li><span>1</span><div>Warning banner in <code>--status-warning</code> while enforcement is off. Satisfies the rollout decision: no deploy-day lockout.</div></li>
+        <li><span>2</span><div>Admin column locked on at reduced opacity. The API rejects <code>group = admin</code> with 400.</div></li>
+        <li><span>3</span><div>Toggle uses <code>--brand</code> violet, same as today's Feature Flags cards. One CTE writes the grant and its audit row.</div></li>
+        <li><span>4</span><div>Write-capable flags carry a pill, matching the existing exclusion from bulk actions.</div></li>
+        <li><span>5</span><div>Toast copy states the 60s contract. There is no instant invalidation across proxy and handlers.</div></li>
+      </ol>
+    </div>
+
+    <div role="tabpanel" id="p-b" aria-labelledby="tab-b" class="mock-wrap" hidden>
+      <div class="screen pending" aria-label="Pending access mockup">
+        <div class="avatar" aria-hidden="true"></div>
+        <b style="font-size:15px">octo-dev <span class="marker">1</span></b>
+        <p style="margin:0;max-width:34ch;color:var(--gd-muted)">Your account has no GitDash access yet. Ask an admin to add you to a group.</p>
+        <span class="pill">Checking again every 15s <span class="marker">2</span></span>
+        <span class="pill">Log out <span class="marker">3</span></span>
+      </div>
+      <ol class="callouts">
+        <li><span>1</span><div>Identity from <code>whoami</code>, not the cookie. The user row was created at login, so they already appear in the admin Users tab.</div></li>
+        <li><span>2</span><div>Polls <code>/api/auth/me</code> every 15s and redirects to <code>/</code> once groups exist. Meets "moves off pending within ~60s of a grant".</div></li>
+        <li><span>3</span><div>No other navigation. Every data API returns 403 <code>no_groups</code>, which the shared fetcher routes back here.</div></li>
+      </ol>
+    </div>
+
+    <div role="tabpanel" id="p-c" aria-labelledby="tab-c" class="mock-wrap" hidden>
+      <div class="screen" aria-label="Settings feature flags mockup">
+        <div class="bar"><b>Feature Flags</b><span class="sub">4 of 5 granted enabled <span class="marker">1</span></span></div>
+        <div class="flags">
+          <div class="flag"><div>DORA Metrics<small>Repository Overview</small></div><span class="tg on"></span></div>
+          <div class="flag"><div>PR Lifecycle Health<small>Repository Overview</small></div><span class="tg on"></span></div>
+          <div class="flag"><div>Runner Utilization<small>Repository Team</small></div><span class="tg"></span><span class="marker">2</span></div>
+          <div class="flag"><div>Reliability Tab<small>Workflow Detail</small></div><span class="tg on"></span></div>
+          <div class="flag"><div>AI Insights<small>Repository Overview</small></div><span class="tg on"></span></div>
+          <div class="hidden-note">9 flags not granted to your groups are hidden <span class="marker">3</span>. AI provider and Email cards hidden for non-admins <span class="marker">4</span>.</div>
+        </div>
+      </div>
+      <ol class="callouts">
+        <li><span>1</span><div>Counter now counts granted flags only. Enable all and Disable all act on the granted set.</div></li>
+        <li><span>2</span><div>A granted flag the user switched off. Preference in localStorage narrows the grant and saves its API calls.</div></li>
+        <li><span>3</span><div>Ungranted flags never render and never fetch. The server returns 403 anyway if called directly.</div></li>
+        <li><span>4</span><div>Admin-only cards are hidden so non-admins see no 403 error cards on Settings.</div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="dec-h">
+    <div class="folio"><span>Decisions</span><span>Confirmed by Thi</span></div>
+    <h2 id="dec-h">Settled before any code.</h2>
+    <table class="dec">
+      <thead><tr><th>Topic</th><th>Decision</th></tr></thead>
+      <tbody id="decisions"></tbody>
+    </table>
+    <p class="pull">Permissions gate <em>GitDash surfaces</em>, not GitHub access. Where GitDash serves data synced with its own token, the plan checks the user's own token first.</p>
+  </section>
+
+  <section aria-labelledby="risk-h">
+    <div class="folio"><span>Risk and review</span><span>Red team 2026-09-27</span></div>
+    <div class="two">
+      <div>
+        <h2 id="risk-h">What the red team caught.</h2>
+        <div id="redteam"></div>
+      </div>
+      <div>
+        <h2>Accepted risks.</h2>
+        <details><summary>Proxy cannot import db or cache</summary><p>Phase 5 step 1 checks the Next 16.3 docs first. Fallback: requireAccess() in every non-public handler with the same decide().</p></details>
+        <details><summary>Per-instance login rate limiter</summary><p>Accepted and documented. Allowed-orgs and the group requirement remove most of the abuse value.</p></details>
+        <details><summary>Cached GitHub data at rest in Postgres</summary><p>Opt-in GitHub routes only, token-scoped keys, TTL with delete-on-read and sampled purge.</p></details>
+        <details><summary>Stale grants for up to 60s</summary><p>This is the documented contract. Up to 10 minutes only while the DB or GitHub is unavailable.</p></details>
+        <h2 style="margin-top:48px">Open questions.</h2>
+        <p>None. All questions were resolved in the red team and validation sessions.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">Plan files: plan.md and phase-00 through phase-07 in this directory are canonical. This page renders them. Sources: <a href="plan.md">plan.md</a>, <a href="../reports/brainstorm-260927-0022-caching-and-rbac.md">brainstorm report</a>. Next.js 16 proxy: https://nextjs.org/docs/messages/middleware-to-proxy</div>
+</footer>
+
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <header><h3 id="dlg-title">Phase</h3><button class="btn" id="dlg-close" type="button">Close</button></header>
+  <div class="body md" id="dlg-body"></div>
+</dialog>
+
+<script type="application/json" id="phase-data">/*__PHASES__*/</script>
+<script type="application/json" id="plan-data">/*__PLAN__*/</script>
+<script>
+(function(){
+  const phases = JSON.parse(document.getElementById('phase-data').textContent);
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function inline(s){
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g,'<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+    s = s.replace(/(^|[\s(])\*([^*\s][^*]*)\*/g,'$1<em>$2</em>');
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,t,u)=>/^(https?:|\.\/|\.\.\/|[\w-]+\.md)/.test(u)?'<a href="'+u+'">'+t+'</a>':t);
+    return s;
+  }
+  function md(src){
+    src = src.replace(/<!--[\s\S]*?-->/g,'');
+    const lines = src.split('\n'); let out=[], i=0;
+    while(i<lines.length){
+      let l = lines[i];
+      if(/^```/.test(l)){ let buf=[]; i++; while(i<lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push('<pre><code>'+esc(buf.join('\n'))+'</code></pre>'); continue; }
+      let h = l.match(/^(#{1,4})\s+(.*)/); if(h){ out.push('<h'+h[1].length+'>'+inline(h[2])+'</h'+h[1].length+'>'); i++; continue; }
+      if(/^\s*(---|\*\*\*)\s*$/.test(l)){ out.push('<hr>'); i++; continue; }
+      if(/^\|/.test(l)){ let rows=[]; while(i<lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]);
+        const cells = r => r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+        let html='<table><thead><tr>'+cells(rows[0]).map(c=>'<th>'+inline(c)+'</th>').join('')+'</tr></thead><tbody>';
+        rows.slice(2).forEach(r=>{ html+='<tr>'+cells(r).map(c=>'<td>'+inline(c)+'</td>').join('')+'</tr>'; });
+        out.push(html+'</tbody></table>'); continue; }
+      if(/^>\s?/.test(l)){ let buf=[]; while(i<lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/,'')); out.push('<blockquote>'+inline(buf.join(' '))+'</blockquote>'); continue; }
+      if(/^\s*([-*]|\d+\.)\s+/.test(l)){
+        let stack=[];
+        while(i<lines.length && (/^\s*([-*]|\d+\.)\s+/.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && stack.length))){
+          let m = lines[i].match(/^(\s*)([-*]|\d+\.)\s+(.*)/);
+          if(!m){ out.push(' '+inline(lines[i].trim())); i++; continue; }
+          let depth = Math.floor(m[1].length/2), tag = /\d/.test(m[2])?'ol':'ul';
+          while(stack.length>depth+1){ out.push('</li></'+stack.pop()+'>'); }
+          if(stack.length===depth+1){ out.push('</li>'); } else { out.push('<'+tag+'>'); stack.push(tag); }
+          let t = m[3], task = t.match(/^\[( |x)\]\s+(.*)/i);
+          out.push(task ? '<li class="task"><input type="checkbox" disabled'+(task[1].toLowerCase()==='x'?' checked':'')+' aria-label="task">'+inline(task[2]) : '<li>'+inline(t));
+          i++;
+        }
+        while(stack.length){ out.push('</li></'+stack.pop()+'>'); }
+        continue;
+      }
+      if(/^\s*$/.test(l)){ i++; continue; }
+      let buf=[]; while(i<lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\||>|\s*([-*]|\d+\.)\s)/.test(lines[i])) buf.push(lines[i++]);
+      out.push('<p>'+inline(buf.join(' '))+'</p>');
+    }
+    return out.join('');
+  }
+  function sectionItems(body, name){
+    const m = body.match(new RegExp('## '+name+'[^\\n]*\\n([\\s\\S]*?)(\\n## |$)'));
+    if(!m) return [];
+    return m[1].split('\n').filter(l=>/^\s*[-*\d]/.test(l) && /^[-*]|^\d/.test(l.trim())).map(l=>l.replace(/^\s*([-*]|\d+\.)\s+(\[.\]\s+)?/,'').replace(/<!--.*?-->/g,'').trim()).filter(Boolean);
+  }
+  const clip = s => { s = s.replace(/\*\*/g,''); return s.length>150 ? s.slice(0,147).replace(/\s\S*$/,'')+'…' : s; };
+  const road = document.getElementById('roadmap');
+  phases.forEach(p=>{
+    const fm = p.fm, body = p.body;
+    const ov = (body.match(/## Overview\n+([^\n]+)/)||[])[1] || '';
+    let req = sectionItems(body,'Requirements'); if(!req.length) req = sectionItems(body,'Part A');
+    const files = ((body.match(/## Related Code Files\n([\s\S]*?)\n## /)||[])[1]||'').split('\n').filter(l=>l.startsWith('- ')).slice(0,3).map(l=>l.slice(2));
+    const sc = sectionItems(body,'Success Criteria').slice(0,2);
+    const li = document.createElement('li'); li.className='phase';
+    li.innerHTML = '<div class="num" aria-hidden="true">'+esc(String(fm.phase))+'</div>'+
+      '<div><h3>'+esc(fm.title)+'</h3><p class="obj">'+inline(ov)+'</p><ul>'+req.slice(0,4).map(r=>'<li>'+inline(clip(r))+'</li>').join('')+'</ul>'+
+      (sc.length?'<div class="gate"><strong>GATE</strong>'+sc.map(s=>inline(clip(s))).join(' · ')+'</div>':'')+'</div>'+
+      '<div class="files files-col">'+files.map(f=>inline(f)).join('<br>')+'</div>'+
+      '<div class="meta meta-col"><b>'+esc(fm.priority)+'</b> · '+esc(fm.effort)+'<br>status '+esc(fm.status)+'<br>needs '+(fm.dependencies && fm.dependencies.length? esc(fm.dependencies.join(', ')) : 'none')+'<br><button class="btn" type="button" data-i="'+phases.indexOf(p)+'" style="margin-top:12px">Full phase</button></div>';
+    road.appendChild(li);
+    if(String(fm.phase)==='3'){ const c=document.createElement('li'); c.className='checkpoint'; c.textContent='Checkpoint. Stop after phase 3 and review caching locally before RBAC.'; road.appendChild(c); }
+  });
+  const dlg = document.getElementById('dlg'), dbody = document.getElementById('dlg-body'), dt = document.getElementById('dlg-title');
+  let opener = null;
+  road.addEventListener('click', e=>{
+    const b = e.target.closest('button[data-i]'); if(!b) return;
+    const p = phases[+b.dataset.i]; opener = b;
+    dt.textContent = 'Phase '+p.fm.phase+': '+p.fm.title;
+    dbody.innerHTML = '<div class="fm">'+Object.entries(p.fm).map(([k,v])=>'<span>'+esc(k)+' <b>'+esc(Array.isArray(v)?'['+v.join(', ')+']':String(v))+'</b></span>').join('')+'</div>'+md(p.body);
+    dlg.showModal(); dbody.scrollTop = 0;
+  });
+  document.getElementById('dlg-close').addEventListener('click',()=>dlg.close());
+  dlg.addEventListener('click', e=>{ if(e.target===dlg) dlg.close(); });
+  dlg.addEventListener('close', ()=>{ if(opener) opener.focus(); });
+  // decisions + red team from plan.md
+  const planMd = JSON.parse(document.getElementById('plan-data').textContent);
+  const decRows = (planMd.match(/## Decisions \(accepted\)\n[\s\S]*?\n\|---\|---\|\n([\s\S]*?)\n\n/)||[])[1]||'';
+  document.getElementById('decisions').innerHTML = decRows.split('\n').filter(Boolean).map(r=>{ const c=r.replace(/^\||\|$/g,'').split('|').map(x=>x.trim()); return '<tr><td>'+inline(c[0])+'</td><td>'+inline(c[1].replace(/<!--.*?-->/g,''))+'</td></tr>'; }).join('');
+  const rt = (planMd.match(/\| # \| Finding \| Severity[^\n]*\n\|[^\n]*\n([\s\S]*?)\n\n/)||[])[1]||'';
+  document.getElementById('redteam').innerHTML = rt.split('\n').filter(Boolean).map(r=>{ const c=r.replace(/^\||\|$/g,'').split('|').map(x=>x.trim()); return '<details><summary><span><span class="sev">'+esc(c[2])+'</span>'+inline(c[1].replace(/\s*\(`[^)]*`[^)]*\)/,''))+'</span></summary><p>'+esc(c[3])+'. Applied to '+esc(c[4])+'.</p></details>'; }).join('');
+  // tabs
+  const tabs = [...document.querySelectorAll('[role=tab]')];
+  function sel(t){ tabs.forEach(x=>{ const on = x===t; x.setAttribute('aria-selected',on); x.tabIndex = on?0:-1; document.getElementById(x.getAttribute('aria-controls')).hidden = !on; }); t.focus(); }
+  tabs.forEach((t,k)=>{ t.addEventListener('click',()=>sel(t)); t.addEventListener('keydown',e=>{ if(e.key==='ArrowRight') sel(tabs[(k+1)%tabs.length]); if(e.key==='ArrowLeft') sel(tabs[(k-1+tabs.length)%tabs.length]); }); });
+})();
+</script>
+</body>
+</html>
