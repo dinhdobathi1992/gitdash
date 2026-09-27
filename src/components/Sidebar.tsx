@@ -18,7 +18,7 @@ import type { GitHubOrg, Repo, RepoSummary } from "@/lib/github";
 import type { RateLimitStatus } from "@/app/api/github/rate-limit/route";
 import { NAV_GROUPS, NAV_BOTTOM, isActive, visibleNav, type NavItem } from "@/components/shell/nav-config";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
-import { LogoMark, shortVersion } from "@/components/shell/Logo";
+import { LogoMark, APP_VERSION } from "@/components/shell/Logo";
 import { useWatchlist } from "@/lib/watchlist";
 import { useAlerts } from "@/lib/use-alerts";
 import { useCurrentOrg, rememberOrg, reposHref } from "@/lib/current-org";
@@ -340,7 +340,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void } = {}) {
           title="Release notes"
           className="font-mono text-xs text-faint hover:text-link"
         >
-          {shortVersion()}
+          v{APP_VERSION}
         </a>
         {onClose && (
           <button

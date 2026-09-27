@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, LogOut, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { AuthBackdrop } from "@/components/auth/AuthLayout";
-import { LogoMark, shortVersion } from "@/components/shell/Logo";
+import { LogoMark, APP_VERSION } from "@/components/shell/Logo";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +64,7 @@ export default function PendingPage() {
           <LogoMark size={36} />
           <span className="text-lg font-semibold text-fg">GitDash</span>
           <span className="h-6 inline-flex items-center px-2 rounded-full border border-control bg-surface font-mono text-xs text-muted">
-            {shortVersion()}
+            v{APP_VERSION}
           </span>
         </div>
 

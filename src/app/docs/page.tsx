@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_VERSION } from "@/components/shell/Logo";
 import { useState, useEffect } from "react";
 import {
   BookOpen, Rocket, Server, Settings2, GitBranch,
@@ -507,6 +508,12 @@ function Modes() {
         <ProseP>
           Enforcement happens on the server: a feature&apos;s API routes answer 403 without the grant. Users can
           still switch granted features off for themselves in Settings.
+        </ProseP>
+        <ProseP>
+          With <Code>GITDASH_ALLOWED_ORGS</Code> set, sign-in depends on GitHub confirming membership. An org
+          with OAuth App access restrictions must approve the GitDash OAuth App, and a fine-grained PAT must
+          use the org as its resource owner with <Code>Members: read</Code> — otherwise sign-in is refused.
+          See FAQ &amp; Troubleshooting.
         </ProseP>
         <CodeBlock language="bash">
           {`DATABASE_URL=postgres://...        # required in organization mode
@@ -2900,6 +2907,14 @@ function APIReference() {
 function FAQ() {
   const items = [
     {
+      q: "Organization mode: sign-in says the account is not a member of an allowed organization.",
+      a: <>With <Code>GITDASH_ALLOWED_ORGS</Code> set, GitDash asks GitHub whether the account is an active member; if GitHub will not say, sign-in is refused and the server log shows GitHub&apos;s reason. Usual causes: the org has <strong className="text-white">OAuth App access restrictions</strong> and has not approved the GitDash OAuth App (an org owner approves it under the org&apos;s Third-party access settings); a <strong className="text-white">fine-grained PAT</strong> whose resource owner is the user instead of the org, or that lacks <Code>Members: read</Code> or is still awaiting org approval; a <strong className="text-white">classic PAT</strong> without <Code>read:org</Code>, or one the org rejects for living longer than 366 days.</>,
+    },
+    {
+      q: "Organization mode: I was added to a group but still see the waiting page.",
+      a: <>Group lookups are cached for 60 seconds. The waiting page checks every 15 seconds and moves on by itself once the grant is visible, so allow up to a minute. It also shows your GitHub login and numeric id to send to an admin.</>,
+    },
+    {
       q: "I see a blank screen or 500 error after deploying.",
       a: <>Check that <Code>SESSION_SECRET</Code> is set and is at least 32 characters. The app throws at startup in production if it is missing or too short. Check server logs for <Code>[startup]</Code> errors.</>,
     },
@@ -2968,7 +2983,7 @@ function FAQ() {
               <Terminal className="w-4 h-4 mt-0.5 text-violet-400 shrink-0" />
               <div className="space-y-1.5">
                 <p className="text-sm font-semibold text-white">{item.q}</p>
-                <p className="text-sm text-slate-400 leading-relaxed">{item.a}</p>
+                <div className="text-sm text-slate-400 leading-relaxed">{item.a}</div>
               </div>
             </div>
           </DocCard>
@@ -3057,10 +3072,59 @@ pnpm run lint`}
 function ReleaseNotes() {
   const releases = [
     {
-      version: "4.2.8",
-      date: "2026-08-16",
+      version: "4.5.1",
+      date: "2026-09-27",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "The FAQ raised a hydration error in the browser because one answer put a list inside a paragraph",
+          "The Helm chart still declared appVersion 4.2.8 after 4.5.0 shipped, so a chart install without an explicit image tag pulled the old image. Chart 0.7.0 declares 4.5.1",
+        ],
+        improved: [
+          "The waiting-for-access page shows where you are in the process — signed in, waiting for an admin, dashboards next — and gives you your GitHub login and numeric id to send to an admin with one click. It checks again every 15 seconds, has a Check now button, and still moves on by itself once a group is granted",
+          "Version badges in the sidebar, sign-in and waiting pages show the full version instead of major.minor, so a patch release is visible",
+          "Documentation now covers the two sign-in failures seen in practice with GITDASH_ALLOWED_ORGS: orgs that restrict OAuth Apps, and fine-grained tokens created under the user rather than the org",
+        ],
+      },
+    },
+    {
+      version: "4.5.0",
+      date: "2026-09-27",
+      changes: {
+        added: [
+          "Organization-mode permissions: fixed groups (devops, security, dev, pm, admin), per-group feature grants, an admin area with users, a permission matrix and an audit log, and a waiting page for people without a group. Enforced on the server, rolled out behind GITDASH_RBAC_ENFORCE",
+          "GitHub API caching: every GitHub read is cached per token and replicas share results through a Postgres table, keeping dashboards well inside the rate limit. Refresh buttons bypass every cache",
+          "Personal access token sign-in in organization mode, with GITDASH_ALLOWED_ORGS to limit sign-in to members of your organizations",
+          "A redesigned interface following the Graphite console design contract, and an intro video behind Explore the demo on the sign-in page",
+        ],
+        fixed: [],
+        improved: [
+          "Organization mode refuses to start without DATABASE_URL and GITDASH_ADMIN_GITHUB_IDS, and /api/health answers 503, so a misconfigured rollout never goes live half-working",
+          "Alert destinations, AI and email settings and manual database sync are admin-only in organization mode",
+        ],
+      },
+    },
+    {
+      version: "4.2.9",
+      date: "2026-09-04",
+      changes: {
+        added: [
+          "Pull-request data now syncs on its own schedule, so the four people-metrics alert rules that read it can actually fire",
+          "The weekly Leadership Digest can be delivered to Slack as well as email",
+          "Dashboard metrics can be exported as CSV or JSON",
+          "An anomaly on a workflow can be filed as a GitHub issue from a confirmation dialog, using your own token. Off by default behind a feature flag",
+        ],
+        fixed: [],
+        improved: [
+          "Features that write to GitHub default to off and are excluded from Enable all, so one click can never arm them",
+        ],
+      },
+    },
+    {
+      version: "4.2.8",
+      date: "2026-08-16",
       changes: {
         added: [],
         fixed: [
@@ -3755,7 +3819,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.0"}
+            v{APP_VERSION}
           </span>
         </div>
         {/* Mobile close */}
@@ -4006,7 +4070,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.0"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{APP_VERSION} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub
