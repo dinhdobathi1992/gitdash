@@ -5,9 +5,8 @@
 // Usage: node scripts/generate-audio-assets.mjs <vo|sfx|music|all> [--force] [--only=id1,id2]
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const script = JSON.parse(readFileSync(join(root, "data/script.json"), "utf8"));
@@ -17,14 +16,15 @@ const mode = args[0] || "all";
 const force = args.includes("--force");
 const only = (args.find((a) => a.startsWith("--only=")) || "").slice(7).split(",").filter(Boolean);
 // multix drops a copy of every output into ./multix-output; keep that out of the project.
-const workDir = join(os.tmpdir(), `${basename(root)}-multix`);
+// Project-local scratch dir (git-ignored): not a predictable path in the shared /tmp.
+const workDir = join(root, "renders/.work-multix");
 mkdirSync(workDir, { recursive: true });
 
-const quote = (v) => `"${String(v).replace(/"/g, '\\"')}"`;
 
 function multix(argv) {
   return new Promise((ok, fail) => {
-    const child = spawn("multix", argv.map(quote), { shell: true, cwd: workDir });
+    const child = // No shell: argv (including voice-over text) is passed verbatim, never interpreted.
+    spawn("multix", argv, { cwd: workDir });
     let log = "";
     child.stdout.on("data", (d) => (log += d));
     child.stderr.on("data", (d) => (log += d));

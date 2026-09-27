@@ -8,9 +8,8 @@
 // Template from the motion-video skill: edit the block marked EDIT (grid sections, anchors, duration) per project.
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const readJson = (p) => JSON.parse(readFileSync(join(root, p), "utf8"));
@@ -20,7 +19,8 @@ const noAudio = process.argv.includes("--no-audio");
 const dry = process.argv.includes("--dry"); // print the schedule only
 const stems = process.argv.includes("--stems"); // also write the ducked-music and voice stems to the temp dir
 const cues = dry ? [] : readJson("data/cues.json");
-const work = join(os.tmpdir(), `${basename(root)}-mix`);
+// Project-local scratch dir (git-ignored): not a predictable path in the shared /tmp.
+const work = join(root, "renders/.work-mix");
 mkdirSync(work, { recursive: true });
 
 // ---------- EDIT per project: grid sections, duration and musical anchors ----------

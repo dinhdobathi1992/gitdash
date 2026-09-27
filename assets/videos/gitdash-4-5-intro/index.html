@@ -301,7 +301,16 @@
         const h = (tag, style, html = "", cls = "") => `<${tag} class="${cls}" style="${style}">${html}</${tag}>`;
 
         // ================= build all DOM before any tween =================
-        $$(".hl").forEach((el) => (el.innerHTML = el.textContent.trim().split(/\s+/).map((w) => `<span class="w">${w}</span>`).join(" ")));
+        $$(".hl").forEach((el) => {
+          // Wrap each word in a span with DOM nodes (text stays text, never parsed as HTML).
+          const words = el.textContent.trim().split(/\s+/);
+          el.replaceChildren(...words.flatMap((w, i) => {
+            const span = document.createElement("span");
+            span.className = "w";
+            span.textContent = w;
+            return i ? [document.createTextNode(" "), span] : [span];
+          }));
+        });
         // accent the last phrase of each headline in the link colour
         [["#sc02", 1], ["#sc03", 3], ["#sc04", 2], ["#sc05", 3], ["#sc06", 4], ["#sc07", 1], ["#sc08", 2], ["#sc09", 1]].forEach(([s, n]) => $$(`${s} .hl .w`).slice(-n).forEach((w) => (w.style.color = "var(--link)")));
 

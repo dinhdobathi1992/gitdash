@@ -3,22 +3,22 @@
 // Usage: node scripts/align-voiceover.mjs [--force]
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const script = JSON.parse(readFileSync(join(root, "data/script.json"), "utf8"));
 const force = process.argv.includes("--force");
 const alignDir = join(root, "data/align");
-const workDir = join(os.tmpdir(), `${basename(root)}-multix`);
+// Project-local scratch dir (git-ignored): not a predictable path in the shared /tmp.
+const workDir = join(root, "renders/.work-multix");
 mkdirSync(alignDir, { recursive: true });
 mkdirSync(workDir, { recursive: true });
 
-const quote = (v) => `"${String(v).replace(/"/g, '\\"')}"`;
 const run = (argv) =>
   new Promise((ok, fail) => {
-    const child = spawn("multix", argv.map(quote), { shell: true, cwd: workDir });
+    const child = // No shell: argv (including voice-over text) is passed verbatim, never interpreted.
+    spawn("multix", argv, { cwd: workDir });
     let log = "";
     child.stdout.on("data", (d) => (log += d));
     child.stderr.on("data", (d) => (log += d));

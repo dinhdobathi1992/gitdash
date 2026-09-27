@@ -53,3 +53,7 @@ k8s/secret.yaml
 .codex
 .cursor
 .claude
+
+# Generated HTML plan viewers (plan.md is the source of truth)
+plans/**/plan.html
+plans/**/assets/plan-template.html
