@@ -34,8 +34,8 @@ interface AuthContextValue {
   grantedFlags: (keyof FeatureFlags)[] | null;
   isAdmin: boolean;
   enforce: boolean;
-  /** Re-read /api/auth/me (e.g. after a 403, or while waiting on /pending). */
-  refresh: () => void;
+  /** Re-read /api/auth/me (e.g. after a 403, or while waiting on /pending). Resolves when the read finishes. */
+  refresh: () => Promise<unknown>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -47,7 +47,7 @@ const AuthContext = createContext<AuthContextValue>({
   grantedFlags: null,
   isAdmin: false,
   enforce: false,
-  refresh: () => {},
+  refresh: async () => {},
 });
 
 // Permissions change on the server with a 60s cache; keep the client within
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       grantedFlags: data ? (data.grantedFlags ?? null) : null,
       isAdmin: data?.isAdmin ?? false,
       enforce: data?.enforce ?? false,
-      refresh: () => void mutate(),
+      refresh: () => mutate(),
     }}>
       {children}
     </AuthContext.Provider>
