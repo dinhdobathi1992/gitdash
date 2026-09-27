@@ -1,0 +1,6 @@
+renders/
+assets/audio/
+# Geist fonts (SIL OFL-1.1) are only needed to re-render the video.
+# Download them from https://github.com/vercel/geist-font into assets/fonts/.
+assets/fonts/
+.DS_Store
