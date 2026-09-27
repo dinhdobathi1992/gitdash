@@ -86,7 +86,7 @@ export function ContributorActivityHeatmap({
         {months.map((m, i) => (
           <span
             key={i}
-            className="text-[9px] text-slate-500"
+            className="text-xs text-slate-500"
             style={{
               marginLeft: i === 0 ? `${m.col * 13}px` : `${(m.col - (months[i - 1]?.col ?? 0) - 1) * 13}px`,
               minWidth: 26,
@@ -102,7 +102,7 @@ export function ContributorActivityHeatmap({
         <div className="flex flex-col gap-[2px] mr-1 shrink-0">
           {DAY_LABELS.map((label, i) => (
             <div key={i} className="h-[11px] flex items-center">
-              <span className="text-[9px] text-slate-600 w-6 text-right">{label}</span>
+              <span className="text-xs text-slate-600 w-6 text-right">{label}</span>
             </div>
           ))}
         </div>
@@ -138,13 +138,13 @@ export function ContributorActivityHeatmap({
 
       {/* Legend */}
       <div className="flex items-center gap-1.5 ml-8">
-        <span className="text-[9px] text-slate-600">Less</span>
+        <span className="text-xs text-slate-600">Less</span>
         <div className="w-[11px] h-[11px] rounded-sm bg-slate-800/60" />
         <div className="w-[11px] h-[11px] rounded-sm bg-violet-900/60" />
         <div className="w-[11px] h-[11px] rounded-sm bg-violet-700/60" />
         <div className="w-[11px] h-[11px] rounded-sm bg-violet-500/70" />
         <div className="w-[11px] h-[11px] rounded-sm bg-violet-400/80" />
-        <span className="text-[9px] text-slate-600">More</span>
+        <span className="text-xs text-slate-600">More</span>
       </div>
     </div>
   );

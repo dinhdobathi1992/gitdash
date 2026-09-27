@@ -64,7 +64,7 @@ export function MetricProvenance({
         onClick={() => setOpen(true)}
         title="Why this number?"
         className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors hover:opacity-80",
+          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium border transition-colors hover:opacity-80",
           meta.badge,
           meta.color,
           className,
@@ -104,7 +104,7 @@ export function MetricProvenance({
 
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-xs text-slate-500 uppercase tracking-wide mb-0.5">Data source</dt>
+              <dt className="text-xs text-slate-500 mb-0.5">Data source</dt>
               <dd className={cn("font-medium flex items-center gap-1.5", meta.color)}>
                 <Icon className="w-3.5 h-3.5" />
                 {meta.text}
@@ -113,7 +113,7 @@ export function MetricProvenance({
 
             {formula && (
               <div>
-                <dt className="text-xs text-slate-500 uppercase tracking-wide mb-0.5">Formula</dt>
+                <dt className="text-xs text-slate-500 mb-0.5">Formula</dt>
                 <dd className="text-slate-300 font-mono text-xs bg-slate-800 px-2 py-1.5 rounded leading-relaxed">
                   {formula}
                 </dd>
@@ -122,7 +122,7 @@ export function MetricProvenance({
 
             {sampleSize !== undefined && (
               <div>
-                <dt className="text-xs text-slate-500 uppercase tracking-wide mb-0.5">Sample size</dt>
+                <dt className="text-xs text-slate-500 mb-0.5">Sample size</dt>
                 <dd className="text-slate-300">
                   {sampleSize.toLocaleString()} data point{sampleSize !== 1 ? "s" : ""}
                 </dd>
@@ -131,10 +131,10 @@ export function MetricProvenance({
 
             {lastUpdated && (
               <div>
-                <dt className="text-xs text-slate-500 uppercase tracking-wide mb-0.5">Last updated</dt>
+                <dt className="text-xs text-slate-500 mb-0.5">Last updated</dt>
                 <dd className="text-slate-300">
                   {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
-                  <span className="ml-1.5 text-slate-600 text-[10px]">
+                  <span className="ml-1.5 text-slate-600 text-xs">
                     {new Date(lastUpdated).toLocaleString()}
                   </span>
                 </dd>

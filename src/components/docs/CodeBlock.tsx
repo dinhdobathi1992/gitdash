@@ -43,7 +43,7 @@ export function CodeBlock({
             <span className="text-xs text-slate-400 font-mono">{filename}</span>
           )}
           {language && !filename && (
-            <span className="text-xs text-slate-500 uppercase tracking-wider">{language}</span>
+            <span className="text-xs text-slate-500">{language}</span>
           )}
         </div>
         {showCopy && (

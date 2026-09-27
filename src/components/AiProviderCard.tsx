@@ -134,7 +134,7 @@ export default function AiProviderCard() {
         </div>
         <span
           className={cn(
-            "shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border",
+            "shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border",
             data.effective_source === "settings"
               ? "border-violet-500/25 bg-violet-500/10 text-violet-300"
               : data.effective_source === "env"
@@ -194,7 +194,7 @@ export default function AiProviderCard() {
                   <option key={p} value={p}>{PROVIDER_META[p].label}</option>
                 ))}
               </select>
-              <p className="text-[11px] text-slate-600 mt-1">{meta.note}</p>
+              <p className="text-xs text-slate-600 mt-1">{meta.note}</p>
             </Field>
 
             <Field label="Model">
@@ -208,7 +208,7 @@ export default function AiProviderCard() {
               <datalist id="ai-model-options">
                 {meta.models.map((m) => <option key={m} value={m} />)}
               </datalist>
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Suggestions shown, but any model your account can reach is accepted. Blank uses{" "}
                 <code className="text-slate-500">{meta.models[0]}</code>.
               </p>
@@ -223,7 +223,7 @@ export default function AiProviderCard() {
                 onChange={(e) => patch({ apiKey: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-900/70 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Stored encrypted and never shown again.
               </p>
             </Field>
@@ -236,7 +236,7 @@ export default function AiProviderCard() {
                 onChange={(e) => patch({ baseUrl: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-900/70 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 For a gateway or regional endpoint. Must be https — this URL carries your key.
               </p>
             </Field>
@@ -269,7 +269,7 @@ export default function AiProviderCard() {
             {dirty ? "Save changes" : "Saved"}
           </button>
           {data.updated_by && (
-            <span className="text-[11px] text-slate-600">
+            <span className="text-xs text-slate-600">
               Last changed by @{data.updated_by}
               {data.updated_at && ` · ${new Date(data.updated_at).toLocaleDateString()}`}
             </span>

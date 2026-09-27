@@ -14,6 +14,9 @@ import { getDeploymentsSummary } from "@/lib/deployments";
 import { withCache, hashKey } from "@/lib/cache";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 
+import { privateCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+
 export type {
   DeploymentsSummary, DeploymentRecord, EnvironmentStat, DeployMetricSource,
 } from "@/lib/deployments";
@@ -23,6 +26,7 @@ export const maxDuration = 60;
 const CACHE_TTL = 600; // 10 min — up to 41 API calls on a miss
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/deployments");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -34,12 +38,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await withCache(
-      `deployments:${hashKey(token)}:${ownerResult.data}/${repoResult.data}`,
+      `github/deployments:${hashKey(token)}:${ownerResult.data}/${repoResult.data}`,
       CACHE_TTL,
       () => getDeploymentsSummary(token, ownerResult.data, repoResult.data),
+      { shared: true },
     );
     return NextResponse.json(data, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}` },
+      headers: privateCacheHeaders(CACHE_TTL),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch deployments");

@@ -15,8 +15,12 @@ import {
 } from "@/lib/db";
 import { safeError } from "@/lib/validation";
 import { isAllowedSlackWebhook } from "@/lib/notifier";
+import { requireAccess, isCurrentUserAdmin } from "@/lib/permissions";
+import { canSeeRepo, canSeeOwner } from "@/lib/repo-access";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireAccess(req, "base");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -25,8 +29,24 @@ export async function GET(req: NextRequest) {
   const includeEvents = searchParams.get("events") === "1";
 
   try {
-    const rules = scope ? await getAlertRules(scope) : await getAllAlertRules();
-    const events = includeEvents ? await getRecentAlertEvents(50) : [];
+    const allRules = scope ? await getAlertRules(scope) : await getAllAlertRules();
+    const allEvents = includeEvents ? await getRecentAlertEvents(50) : [];
+    if (await isCurrentUserAdmin()) {
+      return NextResponse.json({ rules: allRules, events: allEvents });
+    }
+    // Non-admins: only rules/events for repos and orgs their own token can see
+    // (alert data is computed from service-token syncs), and never the rule
+    // destinations (Slack webhook URLs, email addresses).
+    const rules = [];
+    for (const r of allRules) {
+      if (await canSeeScope(token, r.scope)) rules.push({ ...r, destination: null });
+    }
+    const events = [];
+    for (const e of allEvents) {
+      const repo = typeof e.details?.repo === "string" ? e.details.repo : null;
+      const visible = repo ? await canSeeScope(token, `repo:${repo}`) : await canSeeScope(token, e.scope);
+      if (visible) events.push(e);
+    }
     return NextResponse.json({ rules, events });
   } catch (e) {
     return safeError(e, "Failed to fetch alert rules");
@@ -34,6 +54,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -106,6 +128,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -138,6 +162,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAccess(req, "admin");
+  if (denied) return denied;
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -151,4 +177,23 @@ export async function DELETE(req: NextRequest) {
   } catch (e) {
     return safeError(e, "Failed to delete alert rule");
   }
+}
+
+/** "repo:owner/name" → repo visibility; "org:name" → membership; global rules carry no repo data. */
+async function canSeeScope(token: string, scope: string): Promise<boolean> {
+  try {
+    return await scopeVisible(token, scope);
+  } catch {
+    return false; // e.g. rate limited: hide the item rather than fail the page
+  }
+}
+
+async function scopeVisible(token: string, scope: string): Promise<boolean> {
+  if (scope === "*" || scope === "global") return true;
+  if (scope.startsWith("repo:")) {
+    const [owner, repo] = scope.slice(5).split("/");
+    return Boolean(owner && repo) && canSeeRepo(token, owner, repo);
+  }
+  if (scope.startsWith("org:")) return canSeeOwner(token, scope.slice(4));
+  return false;
 }

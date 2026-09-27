@@ -8,6 +8,9 @@ const isDev = process.env.NODE_ENV !== "production";
 
 // output: "standalone" is only needed for Docker — Vercel manages its own output
 const nextConfig: NextConfig = {
+  // Dev server only: allow loading dev assets from 127.0.0.1 as well as
+  // localhost (Next 16 blocks other dev origins by default).
+  allowedDevOrigins: ["127.0.0.1"],
   ...(process.env.DOCKER_BUILD === "1" ? { output: "standalone" } : {}),
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version,

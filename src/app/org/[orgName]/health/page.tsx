@@ -32,21 +32,21 @@ const RISK_META: Record<Band, {
   at_risk: {
     label: "At Risk", text: "text-red-400", textSoft: "text-red-300/80",
     bg: "bg-red-500/[0.06]", border: "border-red-500/20", dot: "bg-red-400",
-    ringHex: "#f87171", barGrad: "bg-gradient-to-r from-red-500 to-red-400",
+    ringHex: "#FF6B6B", barGrad: "bg-gradient-to-r from-red-500 to-red-400",
     groupBg: "bg-gradient-to-r from-red-500/[0.08] via-red-500/[0.02] to-transparent",
     hint: "Single-owner risk — assign a second maintainer",
   },
   watch: {
     label: "Watch", text: "text-amber-400", textSoft: "text-amber-300/80",
     bg: "bg-amber-500/[0.06]", border: "border-amber-500/20", dot: "bg-amber-400",
-    ringHex: "#fbbf24", barGrad: "bg-gradient-to-r from-amber-500 to-amber-400",
+    ringHex: "#F5B544", barGrad: "bg-gradient-to-r from-amber-500 to-amber-400",
     groupBg: "bg-gradient-to-r from-amber-500/[0.07] via-amber-500/[0.02] to-transparent",
     hint: "Thin coverage or slipping throughput",
   },
   healthy: {
     label: "Healthy", text: "text-emerald-400", textSoft: "text-emerald-300/80",
     bg: "bg-emerald-500/[0.06]", border: "border-emerald-500/20", dot: "bg-emerald-400",
-    ringHex: "#34d399", barGrad: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    ringHex: "#3DD68C", barGrad: "bg-gradient-to-r from-emerald-500 to-emerald-400",
     groupBg: "bg-gradient-to-r from-emerald-500/[0.07] via-emerald-500/[0.02] to-transparent",
     hint: "Sustainable ownership and delivery",
   },
@@ -79,7 +79,7 @@ function EstateDistribution({ counts, total }: { counts: Record<Band, number>; t
   return (
     <div className="flex flex-col gap-3 min-w-[280px] px-4 py-3.5 rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/70 to-slate-950/80 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">Estate distribution</span>
+        <span className="text-[10.5px] font-semibold text-slate-500">Estate distribution</span>
         <span className="font-mono text-xs text-slate-400">{total} repos</span>
       </div>
       <div className="flex gap-[3px] h-2">
@@ -113,10 +113,10 @@ function StatTile({ label, value, note, tone }: { label: string; value: number; 
   return (
     <div className="relative overflow-hidden flex flex-col gap-3 px-4 py-4 rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/60 to-slate-950/70 shadow-[0_20px_44px_-32px_rgba(0,0,0,0.95)]">
       <span className={cn("absolute inset-y-0 left-0 w-[3px]", meta.barGrad)} />
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</span>
+      <span className="text-[10.5px] font-semibold text-slate-500">{label}</span>
       <div className="flex items-baseline gap-2">
         <span className={cn("font-mono text-3xl font-bold tabular-nums leading-none tracking-tight", meta.text)}>{value}</span>
-        <span className="text-[11px] text-slate-500">{note}</span>
+        <span className="text-xs text-slate-500">{note}</span>
       </div>
     </div>
   );
@@ -147,8 +147,8 @@ function GroupHeader({ band, count }: { band: Band; count: number }) {
   return (
     <div className={cn("flex items-center gap-2.5 px-5 py-2.5 border-y border-slate-800/80", meta.groupBg)}>
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", meta.dot)} style={{ boxShadow: `0 0 8px ${meta.ringHex}` }} />
-      <span className={cn("text-[11px] font-semibold uppercase tracking-[0.12em]", meta.text)}>{meta.label}</span>
-      <span className={cn("font-mono text-[11px] px-1.5 py-0.5 rounded border", meta.border, meta.text)}>{count}</span>
+      <span className={cn("text-xs font-semibold", meta.text)}>{meta.label}</span>
+      <span className={cn("font-mono text-xs px-1.5 py-0.5 rounded border", meta.border, meta.text)}>{count}</span>
       <div className="flex-1 h-px bg-gradient-to-r from-slate-800 to-transparent" />
       <span className="text-[11.5px] text-slate-500 whitespace-nowrap hidden sm:inline">{meta.hint}</span>
     </div>
@@ -187,7 +187,7 @@ function RepoRow({ entry }: { entry: RepoScorecardEntry }) {
         )}
       </div>
 
-      <span className={cn("justify-self-start text-[11px] font-medium uppercase tracking-wide px-2 py-1 rounded-md border", doraMeta.bg, doraMeta.text, doraMeta.border)}>
+      <span className={cn("justify-self-start text-xs font-medium px-2 py-1 rounded-md border", doraMeta.bg, doraMeta.text, doraMeta.border)}>
         {LEVEL_LABELS[entry.dora_level]}
       </span>
 
@@ -299,7 +299,7 @@ export default function OrgHealthScorecardPage({
   const total = repos.length;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 space-y-7">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },
@@ -316,9 +316,9 @@ export default function OrgHealthScorecardPage({
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.9)]" />
-              <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-slate-500">{orgName}</span>
+              <span className="font-mono text-[10.5px] text-slate-500">{orgName}</span>
             </div>
-            <h1 className="text-2xl font-bold text-white">Team Health Scorecard</h1>
+            <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">Team Health Scorecard</h1>
             <p className="text-sm text-slate-400 max-w-md mt-1">
               Composite of 60% DORA tier and 40% bus-factor risk. Trend compares recent against prior throughput.
             </p>
@@ -367,18 +367,18 @@ export default function OrgHealthScorecardPage({
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-800 bg-slate-900/60 flex-wrap">
                   <Pill active={filter === "all"} onClick={() => setFilter("all")}>
-                    All <span className="ml-1.5 font-mono text-[11px] opacity-60">{total}</span>
+                    All <span className="ml-1.5 font-mono text-xs opacity-60">{total}</span>
                   </Pill>
                   {BAND_ORDER.map((band) => (
                     <Pill key={band} active={filter === band} onClick={() => setFilter(band)}>
-                      {RISK_META[band].label} <span className="ml-1.5 font-mono text-[11px] opacity-60">{counts[band]}</span>
+                      {RISK_META[band].label} <span className="ml-1.5 font-mono text-xs opacity-60">{counts[band]}</span>
                     </Pill>
                   ))}
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500">Sort</span>
+                    <span className="text-xs text-slate-500">Sort</span>
                     <div className="flex items-center gap-1">
                       <Pill active={sort === "score"} onClick={() => setSort("score")}>Lowest score</Pill>
                       <Pill active={sort === "crit"} onClick={() => setSort("crit")}>Most critical</Pill>
@@ -386,7 +386,7 @@ export default function OrgHealthScorecardPage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-[11px] uppercase tracking-wide text-slate-500">Analysed</label>
+                    <label className="text-xs text-slate-500">Analysed</label>
                     <select
                       value={limit}
                       onChange={(e) => setLimit(Number(e.target.value))}
@@ -426,7 +426,7 @@ export default function OrgHealthScorecardPage({
                 <div className="overflow-x-auto">
                   <div className="min-w-[820px]">
                     <div
-                      className="grid items-center gap-3 px-5 py-2.5 border-b border-slate-800 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500"
+                      className="grid items-center gap-3 px-5 py-2.5 border-b border-slate-800 text-xs font-semibold text-slate-500"
                       style={{ gridTemplateColumns: GRID_COLS }}
                     >
                       <div>Repository</div>

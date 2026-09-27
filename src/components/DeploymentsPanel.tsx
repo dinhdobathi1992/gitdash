@@ -108,7 +108,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-[15px] font-semibold text-white">Deployments</h3>
               {stale && (
-                <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300">
                   Recording stopped
                 </span>
               )}
@@ -147,7 +147,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
                 thing as a deployment record. Worth stating explicitly, because
                 the obvious reading of "no deployments" is "you don't deploy". */}
             <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-              <p className="flex items-start gap-1.5 text-[11px] text-slate-400 leading-relaxed">
+              <p className="flex items-start gap-1.5 text-xs text-slate-400 leading-relaxed">
                 <Info className="w-3 h-3 mt-0.5 shrink-0 text-slate-500" />
                 <span>
                   A workflow that deploys does not create a deployment record on its own. GitHub
@@ -190,7 +190,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-[15px] font-semibold text-white">Deployments</h3>
-            <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
               Measured
             </span>
           </div>
@@ -241,7 +241,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
 
         {/* A single recovery is an anecdote, not a metric. Say so. */}
         {mttrSamples === 1 && (
-          <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+          <p className="flex items-start gap-1.5 text-xs text-slate-500">
             <Info className="w-3 h-3 mt-0.5 shrink-0" />
             MTTR is based on a single recovery — treat it as an anecdote rather than a trend.
           </p>
@@ -249,7 +249,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
 
         {data.by_environment.length > 1 && (
           <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-2">
+            <p className="text-[10.5px] font-semibold text-slate-500 mb-2">
               By environment — click to use for the figures above
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -271,7 +271,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
                     <span className={cn("font-mono text-xs truncate flex-1", active ? "text-emerald-100" : "text-slate-200")}>
                       {env.environment}
                     </span>
-                    <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                    <span className="text-xs text-slate-500 tabular-nums shrink-0">
                       {env.total} deploy{env.total === 1 ? "" : "s"}
                       {env.failure_rate_pct !== null && ` · ${env.failure_rate_pct}% fail`}
                     </span>
@@ -285,7 +285,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
 
         {data.recent.length > 0 && (
           <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-2">
+            <p className="text-[10.5px] font-semibold text-slate-500 mb-2">
               Recent
             </p>
             <div className="rounded-xl border border-slate-800 overflow-hidden">
@@ -312,7 +312,7 @@ export default function DeploymentsPanel({ owner, repo }: { owner: string; repo:
         )}
 
         {data.partial && (
-          <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+          <p className="flex items-start gap-1.5 text-xs text-slate-500">
             <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-slate-600" />
             More deployments exist than statuses were fetched for. The production environment is
             resolved first, so the headline figures are complete; other environments may show rates
@@ -335,11 +335,11 @@ function Metric({
   }[tone];
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1.5">
+      <div className="text-[10.5px] font-semibold text-slate-500 mb-1.5">
         {label}
       </div>
       <div className={cn("font-mono text-2xl font-bold tabular-nums leading-none", color)}>{value}</div>
-      <div className="text-[11px] text-slate-600 mt-1.5">{note}</div>
+      <div className="text-xs text-slate-600 mt-1.5">{note}</div>
     </div>
   );
 }

@@ -71,3 +71,44 @@ export function highlightSegments(
   }
   return chunks;
 }
+
+/**
+ * Relative time per the design contract §7: "just now", "18 min ago",
+ * "2 h ago", "1 d ago" under 7 days, then a short date ("Sep 24").
+ * `now` is injectable so render paths can pass a stable clock.
+ */
+export function formatRelative(input: string | number | Date | null | undefined, now: number = Date.now()): string {
+  if (input === null || input === undefined) return "—";
+  const t = new Date(input).getTime();
+  if (Number.isNaN(t)) return "—";
+  const diff = Math.max(0, now - t);
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d} d ago`;
+  const date = new Date(t);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** Mono-friendly duration: "11m 42s", "2h 10m", "38s". */
+export function formatDurationShort(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+/** Nearest-rank percentile of a numeric list; null when empty. */
+export function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
+}

@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { getSession, resetSession } from "@/lib/session";
 import { isStandaloneMode } from "@/lib/mode";
-import { getOctokit } from "@/lib/github";
 import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
-import { publicUrl } from "@/lib/url";
+import { publicUrl, isSameOrigin } from "@/lib/url";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { assertOrgModeConfig, lookupWhoAmI } from "@/lib/identity";
+import { upsertUser } from "@/lib/db";
 
 // HIGH-002: 5 attempts per minute per IP on the PAT setup endpoint
 const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
+/**
+ * POST — sign in with a GitHub Personal Access Token.
+ *
+ * standalone   : the PAT is the only sign-in method (/setup).
+ * organization : alternative to OAuth on /login. The account must pass the
+ *                GITDASH_ALLOWED_ORGS check and is recorded in `users`; access
+ *                to features is then decided by its groups.
+ */
 export async function POST(req: NextRequest) {
-  if (!isStandaloneMode()) {
-    return NextResponse.json({ error: "Not available in organization mode" }, { status: 404 });
+  labelGitHubRoute("auth/setup");
+  const orgMode = !isStandaloneMode();
+  if (orgMode) assertOrgModeConfig();
+
+  // Login CSRF: only accept JSON from this app's own pages. A cross-site form
+  // cannot set Content-Type: application/json without a CORS preflight.
+  if (!isSameOrigin(req) || !req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Rate limit by IP
@@ -35,24 +51,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate the PAT against GitHub — also fetches user identity to cache
+  let who;
   try {
-    const octokit = getOctokit(pat);
-    const { data } = await octokit.rest.users.getAuthenticated();
-
-    const session = await getSession();
-    session.pat = pat;
-    session.user = {
-      login: data.login,
-      name: data.name ?? null,
-      avatar_url: data.avatar_url,
-      email: data.email ?? null,
-    };
-    await session.save();
-
-    return NextResponse.json({
-      ok: true,
-      user: session.user,
-    });
+    who = await lookupWhoAmI(pat);
   } catch {
     // LOW-002: Log invalid PAT attempt server-side
     console.warn("[security] Invalid PAT submitted to /api/auth/setup", {
@@ -66,10 +67,42 @@ export async function POST(req: NextRequest) {
       { status: 401 }
     );
   }
+
+  if (orgMode && !who.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "This account is not a member of an allowed organization, or the token lacks read:org " +
+          "(classic) / Members: read (fine-grained).",
+      },
+      { status: 403 },
+    );
+  }
+
+  const { identity } = who;
+  // Record the user before issuing the session: a DB failure must not leave a
+  // signed-in account that admins cannot see or assign.
+  if (orgMode) {
+    await upsertUser({ id: identity.id, login: identity.login, avatar_url: identity.avatar_url });
+  }
+  const session = await getSession();
+  resetSession(session);
+  session.pat = pat;
+  session.user = {
+    id: identity.id,
+    login: identity.login,
+    name: identity.name,
+    avatar_url: identity.avatar_url,
+    email: identity.email,
+  };
+  await session.save();
+
+  return NextResponse.json({ ok: true, user: session.user });
 }
 
 // DELETE — clear the PAT from session (change / remove token)
 export async function DELETE(req: NextRequest) {
+  labelGitHubRoute("auth/setup");
   if (!isStandaloneMode()) {
     return NextResponse.json({ error: "Not available in organization mode" }, { status: 404 });
   }

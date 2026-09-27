@@ -104,7 +104,7 @@ function SectionHeading({ id, icon: Icon, badge, children }: {
         <Icon className="w-4.5 h-4.5 text-violet-400" />
       </div>
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 id={id} className="text-2xl font-bold text-white">{children}</h2>
+        <h2 id={id} className="text-2xl font-semibold tracking-[-0.02em] text-fg scroll-mt-20">{children}</h2>
         {badge && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 font-medium">
             {badge}
@@ -127,7 +127,7 @@ function ProseP({ children }: { children: React.ReactNode }) {
 
 function GettingStarted() {
   return (
-    <section id="getting-started" className="scroll-mt-8 space-y-6">
+    <section id="getting-started" className="scroll-mt-20 space-y-6">
       <SectionHeading id="getting-started" icon={Rocket}>Introduction</SectionHeading>
 
       <FeatureGrid>
@@ -230,7 +230,7 @@ SESSION_SECRET=$(openssl rand -hex 32)`}
 
 function Deployment() {
   return (
-    <section id="deployment" className="scroll-mt-8 space-y-6">
+    <section id="deployment" className="scroll-mt-20 space-y-6">
       <SectionHeading id="deployment" icon={Server}>Deployment</SectionHeading>
 
       <DocCard>
@@ -310,7 +310,7 @@ docker compose logs -f    # view logs`}
 
 function Configuration() {
   return (
-    <section id="configuration" className="scroll-mt-8 space-y-6">
+    <section id="configuration" className="scroll-mt-20 space-y-6">
       <SectionHeading id="configuration" icon={Settings2}>Configuration</SectionHeading>
 
       <DocCard>
@@ -432,7 +432,7 @@ NEXT_PUBLIC_APP_URL=https://gitdash.example.com`}
 
 function Modes() {
   return (
-    <section id="modes" className="scroll-mt-8 space-y-6">
+    <section id="modes" className="scroll-mt-20 space-y-6">
       <SectionHeading id="modes" icon={GitBranch}>Auth Modes</SectionHeading>
 
       <DocCard>
@@ -495,6 +495,28 @@ function Modes() {
       </div>
 
       <DocCard>
+        <SubHeading>Organization Mode: Groups &amp; Feature Permissions</SubHeading>
+        <ProseP>
+          In organization mode an admin decides who sees which features. Users sign in with GitHub OAuth or a
+          Personal Access Token on <Code>/login</Code>; their numeric GitHub id is placed in one or more fixed
+          groups — <Code>devops</Code>, <Code>security</Code>, <Code>dev</Code>, <Code>pm</Code>,{" "}
+          <Code>admin</Code> — and each group is granted feature flags at <Code>/admin → Permissions</Code>.
+          New users wait on <Code>/pending</Code> until they get a group. Every change is recorded in{" "}
+          <Code>/admin → Audit</Code>, and takes effect for new requests within 60 seconds.
+        </ProseP>
+        <ProseP>
+          Enforcement happens on the server: a feature&apos;s API routes answer 403 without the grant. Users can
+          still switch granted features off for themselves in Settings.
+        </ProseP>
+        <CodeBlock language="bash">
+          {`DATABASE_URL=postgres://...        # required in organization mode
+GITDASH_ADMIN_GITHUB_IDS=12345678   # required — numeric ids (gh api user --jq .id)
+GITDASH_ALLOWED_ORGS=my-org         # optional — restrict sign-in to org members
+GITDASH_RBAC_ENFORCE=false          # roll out: assign groups first, then set to true`}
+        </CodeBlock>
+      </DocCard>
+
+      <DocCard>
         <SubHeading>Switching Modes</SubHeading>
         <ProseP>Change the <Code>MODE</Code> environment variable and restart the server. All session data is invalidated automatically — users will be redirected to the appropriate login page.</ProseP>
         <CodeBlock language="bash">
@@ -511,7 +533,7 @@ MODE=standalone   # or unset MODE entirely`}
 
 function Security() {
   return (
-    <section id="security" className="scroll-mt-8 space-y-6">
+    <section id="security" className="scroll-mt-20 space-y-6">
       <SectionHeading id="security" icon={Shield}>Security Model</SectionHeading>
 
       <Callout type="success" title="Zero browser exposure">
@@ -584,7 +606,7 @@ npm audit --production
 
 function CoreConcepts() {
   return (
-    <section id="core-concepts" className="scroll-mt-8 space-y-6">
+    <section id="core-concepts" className="scroll-mt-20 space-y-6">
       <SectionHeading id="core-concepts" icon={Cpu}>Data Sources</SectionHeading>
 
       <DocCard>
@@ -644,7 +666,7 @@ Webhook: POST /api/webhooks/github
 // forward — it's how "what's new" stays discoverable outside the changelog.
 function VersionBadge({ v }: { v: string }) {
   return (
-    <span className="text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/25 uppercase">
+    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/25">
       New in v{v}
     </span>
   );
@@ -885,7 +907,7 @@ function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
   ];
 
   return (
-    <section id="features" className="scroll-mt-8 space-y-6">
+    <section id="features" className="scroll-mt-20 space-y-6">
       <SectionHeading id="features" icon={Layers}>Feature Overview</SectionHeading>
 
       <ProseP>
@@ -2374,7 +2396,7 @@ function MetricsCiAlerts() {
 
 function APIReference() {
   return (
-    <section id="api-reference" className="scroll-mt-8 space-y-6">
+    <section id="api-reference" className="scroll-mt-20 space-y-6">
       <SectionHeading id="api-reference" icon={Code2} badge="REST">API Reference</SectionHeading>
 
       <Callout type="info">
@@ -2855,7 +2877,7 @@ function APIReference() {
           <ProseP>{endpoint.description}</ProseP>
           {endpoint.params.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Parameters</p>
+              <p className="text-xs font-semibold text-slate-500 mb-2">Parameters</p>
               <DocTable
                 headers={["Name", "Type", "Required", "Description"]}
                 rows={endpoint.params.map((p) => [
@@ -2937,7 +2959,7 @@ function FAQ() {
   ];
 
   return (
-    <section id="faq" className="scroll-mt-8 space-y-6">
+    <section id="faq" className="scroll-mt-20 space-y-6">
       <SectionHeading id="faq" icon={HelpCircle}>FAQ &amp; Troubleshooting</SectionHeading>
       <div className="space-y-3">
         {items.map((item, i) => (
@@ -2958,7 +2980,7 @@ function FAQ() {
 
 function Contributing() {
   return (
-    <section id="contributing" className="scroll-mt-8 space-y-6">
+    <section id="contributing" className="scroll-mt-20 space-y-6">
       <SectionHeading id="contributing" icon={GitPullRequest}>Contributing</SectionHeading>
 
       <DocCard>
@@ -3660,7 +3682,7 @@ function ReleaseNotes() {
   };
 
   return (
-    <section id="release-notes" className="scroll-mt-8 space-y-6">
+    <section id="release-notes" className="scroll-mt-20 space-y-6">
       <SectionHeading id="release-notes" icon={Tag}>Release Notes</SectionHeading>
       <div className="space-y-4">
         {releases.map((r) => (
@@ -3733,7 +3755,7 @@ function DocSidebar({
           <BookOpen className="w-4 h-4 text-violet-400" />
           <span className="text-sm font-semibold text-white">GitDash Docs</span>
           <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20 font-mono">
-            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.8"}
+            v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.0"}
           </span>
         </div>
         {/* Mobile close */}
@@ -3765,7 +3787,7 @@ function DocSidebar({
             <div key={section.title} className="mb-1">
               <button
                 onClick={() => toggleSection(section.title)}
-                className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors"
+                className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-300 transition-colors"
               >
                 {section.title}
                 <ChevronDown className={cn("w-3 h-3 transition-transform", isCollapsed && "-rotate-90")} />
@@ -3962,7 +3984,7 @@ export default function DocsPage() {
               >
                 <ChevronRight className="w-4 h-4 rotate-180 shrink-0 text-slate-600 group-hover:text-violet-400 transition-colors" />
                 <div className="text-left">
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider">Previous</p>
+                  <p className="text-xs text-slate-600">Previous</p>
                   <p className="font-medium">{prevSection.label}</p>
                 </div>
               </button>
@@ -3974,7 +3996,7 @@ export default function DocsPage() {
                 className="group flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors text-right"
               >
                 <div>
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider">Next</p>
+                  <p className="text-xs text-slate-600">Next</p>
                   <p className="font-medium">{nextSection.label}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 shrink-0 text-slate-600 group-hover:text-violet-400 transition-colors" />
@@ -3984,7 +4006,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-8 pb-4 text-center text-xs text-slate-600 space-y-1">
-            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.2.8"} — GitHub Actions Dashboard</p>
+            <p>GitDash v{process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.0"} — GitHub Actions Dashboard</p>
             <p>
               <a href="https://github.com/dinhdobathi1992/gitdash" target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">
                 Open source on GitHub

@@ -25,6 +25,21 @@ config:
   # Must match your ingress host (including scheme).
   appUrl: "https://gitdash.example.com"
 
+  # ── Organization-mode access control ──
+  # Required in organization mode: comma-separated NUMERIC GitHub user ids that
+  # are always admins (find yours: gh api user --jq .id). Also set
+  # secret.databaseUrl — users, groups and grants live in Postgres.
+  # Quote it: adminGithubIds: "12345678" (an unquoted number renders as 1.2345678e+07).
+  adminGithubIds: ""
+  # Optional: comma-separated GitHub orgs whose active members may sign in.
+  # Empty = any GitHub account can sign in (it lands on /pending until an admin
+  # assigns a group). Needs read:org / "Members: read" on the user's token.
+  allowedOrgs: ""
+  # Rollout switch. "false" = users are recorded and admins can prepare groups
+  # and grants while everyone keeps today's access (admin pages are always
+  # admin-only). Set "true" once groups are assigned.
+  rbacEnforce: "false"
+
 # ── Secrets ───────────────────────────────────────────────────────────────────
 secret:
   # When create: true the chart creates a Secret from the values below.
@@ -39,6 +54,11 @@ secret:
   # Required only in organization (OAuth) mode
   githubClientId: ""
   githubClientSecret: ""
+
+  # Postgres connection string. Required in organization mode (users, groups,
+  # grants, audit log); optional in standalone mode (history, alerts, shared
+  # API cache).
+  databaseUrl: ""
 
 # ── Service ───────────────────────────────────────────────────────────────────
 service:

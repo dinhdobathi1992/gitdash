@@ -21,10 +21,8 @@ import { fetcher, FetchError } from "@/lib/swr";
 import { useAiEnabled } from "@/lib/use-ai-enabled";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import type { AiInsightsResponse } from "@/app/api/ai/insights/route";
-import {
-  Sparkles, ChevronRight, RefreshCw, Loader2, AlertTriangle, Lightbulb,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Sparkles, ChevronRight, RefreshCw, Loader2, Lightbulb } from "lucide-react";
+import { cn, formatRelative } from "@/lib/utils";
 
 type Props =
   | { surface: "repo"; owner: string; repo: string }
@@ -33,7 +31,7 @@ type Props =
 export default function AiInsightsCard(props: Props) {
   const { enabled } = useAiEnabled();
   const { flags } = useFeatureFlags();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const query =
@@ -62,100 +60,96 @@ export default function AiInsightsCard(props: Props) {
       ? "Rate limit reached — try again in a minute."
       : "AI insights are unavailable right now.";
 
+  const evidenceHref = props.surface === "repo" ? "#delivery" : null;
+
   return (
-    <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-b from-violet-500/[0.04] to-slate-950/40 overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "w-full relative flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-violet-500/[0.06]",
-          open && "border-b border-violet-500/15",
-        )}
-      >
-        <span className="absolute inset-y-0 left-0 w-[2px] bg-gradient-to-b from-violet-400 to-violet-600" />
-        <span className="shrink-0 w-9 h-9 rounded-lg border border-violet-500/30 bg-violet-500/[0.14] flex items-center justify-center">
-          <Sparkles className="w-4 h-4 text-violet-300" />
+    <section aria-label="AI summary" className="card px-5 py-5">
+      <div className="flex items-start gap-4">
+        <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-control bg-brand-soft text-brand-fg" aria-hidden="true">
+          <Sparkles className="w-4 h-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-[15px] font-semibold text-white">AI Insights</span>
-            {data?.partial && (
-              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300">
-                <AlertTriangle className="w-3 h-3" /> partial data
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Generated analysis of the metrics on this page — always verify against the numbers.
-          </p>
-        </div>
-        <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 text-xs text-slate-300">
-          {open ? "Hide" : "Show"}
-          <ChevronRight className={cn("w-3 h-3 transition-transform", open && "rotate-90")} />
-        </span>
-      </button>
-
-      {open && (
-        <div className="p-5">
+        <div className="flex-1 min-w-0">
           {isLoading && (
-            <div className="flex items-center gap-2.5 text-sm text-violet-200">
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-              <span>Analysing your metrics…</span>
-            </div>
+            <p className="flex items-center gap-2.5 text-sm text-muted">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" /> Summarising the last 30 days…
+            </p>
           )}
 
-          {!isLoading && error && (
-            <p className="text-xs text-slate-500 italic">{unavailableText}</p>
-          )}
+          {!isLoading && error && <p className="text-sm text-muted">{unavailableText}</p>}
 
           {!isLoading && !error && data && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-200 leading-relaxed">{data.content.summary}</p>
+            <>
+              <p className="max-w-[820px] text-sm leading-[22px] font-medium text-fg">{data.content.summary}</p>
+              <p className="mt-2 text-xs text-faint">
+                AI summary of the metrics on this page · {data.provider} · {data.model}
+                {data.cached ? " · cached" : ""} · updated {formatRelative(data.generated_at)}
+                {data.partial && <span className="text-status-warn-text"> · partial data</span>}
+              </p>
 
-              {data.content.bullets.length > 0 && (
-                <ul className="space-y-1.5">
-                  {data.content.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2.5 text-xs text-slate-400">
-                      <span className="mt-1.5 w-1 h-1 rounded-full bg-violet-400 shrink-0" />
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {data.content.actions.length > 0 && (
-                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-300 mb-2">
-                    <Lightbulb className="w-3.5 h-3.5" /> Suggested actions
-                  </div>
-                  <ul className="space-y-1.5">
-                    {data.content.actions.map((a, i) => (
-                      <li key={i} className="flex gap-2.5 text-xs text-slate-300">
-                        <span className="font-mono text-slate-600 shrink-0">{i + 1}.</span>
-                        <span>{a}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {open && (data.content.bullets.length > 0 || data.content.actions.length > 0) && (
+                <div className="mt-4 grid gap-4 md:grid-cols-2 max-w-[1000px]">
+                  {data.content.bullets.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {data.content.bullets.map((b, i) => (
+                        <li key={i} className="flex gap-2.5 text-[13px] text-muted">
+                          <span className="mt-2 w-1 h-1 rounded-full bg-brand-fg shrink-0" aria-hidden="true" />
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {data.content.actions.length > 0 && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-brand-fg mb-2">
+                        <Lightbulb className="w-3.5 h-3.5" aria-hidden="true" /> Suggested actions
+                      </p>
+                      <ol className="space-y-1.5">
+                        {data.content.actions.map((a, i) => (
+                          <li key={i} className="flex gap-2.5 text-[13px] text-muted">
+                            <span className="font-mono text-faint shrink-0">{i + 1}.</span>
+                            <span>{a}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                 </div>
               )}
-
-              <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
-                <span className="text-[11px] text-slate-600">
-                  {data.provider} · {data.model}
-                  {data.cached && " · cached"}
-                </span>
-                <button
-                  onClick={() => setRefreshKey((k) => k + 1)}
-                  disabled={isValidating}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-slate-400 hover:text-violet-300 border border-slate-700 rounded-lg transition-colors disabled:opacity-40"
-                >
-                  <RefreshCw className={cn("w-3 h-3", isValidating && "animate-spin")} />
-                  Regenerate
-                </button>
-              </div>
-            </div>
+            </>
           )}
         </div>
-      )}
-    </div>
+        {!isLoading && !error && data && (
+          <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
+            {evidenceHref && (
+              <a href={evidenceHref} className="inline-flex items-center gap-1 text-[13px] font-medium text-link hover:text-violet-200">
+                See the evidence <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            )}
+            <div className="flex items-center gap-1">
+              {(data.content.bullets.length > 0 || data.content.actions.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => setOpen((v) => !v)}
+                  aria-expanded={open}
+                  className="h-8 px-2.5 rounded-control text-xs text-muted hover:text-fg hover:bg-raised"
+                >
+                  {open ? "Hide details" : "Show details"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setRefreshKey((k) => k + 1)}
+                disabled={isValidating}
+                aria-label="Regenerate summary"
+                title="Regenerate summary"
+                className="flex items-center justify-center w-8 h-8 rounded-control text-muted hover:text-fg hover:bg-raised disabled:text-disabled"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", isValidating && "animate-spin")} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

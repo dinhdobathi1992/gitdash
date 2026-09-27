@@ -49,7 +49,7 @@ function KpiCard({
       </div>
       <div>
         <p className="text-2xl font-bold text-white font-mono leading-none">{value}</p>
-        {sub && <p className="text-[11px] text-slate-500 mt-1">{sub}</p>}
+        {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
       </div>
     </div>
   );

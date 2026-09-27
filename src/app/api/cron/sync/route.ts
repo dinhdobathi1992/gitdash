@@ -29,8 +29,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOctokit } from "@/lib/github";
 import { syncRepo, sendPendingDigests, sendWeeklyLeadershipDigests } from "@/lib/sync";
-import { listSyncedRepos } from "@/lib/db";
+import { listSyncedRepos, pruneStalePendingUsers } from "@/lib/db";
+import { isStandaloneMode } from "@/lib/mode";
 import { pLimitSettled } from "@/lib/concurrency";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { l2Purge } from "@/lib/cache-l2";
 
 export const maxDuration = 300;
 
@@ -41,13 +44,27 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("cron/sync");
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Sweep expired shared-cache rows first: independent of GITHUB_TOKEN and of
+  // how long the sync below takes. Best-effort, never throws.
+  const cachePurged = await l2Purge(10_000);
+  // Organization mode: drop sign-ups that never got a group and went quiet.
+  let pendingUsersPruned = 0;
+  if (!isStandaloneMode() && process.env.DATABASE_URL) {
+    try {
+      pendingUsersPruned = await pruneStalePendingUsers();
+    } catch (err) {
+      console.warn("[cron] pending-user prune failed", err instanceof Error ? err.message : err);
+    }
+  }
+
   if (!process.env.GITHUB_TOKEN) {
     return NextResponse.json(
-      { error: "GITHUB_TOKEN is not configured — cron sync needs a service-level token" },
+      { error: "GITHUB_TOKEN is not configured — cron sync needs a service-level token", cache_rows_purged: cachePurged },
       { status: 500 },
     );
   }
@@ -95,5 +112,7 @@ export async function GET(req: NextRequest) {
     results: synced,
     digest,
     leadership_digest: leadershipDigest,
+    cache_rows_purged: cachePurged,
+    pending_users_pruned: pendingUsersPruned,
   });
 }

@@ -39,7 +39,7 @@ function RiskRow({ entry }: { entry: WorkloadRiskEntry }) {
             return (
               <span
                 key={key}
-                className="flex items-center gap-1 text-[10px] font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20"
+                className="flex items-center gap-1 text-xs font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20"
               >
                 <Icon className="w-2.5 h-2.5" /> {meta.label}
               </span>
@@ -47,12 +47,12 @@ function RiskRow({ entry }: { entry: WorkloadRiskEntry }) {
           })}
         </div>
       ) : (
-        <span className="flex items-center gap-1 text-[10px] text-slate-600">
+        <span className="flex items-center gap-1 text-xs text-slate-600">
           <ShieldCheck className="w-2.5 h-2.5" /> No risk signals
         </span>
       )}
 
-      <div className="flex items-center gap-3 text-[10px] text-slate-600 mt-1.5">
+      <div className="flex items-center gap-3 text-xs text-slate-600 mt-1.5">
         {entry.flags.after_hours && <span>{entry.after_hours_pct}% after-hours</span>}
         {entry.flags.weekend && <span>{entry.weekend_pct}% weekend</span>}
         {entry.flags.concurrent_pr_overload && <span>{entry.open_pr_count} open PRs</span>}
@@ -103,7 +103,7 @@ export default function WorkloadRiskRadar({ data }: { data: TeamWorkloadRiskResp
         </details>
       )}
 
-      <p className="text-[11px] text-slate-600">
+      <p className="text-xs text-slate-600">
         Based on {data.total_commits_analysed} commits over the last {data.window_days} days.
         Heuristic thresholds — a good signal to check in, not a verdict.
       </p>

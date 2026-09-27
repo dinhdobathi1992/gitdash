@@ -8,5 +8,8 @@ metadata:
 data:
   MODE: {{ .Values.config.mode | quote }}
   NEXT_PUBLIC_APP_URL: {{ .Values.config.appUrl | quote }}
+  GITDASH_ADMIN_GITHUB_IDS: {{ .Values.config.adminGithubIds | default "" | quote }}
+  GITDASH_ALLOWED_ORGS: {{ .Values.config.allowedOrgs | default "" | quote }}
+  GITDASH_RBAC_ENFORCE: {{ .Values.config.rbacEnforce | default "false" | toString | quote }}
   NODE_ENV: "production"
   NEXT_TELEMETRY_DISABLED: "1"

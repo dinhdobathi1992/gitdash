@@ -17,6 +17,7 @@ import { getOctokit } from "@/lib/github";
 import { fetchAndUpsertPrFacts, type PrFactsSyncResult } from "@/lib/sync";
 import { listSyncedRepos } from "@/lib/db";
 import { pLimitSettled } from "@/lib/concurrency";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export const maxDuration = 300;
 
@@ -27,6 +28,7 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("cron/sync-pr-facts");
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

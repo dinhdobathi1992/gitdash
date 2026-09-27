@@ -38,6 +38,44 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   githubIssueFromAnomaly: false,
 };
 
+/** Display metadata for each flag (settings page, admin permission matrix). */
+export type FlagDef = {
+  key: keyof FeatureFlags;
+  label: string;
+  description: string;
+  affects: string;
+  writes?: boolean;
+};
+
+export const FLAG_DEFS: FlagDef[] = [
+  { key: "dora", label: "DORA Metrics", description: "Deploy Frequency, Lead Time, Change Failure Rate, MTTR KPI cards and drill-down charts.", affects: "Repository Overview" },
+  { key: "prLifecycle", label: "PR Lifecycle Health", description: "Open PRs, Review P50/P90, Abandon Rate, Age Distribution, and concurrent WIP by author.", affects: "Repository Overview" },
+  { key: "performanceTab", label: "Performance Tab", description: "Job Duration avg vs p95, Job Composition per Run, Slowest Steps — requires fetching job-level data.", affects: "Workflow Detail" },
+  { key: "reliabilityTab", label: "Reliability Tab", description: "MTTR, Failure Streak, Flaky Branches, Re-run Rate, Pass/Fail Timeline.", affects: "Workflow Detail" },
+  { key: "anomalyDetection", label: "Anomaly Detection", description: "Statistical outlier detection (> 2 stddev from rolling baseline) on workflow runs.", affects: "Workflow Detail" },
+  { key: "busFactor", label: "Bus Factor Analysis", description: "Per-module contributor count and Herfindahl-Hirschman Index — requires fetching full commit history.", affects: "Repository Team" },
+  { key: "securityScan", label: "Security Scan", description: "Static analysis of workflow YAML files for security anti-patterns.", affects: "Repository Security" },
+  { key: "costAnalytics", label: "Cost Analytics", description: "GitHub Actions billing breakdown by runner type and SKU.", affects: "Cost Analytics" },
+  { key: "runnerUtilization", label: "Runner Utilization", description: "Per-runner job counts, durations, and failure rates across recent workflow runs.", affects: "Repository Team" },
+  { key: "reviewBottleneck", label: "Review Bottleneck", description: "Flags overloaded reviewers and stale review requests from PR review data.", affects: "Repository Team" },
+  { key: "healthScorecard", label: "Team Health Scorecard", description: "Org-wide ranked view combining DORA tier and bus-factor risk per repo, worst-first.", affects: "Organization Overview" },
+  { key: "workloadRisk", label: "Workload Risk Radar", description: "Flags sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload per person.", affects: "Repository Team" },
+  { key: "aiInsights", label: "AI Insights", description: "LLM-generated analysis of the metrics already on screen. Requires AI provider keys configured on the server — the surfaces stay hidden without them.", affects: "Repository Overview, Organization Health" },
+  { key: "githubIssueFromAnomaly", label: "File Anomaly as GitHub Issue", description: "Adds a 'File as issue' button to the anomaly card on workflow-detail pages. This is a write capability — it creates issues in the repo on your behalf using your GitHub token. Individual toggle only; excluded from bulk Enable/Disable-all.", affects: "Workflow Detail", writes: true },
+];
+
+/**
+ * Effective flags: a feature is on only if the server grants it AND the user
+ * has not switched it off. `granted === "all"` (standalone mode) means the
+ * user's preferences apply unchanged.
+ */
+export function effectiveFlags(preferences: FeatureFlags, granted: Set<keyof FeatureFlags> | "all"): FeatureFlags {
+  if (granted === "all") return preferences;
+  const out = { ...preferences };
+  for (const k of Object.keys(out) as (keyof FeatureFlags)[]) out[k] = preferences[k] && granted.has(k);
+  return out;
+}
+
 export const STORAGE_KEY = "gitdash:feature-flags";
 
 // ── External store (useSyncExternalStore-compatible) ──────────────────────────

@@ -51,17 +51,17 @@ export function OnboardingChecklist({ items, className }: OnboardingChecklistPro
         </div>
         <div className="relative w-10 h-10">
           <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="15" fill="none" stroke="#1e293b" strokeWidth="3" />
+            <circle cx="18" cy="18" r="15" fill="none" stroke="#1E242D" strokeWidth="3" />
             <circle
               cx="18" cy="18" r="15" fill="none"
-              stroke={progress === 100 ? "#22c55e" : "#7c3aed"}
+              stroke={progress === 100 ? "#3DD68C" : "#A48BFF"}
               strokeWidth="3"
               strokeDasharray={`${progress * 0.942} 94.2`}
               strokeLinecap="round"
               className="transition-all duration-500"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+          <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
             {progress}%
           </span>
         </div>
@@ -197,7 +197,7 @@ export function PatPermissionGuide({ className }: { className?: string }) {
         {PAT_SCOPES.map(({ scope, description, required }) => (
           <div key={scope} className="flex items-start gap-2.5">
             <span className={cn(
-              "mt-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0",
+              "mt-0.5 text-xs font-mono px-1.5 py-0.5 rounded border shrink-0",
               required
                 ? "bg-violet-500/10 border-violet-500/20 text-violet-400"
                 : "bg-slate-800 border-slate-700 text-slate-500",
@@ -206,7 +206,7 @@ export function PatPermissionGuide({ className }: { className?: string }) {
             </span>
             <div>
               <p className="text-xs text-slate-300">{description}</p>
-              {!required && <p className="text-[10px] text-slate-600">Optional</p>}
+              {!required && <p className="text-xs text-slate-600">Optional</p>}
             </div>
           </div>
         ))}
@@ -244,10 +244,10 @@ export function CopyBlock({ label, content, className }: { label: string; conten
   return (
     <div className={cn("bg-slate-950 border border-slate-800 rounded-lg overflow-hidden", className)}>
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800 bg-slate-900">
-        <span className="text-[10px] text-slate-500 font-mono">{label}</span>
+        <span className="text-xs text-slate-500 font-mono">{label}</span>
         <button
           onClick={copy}
-          className="text-[10px] text-slate-400 hover:text-white transition-colors"
+          className="text-xs text-slate-400 hover:text-white transition-colors"
         >
           {copied ? "Copied!" : "Copy"}
         </button>

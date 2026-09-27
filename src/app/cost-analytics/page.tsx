@@ -1,898 +1,201 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Cost — `Cost` artboard, contract §9.
+ * Month stepper + Download CSV · 4-cell KPI strip with the month-end
+ * projection compared against last month · daily spend by runner OS with a
+ * faded projection · top repositories · savings estimates · SKU detail.
+ * The account follows the sidebar's org switcher.
+ */
+
+import { useMemo, useState } from "react";
 import useSWR from "swr";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { fetcher, FetchError } from "@/lib/swr";
 import { useAuth } from "@/components/AuthProvider";
-import { Breadcrumb } from "@/components/Sidebar";
-import StatCard from "@/components/StatCard";
-import { formatCurrency } from "@/lib/cost";
-import type {
-  CostAnalysisResponse,
-  SkuBreakdown,
-} from "@/app/api/github/billing/cost-analysis/route";
-import type { GitHubOrg } from "@/lib/github";
-import {
-  AlertCircle,
-  ExternalLink,
-  DollarSign,
-  TrendingUp,
-  Clock,
-  Server,
-  Gauge,
-  Building2,
-  User,
-  Info,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Tag,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { ExportButton } from "@/components/ExportButton";
+import type { CostAnalysisResponse } from "@/app/api/github/billing/cost-analysis/route";
+import { useCurrentOrg } from "@/lib/current-org";
+import { savingsSuggestions } from "@/lib/cost-savings";
+import { Page, PageHeading } from "@/components/ui/PageHeading";
+import { KpiStrip } from "@/components/ui/KpiStrip";
+import { Button } from "@/components/ui/Button";
+import { ErrorBanner } from "@/components/ui/Card";
+import { DailySpendChart, TopRepos, Savings, SkuTable, BillingAccessHelp } from "@/components/cost/CostSections";
 
-// ── Month navigation helpers ─────────────────────────────────────────────────
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const NOW = new Date();
+const CUR_YEAR = NOW.getFullYear();
+const CUR_MONTH = NOW.getMonth() + 1;
 
-function prevMonth(year: number, month: number): { year: number; month: number } {
-  if (month === 1) return { year: year - 1, month: 12 };
-  return { year, month: month - 1 };
+const usd = (n: number, cents = true) => `$${n.toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 })}`;
+
+function shift(y: number, m: number, by: number) {
+  const d = new Date(y, m - 1 + by, 1);
+  return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-function nextMonth(year: number, month: number): { year: number; month: number } {
-  if (month === 12) return { year: year + 1, month: 1 };
-  return { year, month: month + 1 };
+function csvCell(v: string | number): string {
+  const s = String(v);
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s; // formula-injection guard
+  return /[,"\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-// ── Burn Rate Progress Bar ───────────────────────────────────────────────────
-
-function BurnRateBar({
-  progress,
-  status,
-}: {
-  progress: number;
-  status: "ok" | "warning" | "critical";
-}) {
-  const pct = Math.min(100, Math.round(progress * 100));
-
-  const barColor =
-    status === "critical"
-      ? "bg-red-500"
-      : status === "warning"
-        ? "bg-amber-500"
-        : "bg-violet-500";
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-xs text-slate-400">
-        <span>Month progress: {pct}%</span>
-        <span>Days elapsed</span>
-      </div>
-      <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all", barColor)}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── SKU Breakdown Table ──────────────────────────────────────────────────────
-
-function SkuTable({ skus }: { skus: SkuBreakdown[] }) {
-  if (skus.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center">
-        <Server className="w-8 h-8 text-slate-700" />
-        <p className="text-sm font-medium text-slate-500">No Actions usage data for this period</p>
-        <p className="text-xs text-slate-600 max-w-xs">Usage appears here once GitHub Actions runs are billed in this billing period.</p>
-      </div>
-    );
+function downloadCsv(data: CostAnalysisResponse) {
+  const lines = [["runner", "sku", "minutes", "gross_usd", "discount_usd", "net_usd"].join(",")];
+  for (const s of data.skus) lines.push([s.label, s.sku, s.minutes, s.gross_amount, s.discount_amount, s.net_amount].map(csvCell).join(","));
+  if (data.repos?.length) {
+    lines.push("", ["repository", "minutes", "net_usd"].join(","));
+    for (const r of data.repos) lines.push([r.repo, Math.round(r.minutes), r.net_amount.toFixed(2)].map(csvCell).join(","));
   }
-
-  const totalMinutes = skus.reduce((s, x) => s + x.minutes, 0);
-  const totalGross = skus.reduce((s, x) => s + x.gross_amount, 0);
-  const totalDiscount = skus.reduce((s, x) => s + x.discount_amount, 0);
-  const totalNet = skus.reduce((s, x) => s + x.net_amount, 0);
-
-  return (
-    <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-      <table className="w-full text-sm min-w-[640px]">
-        <thead>
-          <tr className="border-b border-slate-800 bg-slate-900/50">
-            <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              SKU / Runner
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              Minutes
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4 hidden md:table-cell">
-              Price/Unit
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              Gross
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              Discount
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              Net
-            </th>
-            <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-widest py-2.5 px-4">
-              Share
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {skus.map((row, idx) => {
-            const share =
-              totalMinutes > 0
-                ? Math.round((row.minutes / totalMinutes) * 100)
-                : 0;
-
-            return (
-              <tr
-                key={row.sku}
-                className={cn(
-                  "border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors",
-                  idx % 2 === 1 && "bg-slate-900/30",
-                )}
-              >
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="p-1.5 rounded-lg bg-slate-800 border border-slate-700/60">
-                      <Server className="w-3 h-3 text-slate-400" />
-                    </span>
-                    <div>
-                      <p className="text-white font-medium text-sm">{row.label}</p>
-                      <p className="text-[10px] font-mono text-slate-600 mt-0.5">{row.sku}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="text-right py-3 px-4 text-white tabular-nums font-mono font-medium">
-                  {row.minutes.toLocaleString()}
-                </td>
-                <td className="text-right py-3 px-4 text-slate-500 tabular-nums font-mono text-xs hidden md:table-cell">
-                  {row.price_per_unit > 0
-                    ? `$${row.price_per_unit.toFixed(4)}/${row.unit_type}`
-                    : "—"}
-                </td>
-                <td className="text-right py-3 px-4 text-slate-300 tabular-nums font-mono">
-                  {formatCurrency(row.gross_amount)}
-                </td>
-                <td className="text-right py-3 px-4 font-mono">
-                  {row.discount_amount > 0 ? (
-                    <span className="text-green-400 tabular-nums">-{formatCurrency(row.discount_amount)}</span>
-                  ) : (
-                    <span className="text-slate-700">—</span>
-                  )}
-                </td>
-                <td className="text-right py-3 px-4 text-white tabular-nums font-mono font-semibold">
-                  {formatCurrency(row.net_amount)}
-                </td>
-                <td className="text-right py-3 px-4">
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-violet-500/80"
-                        style={{ width: `${share}%` }}
-                      />
-                    </div>
-                    <span className="text-slate-400 tabular-nums text-xs w-7 text-right font-mono">
-                      {share}%
-                    </span>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-slate-700/60 bg-slate-900/60">
-            <td className="py-3 px-4 text-sm font-bold text-white">Total</td>
-            <td className="text-right py-3 px-4 text-white tabular-nums font-mono font-bold">
-              {totalMinutes.toLocaleString()}
-            </td>
-            <td className="text-right py-3 px-4 text-slate-600 hidden md:table-cell">—</td>
-            <td className="text-right py-3 px-4 text-slate-300 tabular-nums font-mono font-semibold">
-              {formatCurrency(totalGross)}
-            </td>
-            <td className="text-right py-3 px-4 text-green-400 tabular-nums font-mono font-semibold">
-              {totalDiscount > 0 ? `-${formatCurrency(totalDiscount)}` : <span className="text-slate-700">—</span>}
-            </td>
-            <td className="text-right py-3 px-4 text-white tabular-nums font-mono font-bold">
-              {formatCurrency(totalNet)}
-            </td>
-            <td className="text-right py-3 px-4 text-slate-500 font-mono text-xs">100%</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  );
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `actions-cost-${data.login || "account"}-${data.period.year}-${String(data.period.month).padStart(2, "0")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
-
-// ── Main Page ────────────────────────────────────────────────────────────────
-
-const now = new Date();
-const DEFAULT_YEAR = now.getFullYear();
-const DEFAULT_MONTH = now.getMonth() + 1;
-
-// Sentinel value — means "use personal account, not an org"
-const PERSONAL = "__personal__";
 
 export default function CostAnalyticsPage() {
   const { mode } = useAuth();
-  const isOrgMode = mode === "organization";
+  const orgMode = mode === "organization";
+  const org = useCurrentOrg();
+  const [{ year, month }, setPeriod] = useState({ year: CUR_YEAR, month: CUR_MONTH });
+  const isCurrent = year === CUR_YEAR && month === CUR_MONTH;
 
-  // "" = not yet chosen; PERSONAL = personal account; anything else = org login
-  const [selection, setSelection] = useState<string>("");
-  const [year, setYear] = useState(DEFAULT_YEAR);
-  const [month, setMonth] = useState(DEFAULT_MONTH);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  // Organization mode uses an OAuth token that cannot read personal billing.
+  const blockedPersonal = orgMode && !org;
+  const key = (y: number, m: number) =>
+    blockedPersonal ? null : `/api/github/billing/cost-analysis?year=${y}&month=${m}${org ? `&org=${encodeURIComponent(org)}` : ""}`;
+  const prev = shift(year, month, -1);
 
-  // Load the user's orgs from the same endpoint used by the sidebar
-  const { data: orgs } = useSWR<GitHubOrg[]>("/api/github/orgs", fetcher<GitHubOrg[]>);
+  const { data, error, isLoading, mutate } = useSWR<CostAnalysisResponse>(key(year, month), fetcher<CostAnalysisResponse>);
+  // Last month, for the projection comparison (only meaningful on the current month).
+  const { data: last } = useSWR<CostAnalysisResponse>(isCurrent && data ? key(prev.year, prev.month) : null, fetcher<CostAnalysisResponse>);
 
-  // Derive active selection: user pick OR default to personal account once orgs load
-  const activeSelection = selection || PERSONAL;
-  const isPersonal = activeSelection === PERSONAL;
-  const activeOrg = isPersonal ? "" : activeSelection;
-
-  // In org mode, personal account billing is not accessible via OAuth token — skip the call
-  const isOrgModePersonal = isOrgMode && isPersonal;
-
-  // Build query key — skip if org mode + personal (OAuth can't access personal billing)
-  const key = isOrgModePersonal
-    ? null
-    : isPersonal
-      ? `/api/github/billing/cost-analysis?year=${year}&month=${month}`
-      : activeOrg
-        ? `/api/github/billing/cost-analysis?year=${year}&month=${month}&org=${encodeURIComponent(activeOrg)}`
-        : null;
-
-  const { data, error, isLoading } = useSWR<CostAnalysisResponse>(
-    key,
-    fetcher<CostAnalysisResponse>,
+  const status = error instanceof FetchError ? error.status : null;
+  const daysTotal = new Date(year, month, 0).getDate();
+  const daysElapsed = isCurrent ? NOW.getDate() : daysTotal;
+  const projected = data ? (data.total_net_amount / Math.max(1, daysElapsed)) * daysTotal : 0;
+  const sevenDay = data?.daily?.length ? data.daily.slice(-7).reduce((s, d) => s + d.linux + d.macos + d.windows + d.other, 0) / Math.min(7, data.daily.length) : null;
+  const vsLast = last && last.total_net_amount > 0 ? ((projected - last.total_net_amount) / last.total_net_amount) * 100 : null;
+  const savings = useMemo(
+    () => (data ? savingsSuggestions(data.skus, data.repos, isCurrent ? daysTotal / Math.max(1, daysElapsed) : 1) : []),
+    [data, isCurrent, daysTotal, daysElapsed],
   );
 
-  const isPermissionError = error instanceof FetchError && error.status === 403;
-  const isNotFound = error instanceof FetchError && error.status === 404;
-
-  const selectedOrg = isPersonal ? null : (orgs?.find((o) => o.login === activeOrg) ?? null);
-
-  const goPrev = () => {
-    const p = prevMonth(year, month);
-    setYear(p.year);
-    setMonth(p.month);
-  };
-
-  const goNext = () => {
-    const n = nextMonth(year, month);
-    const isCurrentOrFuture =
-      n.year > DEFAULT_YEAR ||
-      (n.year === DEFAULT_YEAR && n.month > DEFAULT_MONTH);
-    if (isCurrentOrFuture) return;
-    setYear(n.year);
-    setMonth(n.month);
-  };
-
-  const isCurrentMonth = year === DEFAULT_YEAR && month === DEFAULT_MONTH;
+  const account = org ?? "your account";
 
   return (
-    <div className="p-4 md:p-8 space-y-5">
-      <Breadcrumb
-        items={[
-          { label: "Repositories", href: "/" },
-          { label: "Cost Analytics" },
-        ]}
+    <Page>
+      <PageHeading
+        title="Cost"
+        meta={`GitHub Actions billing for ${account} · from the Enhanced Billing API`}
+        actions={
+          <>
+            <div className="inline-flex items-center h-9 rounded-control border border-control bg-surface" role="group" aria-label="Billing month">
+              <button
+                type="button"
+                onClick={() => setPeriod(prev)}
+                aria-label="Previous month"
+                className="flex items-center justify-center w-9 h-full text-muted hover:text-fg"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-3 min-w-[148px] text-center text-[13px] font-semibold text-fg" aria-live="polite">
+                {MONTHS[month - 1]} {year}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPeriod(shift(year, month, 1))}
+                disabled={isCurrent}
+                aria-label="Next month"
+                className="flex items-center justify-center w-9 h-full text-muted hover:text-fg disabled:text-disabled disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <Button onClick={() => data && downloadCsv(data)} disabled={!data}>
+              <Download className="w-4 h-4 text-muted" aria-hidden="true" /> Download CSV
+            </Button>
+          </>
+        }
       />
 
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-              <DollarSign className="w-4 h-4 text-violet-400" />
-            </div>
-            <h1 className="text-xl font-bold text-white">Cost Analytics</h1>
-          </div>
-          <p className="text-sm text-slate-500 max-w-xl">
-            {isOrgMode
-              ? "Real GitHub Actions spend via the Enhanced Billing API — requires Team or Enterprise plan."
-              : "Real GitHub Actions spend — requires a fine-grained PAT with Administration (read) permission."}
-          </p>
-        </div>
-      </div>
+      {blockedPersonal && (
+        <p className="card px-5 py-4 text-sm text-muted">
+          Personal billing isn&apos;t readable in organization mode. Pick an organization in the sidebar switcher to see its Actions spend.
+        </p>
+      )}
 
-      {/* Controls: org dropdown + period */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+      {(status === 403 || status === 404) && <BillingAccessHelp kind={status} org={org ?? ""} orgMode={orgMode} />}
+      {error && status !== 403 && status !== 404 && (
+        <ErrorBanner message={`Couldn't load billing: ${(error as Error).message}`} onRetry={() => mutate()} />
+      )}
 
-        {/* Account / Org dropdown */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-slate-400 shrink-0">
-            <Building2 className="w-4 h-4" />
-            <span>Account:</span>
-          </div>
+      {!blockedPersonal && !error && (
+        <KpiStrip
+          cells={[
+            {
+              key: "billed",
+              label: isCurrent ? "Billed so far" : "Billed",
+              loading: isLoading,
+              value: data ? usd(data.total_net_amount) : "—",
+              foot: isCurrent ? `Day ${daysElapsed} of ${daysTotal}` : `${MONTHS[month - 1]} total`,
+            },
+            {
+              key: "projected",
+              label: isCurrent ? "Projected month end" : "Gross before discounts",
+              loading: isLoading,
+              value: data ? (isCurrent ? usd(projected, false) : usd(data.total_gross_amount)) : "—",
+              tone: isCurrent && vsLast !== null && vsLast > 10 ? "warn" : "default",
+              foot: isCurrent
+                ? vsLast === null
+                  ? "At the current daily pace"
+                  : <span className={vsLast > 10 ? "text-status-warn-text" : undefined}>
+                      {Math.abs(Math.round(vsLast))}% {vsLast >= 0 ? "above" : "below"} {MONTHS[prev.month - 1]} ({usd(last!.total_net_amount, false)})
+                    </span>
+                : data && data.total_discount_amount > 0 ? `${usd(data.total_discount_amount)} discounted` : "No discounts applied",
+            },
+            {
+              key: "burn",
+              label: "Daily burn",
+              loading: isLoading,
+              value: data ? usd(sevenDay ?? data.total_net_amount / Math.max(1, daysElapsed)) : "—",
+              foot: sevenDay !== null ? "7-day average" : "Average this month",
+            },
+            {
+              key: "minutes",
+              label: "Minutes",
+              loading: isLoading,
+              value: data ? Math.round(data.total_minutes).toLocaleString() : "—",
+              foot: "Gross Actions minutes",
+            },
+          ]}
+        />
+      )}
 
-          {orgs === undefined ? (
-            // Loading skeleton
-            <div className="h-9 w-48 rounded-lg skeleton" />
-          ) : (
-            <div className="relative">
-              <button
-                onClick={() => setDropdownOpen((v) => !v)}
-                className="flex items-center gap-2.5 px-3 py-2 bg-slate-900/60 border border-slate-700 hover:border-slate-500 rounded-lg text-sm text-slate-100 transition-colors min-w-[200px]"
-              >
-                {isPersonal ? (
-                  <>
-                    <User className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="flex-1 text-left">Personal Account</span>
-                  </>
-                ) : selectedOrg ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={selectedOrg.avatar_url}
-                      alt={selectedOrg.login}
-                      width={16}
-                      height={16}
-                      className="w-4 h-4 rounded-sm shrink-0"
-                    />
-                    <span className="font-mono flex-1 text-left">{selectedOrg.login}</span>
-                  </>
-                ) : (
-                  <span className="flex-1 text-left text-slate-500">Select account…</span>
-                )}
-                <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", dropdownOpen && "rotate-180")} />
-              </button>
+      {data && data.daily && data.daily.length > 0 && (
+        <DailySpendChart daily={data.daily} year={year} month={month} projectRest={isCurrent} today={daysElapsed} />
+      )}
 
-              {dropdownOpen && (
-                <div className="absolute left-0 top-full mt-1 w-full min-w-[220px] bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1">
-                  {/* Personal account option */}
-                  <button
-                    onClick={() => { setSelection(PERSONAL); setDropdownOpen(false); }}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
-                      isPersonal
-                        ? "text-white bg-slate-700/50"
-                        : "text-slate-300 hover:text-white hover:bg-slate-700/30"
-                    )}
-                  >
-                    <User className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>Personal Account</span>
-                  </button>
-
-                  {/* Org divider + entries */}
-                  {orgs.length > 0 && (
-                    <>
-                      <div className="mx-3 my-1 border-t border-slate-700/50" />
-                      {orgs.map((o) => (
-                        <button
-                          key={o.login}
-                          onClick={() => { setSelection(o.login); setDropdownOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
-                            activeOrg === o.login
-                              ? "text-white bg-slate-700/50"
-                              : "text-slate-300 hover:text-white hover:bg-slate-700/30"
-                          )}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={o.avatar_url}
-                            alt={o.login}
-                            width={16}
-                            height={16}
-                            className="w-4 h-4 rounded-sm shrink-0"
-                          />
-                          <span className="font-mono truncate">{o.login}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+      {data && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {data.repos ? <TopRepos repos={data.repos} /> : (
+            <p className="card px-5 py-5 text-sm text-muted">Per-repository spend isn&apos;t available from GitHub for this account.</p>
           )}
-        </div>
-
-        {/* Period selector */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-slate-400 shrink-0">
-            <Tag className="w-4 h-4" />
-            <span>Period:</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={goPrev}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-              aria-label="Previous month"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-3 py-1 text-sm font-medium text-white bg-slate-900/60 border border-slate-700 rounded-lg min-w-[130px] text-center">
-              {MONTH_NAMES[month - 1]} {year}
-            </span>
-            <button
-              onClick={goNext}
-              disabled={isCurrentMonth}
-              className={cn(
-                "p-1.5 rounded-lg transition-colors",
-                isCurrentMonth
-                  ? "text-slate-600 cursor-not-allowed"
-                  : "text-slate-400 hover:text-white hover:bg-slate-700"
-              )}
-              aria-label="Next month"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          {isCurrentMonth && (
-            <span className="text-xs text-slate-500">Current month</span>
-          )}
-        </div>
-      </div>
-
-      {/* Org mode + personal account selected — OAuth token can't access personal billing */}
-      {isOrgModePersonal && (
-        <div className="flex items-start gap-4 px-5 py-4 bg-slate-700/30 border border-slate-600/40 rounded-xl">
-          <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-300">
-              Personal account billing is not available in organization mode
-            </p>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              In organization mode, GitDash uses a GitHub OAuth token which only has access to
-              organization billing — not personal account billing. Select one of your organizations
-              from the dropdown above to view its cost data.
-            </p>
-          </div>
+          <Savings items={savings} />
         </div>
       )}
 
-      {/* Loading state */}
-      {isLoading && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                <div className="h-3 w-20 rounded skeleton mb-3" />
-                <div className="h-6 w-16 rounded skeleton" />
-              </div>
-            ))}
-          </div>
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6">
-            <div className="h-4 w-40 rounded skeleton mb-4" />
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-8 rounded skeleton" />
-              ))}
-            </div>
-          </div>
-        </div>
+      {data && <SkuTable skus={data.skus} />}
+
+      {data && (
+        <p className="text-xs text-faint">
+          Real billed amounts from GitHub&apos;s Enhanced Billing API, after discounts — not estimates. Projections and savings are estimates.{" "}
+          <a href="https://docs.github.com/en/rest/billing/usage" target="_blank" rel="noopener noreferrer" className="text-link hover:text-violet-200">API reference</a>
+        </p>
       )}
-
-      {/* Permission error — fine-grained PAT required */}
-      {isPermissionError && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 space-y-3">
-          <div className="flex items-center gap-2 text-amber-400">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span className="font-semibold">Insufficient billing permissions</span>
-          </div>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            The GitHub Enhanced Billing API requires a{" "}
-            <strong className="text-slate-300">fine-grained PAT</strong> with
-            the <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code>{" "}
-            organization permission (read). Classic PATs with{" "}
-            <code className="text-slate-300 bg-slate-800 px-1 rounded">admin:org</code> are{" "}
-            <strong className="text-red-400">not supported</strong> by this API.
-          </p>
-          <div className="space-y-2 text-sm text-slate-400">
-            <p className="font-medium text-slate-300">To fix this:</p>
-            <ol className="list-decimal list-inside space-y-1 pl-1">
-              <li>
-                Go to{" "}
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300"
-                >
-                  github.com/settings/personal-access-tokens/new
-                </a>{" "}
-                and create a <strong>Fine-grained token</strong>
-              </li>
-              <li>
-                Under <em>Repository access</em>, select your org
-              </li>
-              <li>
-                Under <em>Organization permissions</em>, set{" "}
-                <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code>{" "}
-                → <strong>Read-only</strong>
-              </li>
-              <li>Go to Settings and re-enter your new token</li>
-            </ol>
-          </div>
-          {activeOrg && (
-            <a
-              href={`https://github.com/organizations/${activeOrg}/settings/billing`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-300 transition-colors"
-            >
-              View org billing on GitHub <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* Not found — org mode: Enhanced Billing Platform not enabled; standalone: insufficient PAT */}
-      {isNotFound && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 space-y-4">
-          <div className="flex items-center gap-2 text-red-400">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span className="font-semibold">
-              {isOrgMode
-                ? <>Billing data not found for <code className="font-mono bg-red-500/10 px-1.5 py-0.5 rounded text-red-300">{activeOrg || "this organization"}</code></>
-                : <>Your API key does not have enough permission for{" "}<code className="font-mono bg-red-500/10 px-1.5 py-0.5 rounded text-red-300">{activeOrg || "this organization"}</code></>
-              }
-            </span>
-          </div>
-
-          {isOrgMode ? (
-            <>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                GitHub returned <code className="text-slate-300 bg-slate-800 px-1 rounded">404</code> for the
-                Enhanced Billing API. This usually means the organization{" "}
-                <code className="text-slate-300 bg-slate-800 px-1 rounded">{activeOrg}</code> is{" "}
-                <strong className="text-red-400">not enrolled</strong> in the GitHub Enhanced Billing Platform,
-                which requires a <strong className="text-slate-300">Team or Enterprise plan</strong>.
-              </p>
-              <div className="flex flex-wrap items-center gap-4 pt-1">
-                {activeOrg && (
-                  <>
-                    <a
-                      href={`https://github.com/organizations/${activeOrg}/settings/billing/platform`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 rounded-lg text-sm text-violet-300 transition-colors"
-                    >
-                      Enable Enhanced Billing for {activeOrg} <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                    <a
-                      href={`https://github.com/organizations/${activeOrg}/settings/billing`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-300 transition-colors"
-                    >
-                      View org billing on GitHub <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                GitHub returned <code className="text-slate-300 bg-slate-800 px-1 rounded">404</code> for the
-                Enhanced Billing API. This almost always means your current PAT does{" "}
-                <strong className="text-red-400">not</strong> have the{" "}
-                <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code> organization
-                permission (read) scoped to{" "}
-                <code className="text-slate-300 bg-slate-800 px-1 rounded">{activeOrg}</code>.
-                GitHub hides the resource entirely rather than returning 403.
-              </p>
-
-              <div className="space-y-2 text-sm text-slate-400">
-                <p className="font-medium text-slate-300">To fix this:</p>
-                <ol className="list-decimal list-inside space-y-1.5 pl-1">
-                  <li>
-                    Go to{" "}
-                    <a
-                      href="https://github.com/settings/personal-access-tokens/new"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-violet-400 hover:text-violet-300 underline underline-offset-2"
-                    >
-                      github.com/settings/personal-access-tokens/new
-                    </a>{" "}
-                    and create a <strong className="text-slate-300">Fine-grained token</strong>
-                  </li>
-                  <li>
-                    Under <em>Resource owner</em>, select{" "}
-                    <code className="text-slate-300 bg-slate-800 px-1 rounded">{activeOrg}</code>
-                  </li>
-                  <li>
-                    Under <em>Organization permissions</em> → set{" "}
-                    <code className="text-slate-300 bg-slate-800 px-1 rounded">Administration</code> →{" "}
-                    <strong className="text-slate-300">Read-only</strong>
-                  </li>
-                  <li>Go to GitDash Settings and replace your current PAT with the new one</li>
-                </ol>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 pt-1">
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 rounded-lg text-sm text-violet-300 transition-colors"
-                >
-                  Create new fine-grained PAT <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-                {activeOrg && (
-                  <a
-                    href={`https://github.com/organizations/${activeOrg}/settings/billing`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-300 transition-colors"
-                  >
-                    View org billing on GitHub <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
-
-              <p className="text-[11px] text-slate-600 border-t border-slate-700/40 pt-3">
-                If your PAT is correct and you are a billing admin, the org may not be on the{" "}
-                GitHub Enhanced Billing Platform (requires Team or Enterprise plan).{" "}
-                {activeOrg && (
-                  <a
-                    href={`https://github.com/organizations/${activeOrg}/settings/billing/platform`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-slate-500 hover:text-slate-400 underline underline-offset-2"
-                  >
-                    Enable Enhanced Billing for {activeOrg}
-                  </a>
-                )}
-              </p>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Generic error */}
-      {error && !isPermissionError && !isNotFound && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
-          <div className="flex items-center gap-2 text-red-400">
-            <AlertCircle className="w-5 h-5" />
-            <span className="font-medium">
-              {error.message ?? "Failed to load cost analysis"}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Data loaded */}
-      {data && !isLoading && (
-        <>
-          {/* ── Account context banner ───────────────────────────────────── */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-violet-500/8 border border-violet-500/20 rounded-xl">
-            {isPersonal ? (
-              <User className="w-5 h-5 text-violet-400 shrink-0" />
-            ) : selectedOrg ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={selectedOrg.avatar_url}
-                alt={selectedOrg.login}
-                width={28}
-                height={28}
-                className="w-7 h-7 rounded-lg shrink-0"
-              />
-            ) : (
-              <Building2 className="w-5 h-5 text-violet-400 shrink-0" />
-            )}
-            <div>
-              <p className="text-xs text-violet-400/70 uppercase tracking-wider font-medium">
-                {isPersonal ? "Personal Account" : "Organization"}
-              </p>
-              <p className="text-sm font-semibold text-white font-mono">
-                {isPersonal ? data.login || "your account" : data.login}
-              </p>
-            </div>
-            <div className="ml-auto text-right flex items-center gap-3">
-              <ExportButton
-                data={data}
-                filenameBase={`cost-analytics-${data.period.year}-${String(data.period.month).padStart(2, "0")}`}
-                csvRows={() =>
-                  (data.skus ?? []).map((sku) => ({
-                    sku: sku.sku,
-                    label: sku.label,
-                    minutes: sku.minutes,
-                    unit_type: sku.unit_type,
-                    price_per_unit: sku.price_per_unit,
-                    gross_amount: sku.gross_amount,
-                    discount_amount: sku.discount_amount,
-                    net_amount: sku.net_amount,
-                  }))
-                }
-              />
-              <div className="text-right">
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Period</p>
-                <p className="text-sm font-medium text-slate-300">
-                  {MONTH_NAMES[data.period.month - 1]} {data.period.year}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Summary stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Net Billed Amount"
-              value={formatCurrency(data.total_net_amount)}
-              sub={
-                data.total_discount_amount > 0
-                  ? `${formatCurrency(data.total_discount_amount)} discounted`
-                  : "No discounts applied"
-              }
-              icon={DollarSign}
-              iconColor="text-green-400"
-              valueColor="green"
-              accent="green"
-            />
-            <StatCard
-              label="Total Minutes"
-              value={data.total_minutes.toLocaleString()}
-              sub={`Gross ${formatCurrency(data.total_gross_amount)}`}
-              icon={Clock}
-              iconColor="text-blue-400"
-              valueColor="blue"
-              accent="blue"
-            />
-            <StatCard
-              label="Daily Burn Rate"
-              value={`${data.burn_rate.daily_burn_rate.toLocaleString()} min`}
-              sub={`Day ${data.burn_rate.days_elapsed} of ${data.burn_rate.days_total}`}
-              icon={TrendingUp}
-              iconColor="text-amber-400"
-              valueColor={data.burn_rate.status === "critical" ? "red" : data.burn_rate.status === "warning" ? "amber" : "default"}
-              accent={data.burn_rate.status === "critical" ? "red" : data.burn_rate.status === "warning" ? "amber" : "none"}
-            />
-            <StatCard
-              label="Projected EOM"
-              value={data.burn_rate.projected_minutes.toLocaleString()}
-              sub={`${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`}
-              icon={Gauge}
-              iconColor={
-                data.burn_rate.status === "critical" ? "text-red-400"
-                  : data.burn_rate.status === "warning" ? "text-amber-400"
-                  : "text-green-400"
-              }
-              valueColor={data.burn_rate.status === "critical" ? "red" : data.burn_rate.status === "warning" ? "amber" : "green"}
-              accent={data.burn_rate.status === "critical" ? "red" : data.burn_rate.status === "warning" ? "amber" : "green"}
-            />
-          </div>
-
-          {/* Burn Rate Projection */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-white">
-                  Monthly Burn Rate &amp; Projection
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                  <Building2 className="w-3 h-3" /> {data.login}
-                </p>
-              </div>
-              {data.burn_rate.status !== "ok" && (
-                <span
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium border",
-                    data.burn_rate.status === "critical"
-                      ? "bg-red-500/10 border-red-500/20 text-red-400"
-                      : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                  )}
-                >
-                  {data.burn_rate.status === "critical"
-                    ? "High burn rate"
-                    : "Moderate burn rate"}
-                </span>
-              )}
-            </div>
-
-            <BurnRateBar
-              progress={data.burn_rate.progress}
-              status={data.burn_rate.status}
-            />
-
-            {/* Projection details */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-slate-900/40 border border-slate-700/40 rounded-lg px-3 py-2.5">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Current Minutes
-                </p>
-                <p className="text-sm font-semibold text-white tabular-nums">
-                  {data.burn_rate.current_minutes.toLocaleString()} min
-                </p>
-              </div>
-              <div className="bg-slate-900/40 border border-slate-700/40 rounded-lg px-3 py-2.5">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Projected EOM
-                </p>
-                <p className="text-sm font-semibold text-white tabular-nums">
-                  {data.burn_rate.projected_minutes.toLocaleString()} min
-                </p>
-              </div>
-              <div className="bg-slate-900/40 border border-slate-700/40 rounded-lg px-3 py-2.5">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Net Billed
-                </p>
-                <p className="text-sm font-semibold text-white tabular-nums">
-                  {formatCurrency(data.total_net_amount)}
-                </p>
-              </div>
-              <div className="bg-slate-900/40 border border-slate-700/40 rounded-lg px-3 py-2.5">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Total Discounts
-                </p>
-                <p
-                  className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    data.total_discount_amount > 0
-                      ? "text-green-400"
-                      : "text-slate-500"
-                  )}
-                >
-                  {data.total_discount_amount > 0
-                    ? `-${formatCurrency(data.total_discount_amount)}`
-                    : "None"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* SKU Breakdown Table */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-6 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-white">
-                Usage by SKU
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Actual cost breakdown per runner SKU from the GitHub Enhanced
-                Billing API
-              </p>
-            </div>
-            <SkuTable skus={data.skus} />
-          </div>
-
-          {/* Info: API requirements */}
-          <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-slate-500" />
-              <h3 className="text-sm font-semibold text-slate-300">
-                About this data
-              </h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Costs shown are real billed amounts from GitHub&apos;s{" "}
-              <strong className="text-slate-300">Enhanced Billing API</strong>{" "}
-              — not estimates. This includes gross charges, any discounts
-              (enterprise agreements, credits), and the final net amount
-              charged. Data requires a fine-grained PAT with{" "}
-              <code className="text-slate-300 bg-slate-800 px-1 rounded">
-                Administration
-              </code>{" "}
-              org permission and an org on the Enhanced Billing Platform
-              (GitHub Team / Enterprise).
-            </p>
-            <a
-              href="https://docs.github.com/en/rest/billing/usage"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-            >
-              GitHub Enhanced Billing API docs{" "}
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </>
-      )}
-    </div>
+    </Page>
   );
 }

@@ -1,510 +1,444 @@
 "use client";
 
+/**
+ * Alerts — `Alerts` artboard, contract §9.
+ * "Firing now" rows with Mute 1h + Investigate · rules list with switches ·
+ * new-rule form in a side panel with a plain-language preview sentence ·
+ * delivery history. Rule changes are admin-only in organization mode;
+ * everyone can see rules and the alerts they fire.
+ */
+
 import { useState } from "react";
-import useSWR from "swr";
-import { fetcher } from "@/lib/swr";
+import Link from "next/link";
+import { Plus, Trash2, Send, CircleX, Clock, Layers, GitPullRequest, Users, Mail, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { Breadcrumb } from "@/components/Sidebar";
 import { RepoPicker } from "@/components/RepoPicker";
+import { cn, formatRelative } from "@/lib/utils";
+import { useAlerts } from "@/lib/use-alerts";
 import {
-  Bell, Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle,
-  CheckCircle2, Clock, TrendingUp, TrendingDown, Zap, Info,
-  Moon, GitPullRequestClosed, AlertTriangle, Mail,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
-import type { DbAlertRule, DbAlertEvent } from "@/lib/db";
+  METRIC_COPY, alertTitle, channelLabel, metricCopy, ruleSentence, ruleThreshold, scopeLabel,
+  type AlertKind, type AlertRuleLike,
+} from "@/lib/alert-copy";
+import { Page, PageHeading } from "@/components/ui/PageHeading";
+import { Button } from "@/components/ui/Button";
+import { Switch } from "@/components/ui/Switch";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { ErrorBanner } from "@/components/ui/Card";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface AlertsResponse {
-  rules: DbAlertRule[];
-  events: DbAlertEvent[];
-}
-
-// ── Metric helpers ────────────────────────────────────────────────────────────
-
-const METRIC_META: Record<string, { label: string; unit: string; description: string; icon: React.ElementType; category?: string }> = {
-  // ── CI metrics ──────────────────────────────────────────────────────────────
-  failure_rate:    { label: "Failure Rate",      unit: "%",    description: "Alert when failure rate exceeds threshold in window",     icon: AlertCircle, category: "CI" },
-  duration_p95:   { label: "Duration P95",       unit: "min",  description: "Alert when p95 run duration exceeds threshold",           icon: Clock, category: "CI" },
-  queue_wait_p95: { label: "Queue Wait P95",     unit: "min",  description: "Alert when p95 queue wait exceeds threshold",             icon: TrendingUp, category: "CI" },
-  success_streak: { label: "Success Streak",     unit: "runs", description: "Alert when consecutive failures exceed threshold",        icon: Zap, category: "CI" },
-  anomaly_count:  { label: "Statistical Anomalies", unit: "runs", description: "Alert when >threshold runs deviate >2 stddev from the rolling baseline", icon: AlertTriangle, category: "CI" },
-  // ── People metrics ─────────────────────────────────────────────────────────
-  pr_throughput_drop:    { label: "PR Throughput Drop",    unit: "%",    description: "Alert when merged PRs drop >threshold% vs prior window",                 icon: TrendingDown, category: "People" },
-  review_response_p90:  { label: "Review Response P90",   unit: "hrs",  description: "Alert when P90 time-to-first-review exceeds threshold hours",              icon: Clock, category: "People" },
-  afterhours_commit_pct:{ label: "After-Hours Commits",   unit: "%",    description: "Alert when after-hours commit % exceeds threshold (burnout risk)",         icon: Moon, category: "People" },
-  pr_abandon_rate:      { label: "PR Abandon Rate",       unit: "%",    description: "Alert when closed-without-merge PRs exceed threshold% of opened",         icon: GitPullRequestClosed, category: "People" },
-  unreviewed_pr_age:    { label: "Unreviewed PR Age",     unit: "days", description: "Alert when any open PR has no review after threshold business days",       icon: AlertTriangle, category: "People" },
-  // ── Leadership ──────────────────────────────────────────────────────────────
-  leadership_digest:    { label: "Weekly Leadership Digest", unit: "", description: "Every Monday, an org-wide narrative summary — health scorecard, trends, and what needs attention",  icon: Mail, category: "Leadership" },
+const KIND_ICON: Record<AlertKind, { icon: React.ComponentType<{ className?: string }>; box: string }> = {
+  failure: { icon: CircleX, box: "bg-status-fail-tint text-status-fail-text" },
+  duration: { icon: Clock, box: "bg-status-warn-tint text-status-warn-text" },
+  queue: { icon: Layers, box: "bg-status-warn-tint text-status-warn-text" },
+  review: { icon: GitPullRequest, box: "bg-status-run-tint text-status-run-text" },
+  people: { icon: Users, box: "bg-status-run-tint text-status-run-text" },
+  digest: { icon: Mail, box: "bg-status-neutral-tint text-status-neutral-text" },
 };
 
-const CHANNEL_META: Record<string, { label: string; color: string }> = {
-  browser: { label: "Browser",  color: "text-violet-400" },
-  slack:   { label: "Slack",    color: "text-green-400" },
-  email:   { label: "Email",    color: "text-blue-400" },
-  digest:  { label: "Daily Digest (email)", color: "text-amber-400" },
+const DESCRIPTIONS: Record<string, string> = {
+  failure_rate: "Share of runs that fail",
+  duration_p95: "95th-percentile run duration",
+  queue_wait_p95: "95th-percentile wait for a runner",
+  success_streak: "Consecutive failed runs",
+  anomaly_count: "Runs more than two standard deviations off the rolling baseline",
+  pr_throughput_drop: "Drop in merged pull requests against the prior window",
+  review_response_p90: "90th-percentile time to first review",
+  afterhours_commit_pct: "Share of commits made after hours",
+  pr_abandon_rate: "Pull requests closed without merging",
+  unreviewed_pr_age: "Business days an open pull request has waited for review",
+  leadership_digest: "Every Monday, an org-wide summary of health, trends and what needs attention",
 };
 
-// ── Rule card ─────────────────────────────────────────────────────────────────
+const WINDOWS = [
+  { hours: 1, label: "1 hour" },
+  { hours: 6, label: "6 hours" },
+  { hours: 24, label: "24 hours" },
+  { hours: 72, label: "3 days" },
+  { hours: 168, label: "7 days" },
+];
 
-function RuleCard({
-  rule,
-  onToggle,
-  onDelete,
-}: {
-  rule: DbAlertRule;
-  onToggle: (id: number, enabled: boolean) => void;
-  onDelete: (id: number) => void;
-}) {
-  const meta = METRIC_META[rule.metric] ?? { label: rule.metric, unit: "", description: "", icon: Bell };
-  const channelMeta = CHANNEL_META[rule.channel] ?? { label: rule.channel, color: "text-slate-400" };
-  const Icon = meta.icon;
+type Channel = "slack" | "email" | "browser" | "digest";
 
-  return (
-    <div className={cn(
-      "flex items-start gap-4 p-4 rounded-xl border transition-colors",
-      rule.enabled
-        ? "bg-slate-800/60 border-slate-700/50"
-        : "bg-slate-900/40 border-slate-800/50 opacity-60"
-    )}>
-      <div className={cn(
-        "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-        rule.enabled ? "bg-violet-500/20 border border-violet-500/30" : "bg-slate-800 border border-slate-700"
-      )}>
-        <Icon className={cn("w-4 h-4", rule.enabled ? "text-violet-400" : "text-slate-500")} />
-      </div>
+const field = "w-full h-[38px] px-3 rounded-control bg-panel border border-control-strong text-sm text-fg placeholder:text-faint focus:outline-none focus:border-brand-fg";
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-white">{meta.label}</span>
-          <span className="text-xs text-slate-500 font-mono">{rule.scope}</span>
-          <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded-full bg-slate-700/50", channelMeta.color)}>
-            {channelMeta.label}
-          </span>
-        </div>
-        <p className="text-xs text-slate-400 mt-0.5">{meta.description}</p>
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-          {rule.metric === "leadership_digest" ? (
-            <span>Sent every Monday</span>
-          ) : (
-            <>
-              <span>Threshold: <span className="text-slate-300 font-mono">{rule.threshold}{meta.unit}</span></span>
-              <span>Window: <span className="text-slate-300">{rule.window_hours}h</span></span>
-            </>
-          )}
-          {rule.destination && (
-            <span className="truncate max-w-[200px]" title={rule.destination}>→ {rule.destination}</span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={() => onToggle(rule.id, !rule.enabled)}
-          className="text-slate-500 hover:text-violet-400 transition-colors"
-          title={rule.enabled ? "Disable" : "Enable"}
-        >
-          {rule.enabled
-            ? <ToggleRight className="w-5 h-5 text-violet-400" />
-            : <ToggleLeft className="w-5 h-5" />}
-        </button>
-        <button
-          onClick={() => onDelete(rule.id)}
-          className="text-slate-600 hover:text-red-400 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Event row ─────────────────────────────────────────────────────────────────
-
-function EventRow({ event }: { event: DbAlertEvent }) {
-  const meta = METRIC_META[event.metric];
-  const label = meta?.label ?? event.metric;
-  const unit = meta?.unit ?? "";
-
-  return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-slate-800/60 last:border-0">
-      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-300">
-          <span className="text-white font-medium">{label}</span>{" "}
-          alert fired for <span className="font-mono text-slate-400">{event.scope}</span>
-          {event.value !== null && (
-            <span> — value: <span className="text-amber-300">{event.value}{unit}</span></span>
-          )}
-        </p>
-      </div>
-      <span className="text-[11px] text-slate-500 shrink-0">
-        {formatDistanceToNow(new Date(event.fired_at))} ago
-      </span>
-    </div>
-  );
-}
-
-// ── Create rule form ──────────────────────────────────────────────────────────
-
-function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
+function NewRulePanel({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const [scope, setScope] = useState("");
   const [metric, setMetric] = useState("failure_rate");
   const [threshold, setThreshold] = useState("20");
-  const [windowHours, setWindowHours] = useState("24");
-  const [channel, setChannel] = useState("browser");
+  const [windowHours, setWindowHours] = useState(24);
+  const [channel, setChannel] = useState<Channel>("slack");
   const [destination, setDestination] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const digest = metric === "leadership_digest";
+  const m = metricCopy(metric);
+  const needsDestination = channel !== "browser";
+  const repoName = scope.split("/").pop();
+
+  const preview = digest
+    ? `Every Monday, ${scope || "the organization"} gets the leadership digest by ${channel === "slack" ? "Slack" : "email"}.`
+    : `You will be alerted ${channel === "browser" ? "in this browser" : channel === "slack" ? "in Slack" : channel === "digest" ? "in the daily email digest" : `at ${destination || "that address"}`} when the ${m.name.toLowerCase()} on ${repoName || "the repository"} goes above ${threshold || "…"}${m.unit} within ${WINDOWS.find((w) => w.hours === windowHours)?.label ?? `${windowHours} hours`}.`;
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!scope.trim() || !threshold) return;
+    if (!scope.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      const scopeValue = scope.trim().includes("/")
-        ? `repo:${scope.trim()}`
-        : `org:${scope.trim()}`;
+      const s = scope.trim();
       const res = await fetch("/api/alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scope: scopeValue,
+          scope: s.includes("/") ? `repo:${s}` : `org:${s}`,
           metric,
-          threshold: Number(threshold),
-          window_hours: Number(windowHours),
+          threshold: digest ? 0 : Number(threshold),
+          window_hours: digest ? 168 : windowHours,
           channel,
           destination: destination.trim() || undefined,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Failed to create rule");
-      }
-      setScope("");
-      setThreshold("20");
-      setDestination("");
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't create the rule");
       onCreated();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't create the rule");
     } finally {
       setSaving(false);
     }
   }
 
-  const needsDestination = channel === "slack" || channel === "email" || channel === "digest";
-  const isLeadershipDigest = metric === "leadership_digest";
-
   return (
-    <form onSubmit={handleSubmit} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-        <Plus className="w-4 h-4 text-violet-400" /> New Alert Rule
-      </h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <form onSubmit={submit} aria-labelledby="new-rule-title" className="card !rounded-[16px] p-6 flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <label className="block text-xs text-slate-400 mb-1">
-            {isLeadershipDigest ? "Organization" : "Repository (scope)"}
-          </label>
-          {isLeadershipDigest ? (
-            <input
-              required
-              placeholder="my-org"
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-            />
-          ) : (
-            <RepoPicker
-              value={scope}
-              onChange={setScope}
-              placeholder="Pick a repository…"
-              className="w-full"
-            />
-          )}
+          <h2 id="new-rule-title" className="text-lg font-semibold text-fg">New alert rule</h2>
+          <p className="mt-1 text-[13px] text-muted">Get told when a number crosses a line you set.</p>
         </div>
+        <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose} className="text-muted hover:text-fg -mr-2 -mt-1">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
 
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Metric</label>
-          <select
-            value={metric}
-            onChange={(e) => {
-              const next = e.target.value;
-              setMetric(next);
-              if (next === "leadership_digest") {
-                // Default channel for leadership_digest is email, but allow switching to slack
-                setChannel((prev) => prev === "slack" ? "slack" : "email");
-                setThreshold("0");
-                setWindowHours("168");
-                setScope((s) => s.includes("/") ? "" : s);
-              } else if (metric === "leadership_digest") {
-                // Leaving leadership_digest: reset to browser defaults
-                setChannel("browser");
-                setThreshold("20");
-              }
-            }}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
-          >
-            <optgroup label="CI Metrics">
-              {Object.entries(METRIC_META).filter(([, m]) => m.category === "CI").map(([key, m]) => (
-                <option key={key} value={key}>{m.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="People Metrics">
-              {Object.entries(METRIC_META).filter(([, m]) => m.category === "People").map(([key, m]) => (
-                <option key={key} value={key}>{m.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Leadership">
-              {Object.entries(METRIC_META).filter(([, m]) => m.category === "Leadership").map(([key, m]) => (
-                <option key={key} value={key}>{m.label}</option>
-              ))}
-            </optgroup>
-          </select>
-          {isLeadershipDigest && (
-            <p className="text-[11px] text-slate-500 mt-1">{METRIC_META.leadership_digest.description}</p>
-          )}
-        </div>
-
-        {/* Threshold and window — hidden for leadership_digest */}
-        {!isLeadershipDigest && (
-          <>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Threshold ({METRIC_META[metric]?.unit ?? ""})
-              </label>
-              <input
-                required
-                type="number"
-                min="0"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Window (hours)</label>
-              <input
-                required
-                type="number"
-                min="1"
-                max="168"
-                value={windowHours}
-                onChange={(e) => setWindowHours(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-              />
-            </div>
-          </>
-        )}
-
-        {/* Channel selector — visible for all metrics including leadership_digest */}
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Channel</label>
-          <select
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer"
-          >
-            {isLeadershipDigest ? (
-              <>
-                <option value="email">Email</option>
-                <option value="slack">Slack</option>
-              </>
-            ) : (
-              <>
-                <option value="browser">Browser</option>
-                <option value="slack">Slack</option>
-                <option value="email">Email</option>
-                <option value="digest">Daily Digest (email)</option>
-              </>
-            )}
-          </select>
-          {channel === "digest" && !isLeadershipDigest && (
-            <p className="text-[11px] text-slate-500 mt-1">
-              Bundled into one email per day instead of a real-time notification per event.
-            </p>
-          )}
-          {isLeadershipDigest && channel === "slack" && (
-            <p className="text-[11px] text-slate-500 mt-1">
-              Destination must be a hooks.slack.com/services/* webhook URL.
-            </p>
-          )}
-        </div>
-
-        {(needsDestination || isLeadershipDigest) && (
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              {channel === "slack" ? "Slack Webhook URL" : "Email Address"}
-            </label>
-            <input
-              required={isLeadershipDigest}
-              placeholder={channel === "slack" ? "https://hooks.slack.com/services/…" : "you@example.com"}
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-            />
-          </div>
-        )}
-
-        {isLeadershipDigest && (
-          <p className="text-[11px] text-slate-500 md:col-span-2 flex items-center gap-1">
-            <Mail className="w-3 h-3" /> Sent every Monday, computed fresh each time — no threshold or window to configure.
-          </p>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-fg" htmlFor={digest ? "rule-org" : undefined}>{digest ? "Organization" : "Watch"}</label>
+        {digest ? (
+          <input id="rule-org" required value={scope} onChange={(e) => setScope(e.target.value)} placeholder="org-name" className={cn(field, "font-mono")} />
+        ) : (
+          <RepoPicker value={scope} onChange={setScope} label="Repository to watch" className="[&>button]:h-[38px] [&>button]:text-sm" />
         )}
       </div>
 
-      {error && (
-        <p className="text-xs text-red-400 flex items-center gap-1">
-          <AlertCircle className="w-3.5 h-3.5" /> {error}
-        </p>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="rule-metric" className="text-sm font-medium text-fg">Metric</label>
+        <select
+          id="rule-metric"
+          value={metric}
+          onChange={(e) => {
+            const next = e.target.value;
+            setMetric(next);
+            if (next === "leadership_digest") {
+              setChannel((c) => (c === "slack" ? "slack" : "email"));
+              setScope((s) => (s.includes("/") ? "" : s));
+            } else if (metric === "leadership_digest") {
+              setChannel("slack");
+              setScope("");
+            }
+          }}
+          className={field}
+        >
+          <optgroup label="Runs">
+            {["failure_rate", "duration_p95", "queue_wait_p95", "success_streak", "anomaly_count"].map((k) => <option key={k} value={k}>{METRIC_COPY[k].name}</option>)}
+          </optgroup>
+          <optgroup label="People">
+            {["pr_throughput_drop", "review_response_p90", "afterhours_commit_pct", "pr_abandon_rate", "unreviewed_pr_age"].map((k) => <option key={k} value={k}>{METRIC_COPY[k].name}</option>)}
+          </optgroup>
+          <optgroup label="Leadership">
+            <option value="leadership_digest">{METRIC_COPY.leadership_digest.name}</option>
+          </optgroup>
+        </select>
+        <p className="text-xs text-muted">{DESCRIPTIONS[metric]}</p>
+      </div>
+
+      {!digest && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="rule-threshold" className="text-sm font-medium text-fg">Goes above</label>
+            <div className="relative">
+              <input id="rule-threshold" required type="number" min="0" value={threshold} onChange={(e) => setThreshold(e.target.value)} className={cn(field, "font-mono pr-12")} />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-faint">{m.unit.trim()}</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="rule-window" className="text-sm font-medium text-fg">Within</label>
+            <select id="rule-window" value={windowHours} onChange={(e) => setWindowHours(Number(e.target.value))} className={field}>
+              {WINDOWS.map((w) => <option key={w.hours} value={w.hours}>{w.label}</option>)}
+            </select>
+          </div>
+        </div>
       )}
 
-      <button
-        type="submit"
-        disabled={saving || !scope.trim()}
-        className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? "Creating…" : "Create Rule"}
-      </button>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-fg" id="send-to">Send to</span>
+        <SegmentedControl
+          label="Send to"
+          size="lg"
+          value={channel}
+          onChange={(c) => setChannel(c)}
+          className="w-full"
+          options={
+            digest
+              ? [{ value: "email", label: "Email" }, { value: "slack", label: "Slack" }]
+              : [{ value: "slack", label: "Slack" }, { value: "email", label: "Email" }, { value: "browser", label: "Browser" }, { value: "digest", label: "Digest" }]
+          }
+        />
+        {channel === "digest" && <p className="text-xs text-muted">Bundled into one email a day instead of one message per alert.</p>}
+      </div>
+
+      {needsDestination && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="rule-dest" className="text-sm font-medium text-fg">{channel === "slack" ? "Slack webhook URL" : "Email address"}</label>
+          <input
+            id="rule-dest"
+            required={digest || channel === "slack" || channel === "email"}
+            type={channel === "slack" ? "url" : "email"}
+            value={destination}
+            onChange={(e) => setDestination(e.target.value)}
+            placeholder={channel === "slack" ? "https://hooks.slack.com/services/…" : "team@example.com"}
+            className={cn(field, "font-mono")}
+          />
+        </div>
+      )}
+
+      <p className="px-4 py-3 rounded-control bg-brand-soft/60 border border-brand-fg/20 text-[13px] leading-5 text-violet-100">{preview}</p>
+
+      {error && <ErrorBanner message={error} />}
+
+      <div className="flex items-center justify-end gap-3">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button type="submit" variant="primary" disabled={saving || !scope.trim()}>{saving ? "Creating…" : "Create rule"}</Button>
+      </div>
     </form>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+function RuleRow({ rule, canEdit, onToggle, onDelete, onTest, testState, now }: {
+  rule: AlertRuleLike;
+  now: number;
+  canEdit: boolean;
+  onToggle: (r: AlertRuleLike) => void;
+  onDelete: (r: AlertRuleLike) => void;
+  onTest: (r: AlertRuleLike) => void;
+  testState?: "sending" | "sent" | "failed";
+}) {
+  const sentence = ruleSentence(rule);
+  const muted = rule.muted_until && new Date(rule.muted_until).getTime() > now;
+  return (
+    <li className="flex items-center gap-4 px-5 py-4 border-b border-line last:border-0">
+      {canEdit ? (
+        <Switch checked={rule.enabled} onChange={() => onToggle(rule)} label={`${rule.enabled ? "Turn off" : "Turn on"}: ${sentence}`} />
+      ) : (
+        <span className={cn("text-xs font-medium w-9", rule.enabled ? "text-status-pass-text" : "text-faint")}>{rule.enabled ? "On" : "Off"}</span>
+      )}
+      <div className={cn("flex-1 min-w-0", !rule.enabled && "opacity-60")}>
+        <p className="text-sm font-medium text-fg truncate">{sentence}</p>
+        <p className="text-[13px] text-muted truncate">
+          {rule.metric === "leadership_digest" ? `Mondays · ${scopeLabel(rule.scope)}` : scopeLabel(rule.scope)}
+          {muted && <span className="text-status-warn-text"> · muted until {new Date(rule.muted_until!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}
+        </p>
+      </div>
+      <span className="hidden md:block w-52 shrink-0 text-[13px] text-muted truncate">{channelLabel(rule)}</span>
+      {canEdit && (
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onTest(rule)}
+            disabled={testState === "sending"}
+            className="font-medium"
+          >
+            <Send className="w-3.5 h-3.5" aria-hidden="true" />
+            {testState === "sending" ? "Sending…" : testState === "sent" ? "Sent" : testState === "failed" ? "Failed" : "Send a test"}
+          </Button>
+          <Button variant="ghost" size="icon" aria-label={`Delete rule: ${sentence}`} onClick={() => onDelete(rule)} className="text-faint hover:text-status-fail-text w-8 h-8">
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
 
 export default function AlertsPage() {
-  const { mode } = useAuth();
-  const isStandalone = mode === "standalone";
+  const { mode, isAdmin } = useAuth();
+  const standalone = mode === "standalone";
+  const { data, error, isLoading, mutate, firing, now } = useAlerts();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [tests, setTests] = useState<Record<number, "sending" | "sent" | "failed">>({});
 
-  const { data, isLoading, mutate } = useSWR<AlertsResponse>(
-    isStandalone ? null : "/api/alerts?events=1",
-    fetcher<AlertsResponse>,
-  );
-
-  async function handleToggle(id: number, enabled: boolean) {
-    await fetch(`/api/alerts?id=${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    mutate();
-  }
-
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this alert rule?")) return;
-    await fetch(`/api/alerts?id=${id}`, { method: "DELETE" });
-    mutate();
-  }
-
-  const rules = data?.rules ?? [];
+  const rules = (data?.rules ?? []) as AlertRuleLike[];
   const events = data?.events ?? [];
+  const active = rules.filter((r) => r.enabled).length;
+  const channels = [...new Set(rules.filter((r) => r.enabled).map((r) => (r.channel === "browser" ? "this browser" : r.channel === "digest" ? "email" : r.channel === "slack" ? "Slack" : "email")))];
 
-  if (isStandalone) {
+  async function patch(id: number, body: Record<string, unknown>) {
+    await fetch(`/api/alerts?id=${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    mutate();
+  }
+  async function remove(r: AlertRuleLike) {
+    if (!confirm(`Delete the rule "${ruleSentence(r)}"?`)) return;
+    await fetch(`/api/alerts?id=${r.id}`, { method: "DELETE" });
+    mutate();
+  }
+  async function test(r: AlertRuleLike) {
+    setTests((t) => ({ ...t, [r.id]: "sending" }));
+    try {
+      const res = await fetch("/api/alerts/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rule_id: r.id }) });
+      const body = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      setTests((t) => ({ ...t, [r.id]: res.ok && body.ok ? "sent" : "failed" }));
+    } catch {
+      setTests((t) => ({ ...t, [r.id]: "failed" }));
+    }
+  }
+
+  if (standalone) {
     return (
-      <div className="p-8 space-y-6">
-        <Breadcrumb items={[{ label: "Alerts" }]} />
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-            <Bell className="w-5 h-5 text-amber-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Alert Rules</h1>
-            <p className="text-sm text-slate-400">Define thresholds — alerts are evaluated when runs are synced to DB</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-4 px-5 py-4 bg-amber-500/8 border border-amber-500/20 rounded-xl">
-          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-amber-300">
-              Not available in standalone mode
-            </p>
-            <p className="text-xs text-amber-500/80">
-              Alert rules require a PostgreSQL database and GitHub OAuth. Switch to organization mode,
-              configure a GitHub OAuth App, and set a <span className="font-mono">DATABASE_URL</span> to use this feature.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Page>
+        <PageHeading title="Alerts" meta="Thresholds on your runs and pull requests, delivered to Slack, email or this browser" />
+        <p className="card px-5 py-4 text-sm text-muted">
+          Alerts need organization mode with a database (<span className="font-mono text-fg">DATABASE_URL</span>) and a GitHub OAuth app. They aren&apos;t available in standalone mode.
+        </p>
+      </Page>
     );
   }
 
+  const meta = isLoading
+    ? "Loading alerts…"
+    : [`${firing.length} firing now`, `${active} of ${rules.length} rules active`, channels.length ? `delivered to ${channels.join(", ").replace(/, ([^,]*)$/, " and $1")}` : null].filter(Boolean).join(" · ");
+
   return (
-    <div className="p-8 space-y-6">
-      <Breadcrumb items={[{ label: "Alerts" }]} />
+    <Page>
+      <PageHeading
+        title="Alerts"
+        meta={meta}
+        actions={isAdmin && !panelOpen && (
+          <Button variant="primary" onClick={() => setPanelOpen(true)}>
+            <Plus className="w-4 h-4" aria-hidden="true" /> New rule
+          </Button>
+        )}
+      />
 
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-          <Bell className="w-5 h-5 text-amber-400" />
+      {error && <ErrorBanner message={`Couldn't load alerts: ${(error as Error).message}`} onRetry={() => mutate()} />}
+
+      <div className={cn("grid gap-6 items-start", panelOpen && "xl:grid-cols-[minmax(0,1fr)_400px]")}>
+        <div className="flex flex-col gap-7 min-w-0">
+          {/* Firing now */}
+          <section aria-labelledby="firing-title">
+            <h2 id="firing-title" className="text-[15px] font-semibold text-fg mb-3">Firing now</h2>
+            <div className="card overflow-hidden">
+              {isLoading ? (
+                <div className="p-5 space-y-3">{[0, 1].map((i) => <div key={i} className="h-10 rounded skeleton" />)}</div>
+              ) : firing.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-status-pass-text bg-status-pass-tint">Nothing is firing.</p>
+              ) : (
+                <ul>
+                  {firing.map((f) => {
+                    const k = KIND_ICON[f.kind];
+                    const Icon = k.icon;
+                    return (
+                      <li key={f.key} className="flex items-center gap-4 px-5 py-4 border-b border-line last:border-0">
+                        <span className={cn("flex items-center justify-center w-8 h-8 rounded-control shrink-0", k.box)}>
+                          <Icon className="w-4 h-4" aria-hidden="true" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-fg truncate">{alertTitle(f.event)}</p>
+                          <p className="text-[13px] text-muted truncate">
+                            {[
+                              f.rule ? `Rule: ${ruleThreshold(f.rule)}` : null,
+                              f.rule ? `sent to ${channelLabel(f.rule)}` : null,
+                              `firing for ${formatRelative(f.event.fired_at, now).replace(/ ago$/, "")}`,
+                            ].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isAdmin && f.rule && (
+                            <Button size="sm" onClick={() => patch(f.rule!.id, { muted_until: new Date(Date.now() + 3_600_000).toISOString() })}>
+                              Mute 1h
+                            </Button>
+                          )}
+                          {f.href && (
+                            <Link href={f.href} className="inline-flex items-center h-8 px-3 rounded-control bg-raised text-[13px] font-semibold text-fg hover:bg-raised/70">
+                              Investigate
+                            </Link>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* Rules */}
+          <section aria-labelledby="rules-title">
+            <div className="flex items-center justify-between mb-3">
+              <h2 id="rules-title" className="text-[15px] font-semibold text-fg">Rules</h2>
+              {events.length > 0 && <a href="#history" className="text-[13px] font-medium text-link hover:text-violet-200">Delivery history →</a>}
+            </div>
+            {!isAdmin && <p className="mb-3 text-[13px] text-muted">Admins manage alert rules. You can see the rules and the alerts they fire.</p>}
+            <div className="card overflow-hidden">
+              {isLoading ? (
+                <div className="p-5 space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-10 rounded skeleton" />)}</div>
+              ) : rules.length === 0 ? (
+                <div className="flex items-center justify-between gap-3 px-5 py-4 text-sm text-muted">
+                  <span>No alert rules yet.</span>
+                  {isAdmin && <Button size="sm" onClick={() => setPanelOpen(true)}>Create one</Button>}
+                </div>
+              ) : (
+                <ul>
+                  {rules.map((r) => (
+                    <RuleRow
+                      key={r.id}
+                      rule={r}
+                      canEdit={isAdmin}
+                      onToggle={(x) => patch(x.id, { enabled: !x.enabled })}
+                      onDelete={remove}
+                      onTest={test}
+                      testState={tests[r.id]}
+                      now={now}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* Delivery history */}
+          {events.length > 0 && (
+            <section id="history" aria-labelledby="history-title" className="scroll-mt-20">
+              <h2 id="history-title" className="text-[15px] font-semibold text-fg mb-3">Delivery history</h2>
+              <ul className="card overflow-hidden">
+                {events.slice(0, 20).map((e) => (
+                  <li key={e.id} className="flex items-center gap-4 px-5 h-12 border-b border-line last:border-0 text-[13px]">
+                    <span className="flex-1 min-w-0 truncate text-fg">{alertTitle(e)}</span>
+                    <span className="hidden sm:block w-40 text-muted truncate">
+                      {(e as { delivery_status?: string | null }).delivery_status ?? "—"}
+                    </span>
+                    <span className="w-24 text-right text-faint">{formatRelative(e.fired_at, now)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Alert Rules</h1>
-          <p className="text-sm text-slate-400">Define thresholds — alerts are evaluated when runs are synced to DB</p>
-        </div>
-      </div>
 
-      {/* Info banner */}
-      <div className="flex items-start gap-3 px-4 py-3 bg-blue-500/8 border border-blue-500/20 rounded-xl">
-        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-        <div className="text-xs text-blue-300/80 space-y-0.5">
-          <p className="font-medium text-blue-300">How alerts work</p>
-          <p>Rules are evaluated each time a repo sync runs via <span className="font-mono">POST /api/db/sync</span>. Browser alerts display here; Slack/email webhooks fire in real time.</p>
-        </div>
-      </div>
-
-      {/* Create form */}
-      <CreateRuleForm onCreated={() => mutate()} />
-
-      {/* Existing rules */}
-      <div>
-        <h2 className="text-sm font-semibold text-white mb-3">
-          Active Rules ({rules.length})
-        </h2>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-20 rounded-xl skeleton" />
-            ))}
-          </div>
-        ) : rules.length === 0 ? (
-          <div className="text-center py-10 text-slate-600 text-sm">
-            No alert rules yet — create one above.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <RuleCard
-                key={rule.id}
-                rule={rule}
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+        {panelOpen && isAdmin && (
+          <aside className="xl:sticky xl:top-20">
+            <NewRulePanel onCreated={() => mutate()} onClose={() => setPanelOpen(false)} />
+          </aside>
         )}
       </div>
-
-      {/* Recent events */}
-      {events.length > 0 && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-white">Recent Alert Events</h2>
-            <span className="ml-auto text-xs text-slate-500">{events.length} events</span>
-          </div>
-          <div className="divide-y divide-slate-800/60">
-            {events.map((e) => (
-              <EventRow key={e.id} event={e} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </Page>
   );
 }

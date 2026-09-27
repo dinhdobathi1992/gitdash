@@ -1,6 +1,6 @@
 "use client";
 
-import { conclusionBadgeCn, cn } from "@/lib/utils";
+import { StatusPill, runOutcome } from "@/components/ui/StatusPill";
 
 interface BadgeProps {
   conclusion: string | null;
@@ -8,30 +8,8 @@ interface BadgeProps {
   className?: string;
 }
 
-// Statuses that mean "still running — show pulsing dot"
-const ACTIVE_STATUSES = new Set(["in_progress", "queued", "waiting", "requested", "pending"]);
-
+/** Run outcome pill (Success, Failure, Cancelled, Running, Queued…). */
 export function ConclusionBadge({ conclusion, status, className }: BadgeProps) {
-  const isActive = status != null && ACTIVE_STATUSES.has(status);
-
-  const label = isActive
-    ? status === "in_progress"
-      ? "running"
-      : status!
-    : conclusion ?? status ?? "unknown";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium capitalize",
-        conclusionBadgeCn(conclusion ?? status ?? null),
-        className
-      )}
-    >
-      {isActive && (
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-      )}
-      {label}
-    </span>
-  );
+  const o = runOutcome(conclusion, status);
+  return <StatusPill tone={o.tone} pulse={o.live} className={className}>{o.label}</StatusPill>;
 }

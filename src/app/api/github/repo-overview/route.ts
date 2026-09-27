@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getRepoOverview } from "@/lib/github";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
+import { privateCacheHeaders, wantsFresh } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { withCache, hashKey } from "@/lib/cache";
 
 const CACHE_TTL = 300; // 5 min
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/repo-overview");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -18,9 +22,14 @@ export async function GET(req: NextRequest) {
   if (!repoResult.ok) return repoResult.response;
 
   try {
-    const overview = await getRepoOverview(token, ownerResult.data, repoResult.data);
+    const overview = await withCache(
+      `github/repo-overview:${hashKey(token)}:${ownerResult.data}:${repoResult.data}`,
+      CACHE_TTL,
+      () => getRepoOverview(token, ownerResult.data, repoResult.data),
+      { shared: true, refresh: wantsFresh(req) },
+    );
     return NextResponse.json(overview, {
-      headers: { "Cache-Control": `private, s-maxage=${CACHE_TTL}, stale-while-revalidate=180` },
+      headers: privateCacheHeaders(0),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch repo overview");

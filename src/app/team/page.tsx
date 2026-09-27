@@ -1,334 +1,181 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Team insights — `Team` artboard, contract §9.
+ * 5-cell KPI strip incl. review bus factor · who-reviews-whom heatmap ·
+ * workload to watch · contributors table. Data is per repository (the
+ * contributor APIs are repo-scoped); the picker defaults to your first
+ * pinned repository, else the most recently updated one, and is kept in
+ * the URL (?repo=owner/name) so the view can be shared.
+ */
+
+import { Suspense, useMemo } from "react";
 import useSWR from "swr";
-import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { fetcher } from "@/lib/swr";
-import { Breadcrumb } from "@/components/Sidebar";
-import { TeamLeaderboard } from "@/components/TeamLeaderboard";
-import { RepoPicker } from "@/components/RepoPicker";
 import type { RepoContributorsResponse } from "@/app/api/github/repo-contributors/route";
-import {
-  Users, AlertCircle, GitPullRequest, Eye, GitMerge,
-  ShieldAlert, Info, ChevronDown, ChevronUp,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import type { TeamWorkloadRiskResponse } from "@/app/api/github/team-workload-risk/route";
+import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
+import { RepoPicker, useOrgRepoList } from "@/components/RepoPicker";
+import PartialDataBadge from "@/components/PartialDataBadge";
+import { Page, PageHeading } from "@/components/ui/PageHeading";
+import { KpiStrip } from "@/components/ui/KpiStrip";
+import { ErrorBanner } from "@/components/ui/Card";
+import { ReviewHeatmap } from "@/components/team/ReviewHeatmap";
+import { WorkloadList } from "@/components/team/WorkloadList";
+import { ContributorsTable } from "@/components/team/ContributorsTable";
+import { useWatchlist } from "@/lib/watchlist";
+import { reviewBusFactor, medianPositive } from "@/lib/team-metrics";
 
-// ── Reviewer load matrix ──────────────────────────────────────────────────────
-function ReviewerMatrix({
-  matrix,
-  owner,
-}: {
-  matrix: RepoContributorsResponse["reviewer_matrix"];
-  owner: string;
-}) {
-  const authors = [...new Set(matrix.map((c) => c.author))].sort();
-  const reviewers = [...new Set(matrix.map((c) => c.reviewer))].sort();
+function fmtHours(h: number | null): string {
+  if (h === null) return "—";
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  if (h < 48) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
 
-  if (authors.length === 0) {
-    return (
-      <p className="text-sm text-slate-600 italic text-center py-8">
-        No cross-review data found in the analysed PRs
-      </p>
-    );
+function TeamContent() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { flags } = useFeatureFlags();
+  const { pinned } = useWatchlist();
+  const { data: repos } = useOrgRepoList();
+
+  // ?repo=owner/name, else first pinned repo in this list, else the most recently updated.
+  const chosen = params.get("repo");
+  const fallback = useMemo(() => {
+    if (!repos?.length) return "";
+    return repos.find((r) => pinned.includes(r.full_name))?.full_name ?? repos[0].full_name;
+  }, [repos, pinned]);
+  const repoFullName = chosen ?? fallback;
+  const [owner, repo] = repoFullName.split("/");
+  const selected = owner && repo ? { owner, repo } : null;
+
+  function pick(full: string) {
+    const next = new URLSearchParams(params.toString());
+    next.set("repo", full);
+    router.replace(`/team?${next.toString()}`, { scroll: false });
   }
 
-  const lookup: Record<string, number> = {};
-  for (const cell of matrix) lookup[`${cell.author}|${cell.reviewer}`] = cell.count;
-  const maxCount = Math.max(...matrix.map((c) => c.count), 1);
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="text-[10px] border-collapse">
-        <thead>
-          <tr>
-            {/* top-left corner */}
-            <th className="w-24 pb-2 pr-2 text-right text-slate-600 font-normal align-bottom">
-              author ↓ · reviewer →
-            </th>
-            {reviewers.map((r) => (
-              <th
-                key={r}
-                className="pb-2 px-1 text-center font-medium text-slate-400 whitespace-nowrap"
-                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", height: 60 }}
-              >
-                <Link
-                  href={`/contributor/${r}?owner=${owner}`}
-                  className="hover:text-violet-300 transition-colors"
-                >
-                  {r}
-                </Link>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {authors.map((a) => (
-            <tr key={a}>
-              <td className="pr-3 py-1 text-right text-slate-400 font-medium whitespace-nowrap">
-                <Link
-                  href={`/contributor/${a}?owner=${owner}`}
-                  className="hover:text-violet-300 transition-colors"
-                >
-                  {a}
-                </Link>
-              </td>
-              {reviewers.map((r) => {
-                const count = lookup[`${a}|${r}`] ?? 0;
-                const intensity = count / maxCount;
-                return (
-                  <td key={r} className="p-1 text-center">
-                    <div
-                      className="w-7 h-7 rounded flex items-center justify-center text-[10px] font-mono mx-auto transition-colors"
-                      style={{
-                        backgroundColor:
-                          count > 0
-                            ? `rgba(124, 58, 237, ${0.15 + intensity * 0.7})`
-                            : "transparent",
-                        color: count > 0 ? "#e2e8f0" : "#334155",
-                        border: count > 0 ? "1px solid rgba(124,58,237,0.3)" : "1px solid #1e293b",
-                      }}
-                      title={count > 0 ? `${a} authored, ${r} reviewed: ${count} PR${count !== 1 ? "s" : ""}` : ""}
-                    >
-                      {count > 0 ? count : ""}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ── Summary stat chips ────────────────────────────────────────────────────────
-function StatChip({
-  icon: Icon,
-  label,
-  value,
-  highlight,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs",
-        highlight
-          ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
-          : "bg-slate-800/60 border-slate-700/50 text-slate-400",
-      )}
-    >
-      <Icon className="w-3.5 h-3.5 shrink-0" />
-      <span>{label}:</span>
-      <span className={cn("font-semibold", highlight ? "text-amber-200" : "text-white")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-function PageSkeleton() {
-  return (
-    <div className="space-y-4 mt-4">
-      <div className="flex gap-3 flex-wrap">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-9 w-36 rounded-lg skeleton" />
-        ))}
-      </div>
-      <div className="rounded-xl border border-slate-700/50 overflow-hidden">
-        <div className="h-10 w-full skeleton rounded-none" />
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex gap-4 p-4 border-t border-slate-800">
-            <div className="w-6 h-6 rounded-full skeleton" />
-            <div className="h-4 w-32 rounded skeleton" />
-            {Array.from({ length: 6 }).map((_, j) => (
-              <div key={j} className="h-4 w-16 rounded skeleton ml-auto" />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-export default function TeamInsightsPage() {
-  // RepoPicker stores "owner/repo" as a single string
-  const [repoFullName, setRepoFullName] = useState("");
-  const [showMatrix, setShowMatrix] = useState(false);
-
-  const [repoOwner, repoName] = repoFullName.split("/");
-  const selectedRepo = repoOwner && repoName ? { owner: repoOwner, repo: repoName } : null;
-
-  const apiUrl = selectedRepo
-    ? `/api/github/repo-contributors?owner=${selectedRepo.owner}&repo=${selectedRepo.repo}`
-    : null;
-
-  const { data, error, isLoading } = useSWR<RepoContributorsResponse>(
-    apiUrl,
+  const { data, error, isLoading, mutate } = useSWR<RepoContributorsResponse>(
+    selected ? `/api/github/repo-contributors?owner=${selected.owner}&repo=${selected.repo}` : null,
     fetcher<RepoContributorsResponse>,
   );
+  const { data: workload, isLoading: workloadLoading } = useSWR<TeamWorkloadRiskResponse>(
+    selected && flags.workloadRisk ? `/api/github/team-workload-risk?owner=${selected.owner}&repo=${selected.repo}` : null,
+    fetcher<TeamWorkloadRiskResponse>,
+  );
 
-  const totalMerged = data?.contributors.reduce((s, c) => s + c.prs_merged, 0) ?? 0;
-  const totalReviews = data?.contributors.reduce((s, c) => s + c.reviews_given, 0) ?? 0;
-  const selfMerges = data?.contributors.reduce((s, c) => s + c.self_merge_count, 0) ?? 0;
+  const k = useMemo(() => {
+    const c = data?.contributors ?? [];
+    const merged = c.reduce((s, x) => s + x.prs_merged, 0);
+    const opened = c.reduce((s, x) => s + x.prs_opened, 0);
+    const reviews = c.reduce((s, x) => s + x.reviews_given, 0);
+    const self = c.reduce((s, x) => s + x.self_merge_count, 0);
+    return {
+      merged, opened, reviews, self,
+      cycle: medianPositive(c.map((x) => x.avg_hours_to_merge)),
+      bus: reviewBusFactor(c.map((x) => x.reviews_given)),
+    };
+  }, [data]);
+
+  const loading = isLoading || (!data && !error && !!selected);
+  const meta = data
+    ? `${data.contributors.length} contributors · ${k.opened} pull requests in ${repo} · last ${data.period_days} days`
+    : selected ? `Loading ${repo}…` : "Pick a repository to see its team";
 
   return (
-    <div className="p-8">
-      <Breadcrumb items={[{ label: "Team Insights" }]} />
+    <Page>
+      <PageHeading
+        title="Team insights"
+        meta={meta}
+        actions={
+          <label className="flex items-center gap-2.5 text-[13px] text-muted">
+            Repository
+            <RepoPicker value={repoFullName} onChange={pick} className="w-56" />
+          </label>
+        }
+      />
 
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-violet-400" />
-            Team Insights
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Per-contributor delivery metrics, reviewer load, and team health — select a
-            repository to begin.
-          </p>
-        </div>
-      </div>
+      {error && <ErrorBanner message={`Couldn't load contributors: ${(error as Error).message}`} onRetry={() => mutate()} />}
+      {data?.partial && <PartialDataBadge fetched={data.fetched_prs} total={data.total_prs_attempted} unit="pull requests" />}
 
-      {/* Repo selector */}
-      <div className="mb-6">
-        <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">
-          Select repository
-        </p>
-        <RepoPicker
-          value={repoFullName}
-          onChange={setRepoFullName}
-          className="max-w-sm"
-        />
-      </div>
-
-      {/* No repo selected */}
-      {!selectedRepo && (
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-          <Users className="w-10 h-10 text-slate-700" />
-          <p className="text-slate-500 text-sm">
-            Choose a repository above to see contributor metrics and team performance.
-          </p>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-300 text-sm mb-4">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error.message ?? "Failed to load contributor data"}
-        </div>
-      )}
-
-      {/* Loading */}
-      {isLoading && <PageSkeleton />}
-
-      {/* Data */}
-      {data && selectedRepo && !isLoading && (
-        <div className="space-y-6">
-          {/* Summary chips */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatChip
-              icon={GitMerge}
-              label="PRs analysed"
-              value={data.total_prs_analysed}
-            />
-            <StatChip
-              icon={GitPullRequest}
-              label="PRs merged"
-              value={totalMerged}
-            />
-            <StatChip
-              icon={Eye}
-              label="Reviews given"
-              value={totalReviews}
-            />
-            <StatChip
-              icon={ShieldAlert}
-              label="Bus factor"
-              value={data.bus_factor}
-              highlight={data.bus_factor <= 2}
-            />
-            {selfMerges > 0 && (
-              <StatChip
-                icon={AlertCircle}
-                label="Self-merges"
-                value={selfMerges}
-                highlight={selfMerges > 0}
-              />
-            )}
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-600 ml-auto">
-              <Info className="w-3 h-3" />
-              Last {data.period_days}d · {data.contributors.length} contributors
-            </div>
-          </div>
-
-          {data.contributors.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center rounded-xl border border-slate-800">
-              <GitPullRequest className="w-8 h-8 text-slate-700" />
-              <p className="text-slate-500 text-sm">
-                No merged PRs found for{" "}
-                <span className="font-mono text-slate-400">
-                  {selectedRepo.owner}/{selectedRepo.repo}
+      {selected && (
+        <KpiStrip
+          cells={[
+            {
+              key: "merged",
+              label: "Pull requests merged",
+              loading,
+              value: k.merged.toLocaleString(),
+              foot: k.opened ? `of ${k.opened} opened · ${Math.round((k.merged / k.opened) * 100)}%` : "None opened in this window",
+            },
+            { key: "cycle", label: "Median cycle time", loading, value: fmtHours(k.cycle), foot: "median of contributors' averages" },
+            {
+              key: "reviews",
+              label: "Reviews given",
+              loading,
+              value: k.reviews.toLocaleString(),
+              foot: k.merged ? `${(k.reviews / k.merged).toFixed(1)} per merged pull request` : "—",
+            },
+            {
+              key: "bus",
+              label: "Review bus factor",
+              loading,
+              value: k.bus ? String(k.bus.people) : "—",
+              tone: k.bus && k.bus.people <= 2 ? "warn" : "default",
+              foot: k.bus ? (
+                <span className={k.bus.people <= 2 ? "text-status-warn-text" : undefined}>
+                  {k.bus.people} {k.bus.people === 1 ? "person does" : "people do"} {k.bus.share}% of reviews
                 </span>
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Leaderboard */}
-              <div>
-                <h2 className="text-sm font-semibold text-white mb-1">
-                  Contributor Leaderboard
-                </h2>
-                <p className="text-xs text-slate-500 mb-3">
-                  Click any column header to sort · Click a contributor name to see their
-                  full profile
-                </p>
-                <TeamLeaderboard
-                  contributors={data.contributors}
-                  owner={selectedRepo.owner}
-                  repo={selectedRepo.repo}
-                />
-              </div>
+              ) : "No reviews in this window",
+            },
+            {
+              key: "self",
+              label: "Self-merged",
+              loading,
+              value: k.self.toLocaleString(),
+              tone: k.self > 0 ? "warn" : "default",
+              foot: k.merged ? `${Math.round((k.self / k.merged) * 100)}% of merges` : "—",
+            },
+          ]}
+        />
+      )}
 
-              {/* Reviewer load matrix (collapsible) */}
-              <div>
-                <button
-                  onClick={() => setShowMatrix((v) => !v)}
-                  className="flex items-center gap-2 text-sm font-semibold text-white mb-1 hover:text-violet-300 transition-colors"
-                >
-                  {showMatrix ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                  Reviewer Load Matrix
-                </button>
-                <p className="text-xs text-slate-500 mb-3">
-                  How many PRs each reviewer has reviewed per author — identifies review
-                  bottlenecks
-                </p>
-                {showMatrix && (
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-                    <ReviewerMatrix
-                      matrix={data.reviewer_matrix}
-                      owner={selectedRepo.owner}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+      {data && data.contributors.length === 0 && (
+        <p className="card px-5 py-5 text-sm text-muted">No merged pull requests in <span className="font-mono">{repoFullName}</span> in this window.</p>
+      )}
+
+      {data && data.contributors.length > 0 && selected && (
+        <>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+            <ReviewHeatmap matrix={data.reviewer_matrix} owner={selected.owner} />
+            <WorkloadList
+              people={workload?.people ?? []}
+              owner={selected.owner}
+              loading={workloadLoading}
+              disabled={!flags.workloadRisk}
+              windowDays={workload?.window_days}
+            />
+          </div>
+          <ContributorsTable rows={data.contributors} owner={selected.owner} repo={selected.repo} workload={workload?.people ?? []} />
+        </>
+      )}
+
+      {loading && !data && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+          <div className="card h-[380px] skeleton" />
+          <div className="card h-[380px] skeleton" />
         </div>
       )}
-    </div>
+    </Page>
+  );
+}
+
+export default function TeamInsightsPage() {
+  return (
+    <Suspense fallback={<div className="px-10 pt-8 text-sm text-muted">Loading…</div>}>
+      <TeamContent />
+    </Suspense>
   );
 }

@@ -207,7 +207,7 @@ Open [http://localhost:3000](http://localhost:3000). In `standalone` mode you'll
 | Mode | Best for | Login flow |
 | --- | --- | --- |
 | **`standalone`** (default) | Individual / self-hosted use | User enters PAT at `/setup`, token stored in encrypted HttpOnly session cookie |
-| **`organization`** | Shared team deployment | GitHub OAuth via `/login` and `/api/auth/callback`, token stored in encrypted session cookie |
+| **`organization`** | Shared team deployment | GitHub OAuth **or** a PAT on `/login`, token stored in encrypted session cookie. Features are granted per group by an admin (see below) |
 
 Mode is controlled by the `MODE` environment variable.
 
@@ -224,6 +224,43 @@ Create a GitHub OAuth App with:
 
 - **Homepage URL:** `http://localhost:3000`
 - **Callback URL:** `http://localhost:3000/api/auth/callback`
+
+### Organization Mode Access Control (groups & feature permissions)
+
+In organization mode, what each person can see is decided by an admin, not by the browser:
+
+- **Identity** is the numeric GitHub id of the signed-in token (OAuth or PAT).
+- **Groups** are fixed: `devops`, `security`, `dev`, `pm`, `admin`. A user can be in several.
+- **Grants**: an admin turns feature flags on per group at **`/admin` → Permissions**. A user gets
+  the union of their groups' flags; `admin` gets everything plus `/admin`. Users can still switch
+  granted features off for themselves in Settings, never on.
+- **New users** are recorded on first sign-in and land on `/pending` until an admin assigns a group
+  (**`/admin` → Users**). Every change is written to **`/admin` → Audit**.
+- **Enforcement** is server-side (`src/proxy.ts`): a feature's API routes return 403 without the grant,
+  even when called directly. Grants and revocations reach new requests within **60 seconds**.
+
+Required and optional settings:
+
+```env
+DATABASE_URL=postgres://...          # required in organization mode (users, groups, grants, audit)
+GITDASH_ADMIN_GITHUB_IDS=12345678     # required: numeric ids that are always admins (gh api user --jq .id)
+GITDASH_ALLOWED_ORGS=my-org           # optional: only active members of these orgs may sign in
+GITDASH_RBAC_ENFORCE=false            # rollout switch — see below
+```
+
+**Rollout:** deploy with `GITDASH_RBAC_ENFORCE=false` (everyone keeps today's access; admin pages are
+admin-only), let people sign in, assign groups and grants in `/admin`, then set it to `true`.
+The app refuses to start in organization mode without `DATABASE_URL` and a valid
+`GITDASH_ADMIN_GITHUB_IDS`, and `/api/health` returns 503 so a misconfigured rollout never goes ready.
+
+**PAT sign-in in organization mode** — a fine-grained, read-only PAT is enough for most views. With
+`GITDASH_ALLOWED_ORGS` set it needs `read:org` (classic) or org **Members: read** (fine-grained).
+Note that some orgs forbid classic PATs with a lifetime over 366 days; GitHub then refuses the
+membership check and sign-in is denied (the server log shows GitHub's reason).
+
+This model gates **GitDash features**, not GitHub itself: data fetched with a user's own token is
+still limited by what that token can see on GitHub. Data GitDash serves from its own database
+(`/api/db/*`) is only returned for repos/orgs the user's token can see.
 
 ### Token Scope Guidance
 
@@ -305,7 +342,12 @@ Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workf
 | `NEXT_PUBLIC_APP_URL` | Recommended | Public app URL for OAuth/callback flows |
 | `GITHUB_CLIENT_ID` | Org mode | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | Org mode | GitHub OAuth App client secret |
-| `DATABASE_URL` | Optional | Enables historical DB sync, trends, and alerts |
+| `DATABASE_URL` | Org mode | Enables historical DB sync, trends, alerts and the shared API cache. **Required** in organization mode (users, groups, grants) |
+| `GITDASH_ADMIN_GITHUB_IDS` | Org mode | Comma-separated numeric GitHub user ids that are always admins |
+| `GITDASH_ALLOWED_ORGS` | Optional | Org mode: comma-separated orgs whose active members may sign in (empty = anyone, lands on `/pending`) |
+| `GITDASH_RBAC_ENFORCE` | Optional | Org mode: `true` enforces group permissions; `false` (default) keeps today's access during rollout |
+| `GITDASH_L2_CACHE` | Optional | `0` keeps API caching in-process only (default: shared `api_cache` table when `DATABASE_URL` is set) |
+| `GITDASH_GH_LOG` | Optional | `1` logs every GitHub API call with route and remaining rate-limit budget |
 | `GITHUB_WEBHOOK_SECRET` | Optional | Signature verification for `/api/webhooks/github` |
 | `GITHUB_TOKEN` | Optional | Fallback when no session token is available. **Required** for the scheduled sync cron (`/api/cron/sync`), which has no user session |
 | `CRON_SECRET` | Optional | Bearer token authorizing `/api/cron/sync`. Vercel Cron sends this automatically when set; the route fails closed (401) if unset |

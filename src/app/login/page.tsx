@@ -1,8 +1,11 @@
 "use client";
 
+/** Sign in (organization mode) — `Login` artboard. */
+
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Play } from "lucide-react";
+import { PatForm } from "@/components/PatForm";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: "You cancelled the GitHub sign-in.",
@@ -11,109 +14,65 @@ const ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: "Sign-in state mismatch. Please try again (possible CSRF attempt).",
   state_expired: "Sign-in session expired. Please try signing in again.",
   server: "An unexpected server error occurred. Try again.",
+  org_not_allowed:
+    "This GitHub account is not a member of an organization allowed to use this GitDash, or the sign-in lacks read:org.",
 };
+
+function Code({ children }: { children: React.ReactNode }) {
+  return <code className="font-mono text-fg">{children}</code>;
+}
 
 function LoginContent() {
   const params = useSearchParams();
   const error = params.get("error");
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 lg:p-8">
-      {/* background glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-3xl" />
+    <AuthLayout>
+      <p className="text-[13px] font-semibold text-link">Welcome back</p>
+      <h2 className="mt-2 text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">Sign in to GitDash</h2>
+      <p className="mt-3 text-sm leading-[22px] text-muted">
+        Use your GitHub account. Your organization&apos;s admin decides which dashboards you can see.
+      </p>
+
+      {error && (
+        <p role="alert" className="mt-5 px-3.5 py-3 rounded-control bg-status-fail-tint border border-status-fail/25 text-[13px] text-status-fail-text">
+          {ERROR_MESSAGES[error] ?? "Something went wrong. Try again."}
+        </p>
+      )}
+
+      <a
+        href="/api/auth/login"
+        className="mt-6 flex items-center justify-center gap-2.5 w-full h-12 rounded-[12px] bg-primary text-white text-[15px] font-semibold hover:brightness-110 transition-[filter] duration-100"
+      >
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
+          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+        </svg>
+        Continue with GitHub
+      </a>
+
+      <div className="flex items-center gap-3 my-7" aria-hidden="true">
+        <div className="h-px flex-1 bg-line" />
+        <span className="text-xs text-muted">or use a personal access token</span>
+        <div className="h-px flex-1 bg-line" />
       </div>
 
-      <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        {/* Left: Login form */}
-        <div className="w-full max-w-sm mx-auto lg:mx-0">
-          {/* logo */}
-          <div className="flex flex-col items-center mb-10">
-            <div className="w-24 h-24 shrink-0 rounded-3xl overflow-hidden shadow-2xl shadow-violet-500/30 mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="GitDash Logo" className="w-full h-full object-cover" />
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">GitDash</h1>
-            <p className="text-sm text-slate-400 mt-1">GitHub Actions Dashboard</p>
-            <a
-              href="/docs"
-              className="mt-3 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-4"
-            >
-              Documentation
-            </a>
-          </div>
+      <PatForm>
+        <p className="text-xs leading-[18px] text-muted">
+          Needs <Code>repo</Code>, <Code>workflow</Code>, <Code>read:org</Code>, <Code>read:user</Code> and <Code>user:email</Code> — a
+          fine-grained token needs org Members: read. The server keeps it only in your encrypted session cookie.
+        </p>
+      </PatForm>
 
-          {/* card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white mb-1 text-center">Sign in</h2>
-            <p className="text-sm text-slate-400 text-center mb-8">
-              Connect your GitHub account to view your org&apos;s workflow metrics
-            </p>
-
-            {error && (
-              <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm text-center">
-                {ERROR_MESSAGES[error] ?? "Something went wrong. Try again."}
-              </div>
-            )}
-
-            <a
-              href="/api/auth/login"
-              className="flex items-center justify-center gap-3 w-full px-5 py-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold rounded-xl text-sm transition-colors shadow-lg"
-            >
-              {/* GitHub SVG mark */}
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden>
-                <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-              </svg>
-              Continue with GitHub
-            </a>
-
-            <p className="text-xs text-slate-500 text-center mt-6 leading-relaxed">
-              GitDash requests{" "}
-              <code className="text-slate-400 bg-slate-800 px-1 rounded">read:user</code>,{" "}
-              <code className="text-slate-400 bg-slate-800 px-1 rounded">repo</code>,{" "}
-              <code className="text-slate-400 bg-slate-800 px-1 rounded">workflow</code> and{" "}
-              <code className="text-slate-400 bg-slate-800 px-1 rounded">read:org</code> scopes.
-              Cost Analytics requires a separate fine-grained PAT with Administration org permission.{" "}
-              Your token is stored in an encrypted server-side session and never exposed to the browser.
-            </p>
-          </div>
-
-          <div className="text-xs text-slate-600 text-center mt-6 space-y-1">
-            <p>For internal use only — self-hosted GitHub Actions dashboard</p>
-            <p>MIT License · Made by <span className="text-slate-500">Dinh Do Ba Thi</span></p>
-          </div>
-        </div>
-
-        {/* Right: Video preview */}
-        <div className="hidden lg:block">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Play className="w-4 h-4 text-violet-400" />
-              <h3 className="text-sm font-semibold text-white">See GitDash in action</h3>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-slate-800 shadow-2xl shadow-violet-500/10 bg-slate-900">
-              <video
-                src="/videos/intro.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full aspect-video object-cover"
-              />
-            </div>
-            <p className="text-xs text-slate-500 text-center">
-              DORA metrics, workflow analytics, team insights, cost tracking — all in one dashboard.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <p className="mt-6 text-xs leading-[18px] text-faint">
+        Cost needs a separate fine-grained token with the Administration organization permission. <a href="/docs" className="text-link hover:text-violet-200">Documentation</a>
+      </p>
+    </AuthLayout>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<div className="min-h-screen bg-ground" />}>
       <LoginContent />
     </Suspense>
   );

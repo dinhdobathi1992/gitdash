@@ -18,11 +18,10 @@ export default function PartialDataBadge({
   unit?: string;
 }) {
   if (fetched >= total) return null;
-
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-3">
-      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-      Computed from {fetched}/{total} {unit} — some requests were rate-limited or failed. Values below may be undercounted.
-    </div>
+    <p role="status" className="flex items-center gap-2 px-3 py-2 rounded-control bg-status-warn-tint text-xs text-status-warn-text">
+      <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+      Computed from {fetched} of {total} {unit} — some requests were rate-limited or failed, so values may be undercounted.
+    </p>
   );
 }

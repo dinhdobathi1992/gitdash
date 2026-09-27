@@ -7,6 +7,7 @@
  */
 
 import { createHash } from "crypto";
+import { l2Get, l2Set, l2Delete } from "./cache-l2";
 
 interface CacheEntry<T> {
   value: T;
@@ -23,7 +24,12 @@ const store = new Map<string, CacheEntry<unknown>>();
 const MAX_ENTRIES = 2000;
 
 /** In-flight factory calls, so concurrent misses share one execution. */
-const inflight = new Map<string, Promise<unknown>>();
+interface InflightEntry {
+  promise: Promise<unknown>;
+  /** True when this computation bypasses cached data (a refresh) — a refresh may only join such an entry. */
+  fresh: boolean;
+}
+const inflight = new Map<string, InflightEntry>();
 
 /**
  * Derive a short stable hash from a secret (e.g. a GitHub token) for use in
@@ -84,6 +90,39 @@ export function cacheDeleteByPrefix(prefix: string): void {
   }
 }
 
+/** Partial results (some sub-requests failed) are kept briefly, not for the full TTL. */
+export const PARTIAL_TTL_SECONDS = 30;
+
+/** TTL policy for results carrying a `partial` flag: short TTL when partial. */
+export function partialAwareTtl<T extends { partial?: boolean }>(ttlSeconds: number) {
+  return (value: T) => (value.partial ? PARTIAL_TTL_SECONDS : ttlSeconds);
+}
+
+export interface WithCacheOptions<T> {
+  /**
+   * Return false to hand the value to callers without storing it — e.g. an
+   * LLM failure payload. Concurrent callers still share the in-flight result.
+   */
+  shouldCache?: (value: T) => boolean;
+  /**
+   * Per-value TTL override in seconds (0 = do not store). Used to keep
+   * partial results only briefly — see partialAwareTtl().
+   */
+  ttlFor?: (value: T) => number;
+  /**
+   * User-initiated refresh: skip the cached value, recompute, and overwrite
+   * it. Joins an in-flight computation only if that one is also a refresh —
+   * an ordinary one may be about to return an old shared (L2) row.
+   */
+  refresh?: boolean;
+  /**
+   * Also read/write the shared Postgres layer (src/lib/cache-l2.ts) so other
+   * instances reuse the result. Only for GitHub DTOs — never for settings,
+   * secrets or AI output, which would be stored as plaintext.
+   */
+  shared?: boolean;
+}
+
 /**
  * Wrap an async factory in a cache: if the key is hot, return the cached
  * value; otherwise call factory(), cache the result, and return it.
@@ -100,25 +139,63 @@ export async function withCache<T>(
   key: string,
   ttlSeconds: number,
   factory: () => Promise<T>,
+  opts: WithCacheOptions<T> = {},
 ): Promise<T> {
-  const cached = cacheGet<T>(key);
-  if (cached !== undefined) return cached;
+  if (!opts.refresh) {
+    const cached = cacheGet<T>(key);
+    if (cached !== undefined) return cached;
+  }
 
   const existing = inflight.get(key);
-  if (existing) return existing as Promise<T>;
+  if (existing && (existing.fresh || !opts.refresh)) return existing.promise as Promise<T>;
 
-  const promise = (async () => {
+  const entry: InflightEntry = { promise: Promise.resolve(), fresh: Boolean(opts.refresh) };
+  // Deferred start: the entry is registered before the factory runs, so even a
+  // factory that throws synchronously cannot leave a stale in-flight slot.
+  const promise = Promise.resolve().then(async () => {
     try {
+      // A refresh that replaced this entry owns the key now; a superseded run
+      // still answers its own callers but must not write over fresher data.
+      const superseded = () => inflight.get(key) !== entry;
+      if (opts.shared && !opts.refresh) {
+        const hit = await l2Get<T>(key);
+        if (hit) {
+          if (!superseded()) cacheSet(key, hit.value, hit.ttlSeconds);
+          return hit.value;
+        }
+      }
       const value = await factory();
-      cacheSet(key, value, ttlSeconds);
+      if (superseded()) return value;
+      const ttl = opts.ttlFor ? opts.ttlFor(value) : ttlSeconds;
+      const storable = ttl > 0 && (!opts.shouldCache || opts.shouldCache(value));
+      if (storable) {
+        cacheSet(key, value, ttl);
+        // Awaited (bounded by the L2 timeout) so a later delete/overwrite from
+        // this instance can never be overtaken by this write.
+        if (opts.shared) await l2Set(key, value, ttl);
+      } else if (opts.refresh) {
+        cacheDelete(key);
+        if (opts.shared) await l2Delete(key);
+      }
       return value;
     } finally {
-      inflight.delete(key);
+      // A refresh may have replaced this entry; only remove our own.
+      if (inflight.get(key) === entry) inflight.delete(key);
     }
-  })();
+  });
 
-  inflight.set(key, promise);
+  entry.promise = promise;
+  inflight.set(key, entry);
   return promise;
+}
+
+/**
+ * Test hook: drop every entry and in-flight promise, simulating a fresh
+ * process (e.g. a second replica with a cold in-memory cache).
+ */
+export function __resetCacheForTests(): void {
+  store.clear();
+  inflight.clear();
 }
 
 /**

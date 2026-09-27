@@ -14,5 +14,6 @@ export async function POST(req: NextRequest) {
   }
   // standalone → back to setup; organization → back to login
   const dest = isStandaloneMode() ? "/setup" : "/login";
-  return NextResponse.redirect(publicUrl(dest, req));
+  // 303 so the browser follows with GET (a 307 would re-POST to the page).
+  return NextResponse.redirect(publicUrl(dest, req), 303);
 }

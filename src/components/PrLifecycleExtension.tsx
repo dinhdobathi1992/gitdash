@@ -21,12 +21,12 @@ import PartialDataBadge from "@/components/PartialDataBadge";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: "#1e293b",
-    border: "1px solid #334155",
+    background: "#1E242D",
+    border: "1px solid #2A313C",
     borderRadius: 8,
     fontSize: 12,
   },
-  labelStyle: { color: "#94a3b8", marginBottom: 4 },
+  labelStyle: { color: "#A3A9B4", marginBottom: 4 },
 };
 
 function SectionCard({
@@ -72,10 +72,10 @@ function TimeToFirstReviewChart({
   approvalP90: number;
 }) {
   const data = [
-    { metric: "First Review P50", hours: p50, color: "#2563eb" },
-    { metric: "First Review P90", hours: p90, color: "#7c3aed" },
-    { metric: "Approval→Merge P50", hours: approvalP50, color: "#0891b2" },
-    { metric: "Approval→Merge P90", hours: approvalP90, color: "#059669" },
+    { metric: "First Review P50", hours: p50, color: "#74B6F4" },
+    { metric: "First Review P90", hours: p90, color: "#A48BFF" },
+    { metric: "Approval→Merge P50", hours: approvalP50, color: "#4FD1E8" },
+    { metric: "Approval→Merge P90", hours: approvalP90, color: "#3DD68C" },
   ];
 
   return (
@@ -86,10 +86,10 @@ function TimeToFirstReviewChart({
           layout="vertical"
           margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" horizontal={false} />
           <XAxis
             type="number"
-            tick={{ fill: "#64748b", fontSize: 10 }}
+            tick={{ fill: "#7A818D", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             unit="h"
@@ -97,7 +97,7 @@ function TimeToFirstReviewChart({
           <YAxis
             type="category"
             dataKey="metric"
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            tick={{ fill: "#A3A9B4", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             width={130}
@@ -120,13 +120,13 @@ function TimeToFirstReviewChart({
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-slate-900/50 rounded-lg p-2.5 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+          <p className="text-xs text-slate-500 mb-0.5">
             First Review P50
           </p>
           <p className="text-sm font-bold text-blue-400">{fmtHours(p50)}</p>
         </div>
         <div className="bg-slate-900/50 rounded-lg p-2.5 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+          <p className="text-xs text-slate-500 mb-0.5">
             First Review P90
           </p>
           <p className="text-sm font-bold text-violet-400">{fmtHours(p90)}</p>
@@ -142,7 +142,7 @@ function PrAgeDistribution({
 }: {
   distribution: { bucket: string; count: number }[];
 }) {
-  const COLORS = ["#059669", "#0891b2", "#d97706", "#dc2626", "#7c3aed"];
+  const COLORS = ["#3DD68C", "#4FD1E8", "#F5B544", "#FF6B6B", "#A48BFF"];
 
   if (distribution.every((d) => d.count === 0)) {
     return (
@@ -158,15 +158,15 @@ function PrAgeDistribution({
         data={distribution}
         margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
         <XAxis
           dataKey="bucket"
-          tick={{ fill: "#64748b", fontSize: 9 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           width={24}
@@ -192,7 +192,7 @@ function ReviewRoundChart({
 }: {
   distribution: { rounds: string; count: number }[];
 }) {
-  const COLORS = ["#64748b", "#059669", "#d97706", "#dc2626"];
+  const COLORS = ["#7A818D", "#3DD68C", "#F5B544", "#FF6B6B"];
   const total = distribution.reduce((s, d) => s + d.count, 0);
 
   if (total === 0) {
@@ -232,7 +232,7 @@ function ReviewRoundChart({
                 <text
                   x={x}
                   y={y}
-                  fill="#94a3b8"
+                  fill="#A3A9B4"
                   textAnchor={x > cx ? "start" : "end"}
                   dominantBaseline="central"
                   fontSize={10}
@@ -307,7 +307,7 @@ function StalePrAlerts({
             >
               #{pr.number} {pr.title}
             </a>
-            <p className="text-[10px] text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               by @{pr.author} &middot; {fmtHours(pr.age_hours)} old &middot; no reviews
             </p>
           </div>
@@ -337,7 +337,7 @@ export function PrLifecycleExtension({
         <PartialDataBadge fetched={data.fetched_prs} total={data.total_prs_attempted} unit="PRs" />
       )}
       {/* Data source badge */}
-      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
         <Database className="w-2.5 h-2.5" />
         <span>
           {data.total_open} open PRs · {data.closed_prs_analysed} recently closed PRs for benchmarks
@@ -353,7 +353,7 @@ export function PrLifecycleExtension({
             <MetricTooltip text="Total number of pull requests currently open in this repository. A growing count over time signals a review bottleneck or accumulating WIP." align="left" />
           </div>
           <p className="text-2xl font-bold text-white">{data.total_open}</p>
-          <p className="text-[11px] text-slate-500 mt-1">currently open</p>
+          <p className="text-xs text-slate-500 mt-1">currently open</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -364,7 +364,7 @@ export function PrLifecycleExtension({
           <p className="text-2xl font-bold text-white">
             {fmtHours(data.time_to_first_review_p50_hours)}
           </p>
-          <p className="text-[11px] text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
+          <p className="text-xs text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -375,7 +375,7 @@ export function PrLifecycleExtension({
           <p className="text-2xl font-bold text-white">
             {fmtHours(data.time_to_first_review_p90_hours)}
           </p>
-          <p className="text-[11px] text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
+          <p className="text-xs text-slate-500 mt-1">from {data.closed_prs_analysed} recently closed PRs</p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -389,7 +389,7 @@ export function PrLifecycleExtension({
           )}>
             {data.abandon_rate}%
           </p>
-          <p className="text-[11px] text-slate-500 mt-1">{data.closed_prs_analysed} closed PRs analysed</p>
+          <p className="text-xs text-slate-500 mt-1">{data.closed_prs_analysed} closed PRs analysed</p>
         </div>
       </div>
 

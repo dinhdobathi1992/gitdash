@@ -20,12 +20,12 @@ interface FunnelData {
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: "#1e293b",
-    border: "1px solid #334155",
+    background: "#1E242D",
+    border: "1px solid #2A313C",
     borderRadius: 8,
     fontSize: 12,
   },
-  labelStyle: { color: "#94a3b8", marginBottom: 4 },
+  labelStyle: { color: "#A3A9B4", marginBottom: 4 },
 };
 
 /**
@@ -35,10 +35,10 @@ const TOOLTIP_STYLE = {
 export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
   const data = useMemo(
     () => [
-      { stage: "Opened", count: funnel.opened, color: "#7c3aed" },
-      { stage: "Reviewed", count: funnel.reviewed, color: "#2563eb" },
-      { stage: "Approved", count: funnel.approved, color: "#0891b2" },
-      { stage: "Merged", count: funnel.merged, color: "#059669" },
+      { stage: "Opened", count: funnel.opened, color: "#A48BFF" },
+      { stage: "Reviewed", count: funnel.reviewed, color: "#74B6F4" },
+      { stage: "Approved", count: funnel.approved, color: "#4FD1E8" },
+      { stage: "Merged", count: funnel.merged, color: "#3DD68C" },
     ],
     [funnel]
   );
@@ -62,19 +62,19 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
         >
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#1e293b"
+            stroke="#1E242D"
             horizontal={false}
           />
           <XAxis
             type="number"
-            tick={{ fill: "#64748b", fontSize: 10 }}
+            tick={{ fill: "#7A818D", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             type="category"
             dataKey="stage"
-            tick={{ fill: "#94a3b8", fontSize: 11 }}
+            tick={{ fill: "#A3A9B4", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             width={70}
@@ -83,7 +83,7 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
             {...TOOLTIP_STYLE}
             formatter={(val) => [val ?? 0, "PRs"]}
           />
-          <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#7c3aed">
+          <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#A48BFF">
             {data.map((entry, i) => (
               <rect key={i} fill={entry.color} />
             ))}
@@ -95,7 +95,7 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
       <div className="grid grid-cols-3 gap-2">
         {funnel.opened > 0 && (
           <div className="bg-slate-900/50 rounded-lg p-2.5 text-center">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+            <p className="text-xs text-slate-500 mb-0.5">
               Review Rate
             </p>
             <p className="text-sm font-bold text-blue-400">
@@ -105,7 +105,7 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
         )}
         {funnel.reviewed > 0 && (
           <div className="bg-slate-900/50 rounded-lg p-2.5 text-center">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+            <p className="text-xs text-slate-500 mb-0.5">
               Approval Rate
             </p>
             <p className="text-sm font-bold text-cyan-400">
@@ -115,7 +115,7 @@ export function ContributorPrFunnel({ funnel }: { funnel: FunnelData }) {
         )}
         {funnel.opened > 0 && (
           <div className="bg-slate-900/50 rounded-lg p-2.5 text-center">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">
+            <p className="text-xs text-slate-500 mb-0.5">
               Merge Rate
             </p>
             <p className="text-sm font-bold text-green-400">

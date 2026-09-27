@@ -11,8 +11,10 @@ export interface SessionData {
   oauthState?: string;
   // Expiry timestamp for oauthState (ms since epoch)
   oauthStateExpiry?: number;
-  // cached GitHub user identity (both modes)
+  // cached GitHub user identity (both modes) — for display only. Access
+  // decisions use the identity GitHub returns for the token (src/lib/identity.ts).
   user?: {
+    id?: number;
     login: string;
     name: string | null;
     avatar_url: string;
@@ -60,11 +62,29 @@ export async function getSession() {
 /**
  * Return the GitHub token for the current request.
  *
- * standalone    → session.pat          (user entered their own PAT on /setup)
- * organization  → session.accessToken  (OAuth token from GitHub)
+ * standalone    → session.pat                       (PAT entered on /setup)
+ * organization  → session.accessToken ?? session.pat (OAuth sign-in, or a PAT
+ *                 on /login). Each login resets the session, so only one of
+ *                 the two is ever set.
  */
 export async function getTokenFromSession(): Promise<string | null> {
   const session = await getSession();
+  return sessionToken(session);
+}
+
+/** The token a session carries, by mode (see getTokenFromSession). */
+export function sessionToken(session: SessionData): string | null {
   if (isStandaloneMode()) return session.pat ?? null;
-  return session.accessToken ?? null;
+  return session.accessToken ?? session.pat ?? null;
+}
+
+/**
+ * Clear every field before writing a new login into the session, so a second
+ * sign-in on the same browser can never leave the previous account's token
+ * behind (session fixation / identity mix-up).
+ */
+export function resetSession(session: SessionData): void {
+  for (const key of Object.keys(session) as (keyof SessionData)[]) {
+    if (typeof session[key] !== "function") delete session[key];
+  }
 }

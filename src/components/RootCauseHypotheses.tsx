@@ -22,10 +22,11 @@ import type { Confidence } from "@/lib/ai-schema";
 import { Sparkles, Loader2, Search, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const CONFIDENCE_STYLE: Record<Confidence, string> = {
-  high: "bg-red-500/10 text-red-300 border-red-500/25",
-  medium: "bg-amber-500/10 text-amber-300 border-amber-500/25",
-  low: "bg-slate-700/40 text-slate-400 border-slate-600/40",
+// Contract `Workflow` artboard: Likely / Possible / Unlikely chips.
+const CONFIDENCE: Record<Confidence, { label: string; cls: string }> = {
+  high: { label: "Likely", cls: "bg-status-fail-tint text-status-fail-text" },
+  medium: { label: "Possible", cls: "bg-status-warn-tint text-status-warn-text" },
+  low: { label: "Unlikely", cls: "bg-status-neutral-tint text-status-neutral-text" },
 };
 
 export default function RootCauseHypotheses({
@@ -53,32 +54,35 @@ export default function RootCauseHypotheses({
 
   if (!asked) {
     return (
-      <button
-        onClick={() => setAsked(true)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-violet-300 bg-violet-500/10 border border-violet-500/25 rounded-lg hover:bg-violet-500/20 transition-colors"
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        Suggest why this is failing
-      </button>
+      <div className="flex flex-col items-start gap-3 py-2">
+        <p className="text-[13px] text-muted">
+          Reads the failed jobs and step names of recent runs and suggests likely causes. Takes a few seconds.
+        </p>
+        <button
+          type="button"
+          onClick={() => setAsked(true)}
+          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-control bg-brand-soft border border-brand-fg/40 text-[13px] font-semibold text-violet-200 hover:bg-brand-soft/70"
+        >
+          <Sparkles className="w-4 h-4" aria-hidden="true" /> Suggest why this is failing
+        </button>
+      </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2.5 text-xs text-violet-200">
-        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-        Reading failed jobs and step names — this one takes a few seconds…
-      </div>
+      <p className="flex items-center gap-2.5 py-2 text-[13px] text-muted">
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
+        Reading failed jobs and step names…
+      </p>
     );
   }
 
   if (error) {
     const status = error instanceof FetchError ? error.status : null;
     return (
-      <p className="text-xs text-slate-500 italic">
-        {status === 429
-          ? "Rate limit reached — try again in a minute."
-          : "Hypotheses unavailable right now."}
+      <p className="py-2 text-[13px] text-muted">
+        {status === 429 ? "Rate limit reached — try again in a minute." : "Hypotheses are unavailable right now."}
       </p>
     );
   }
@@ -88,54 +92,41 @@ export default function RootCauseHypotheses({
   // Server-side floor: too few failures to say anything useful.
   if (!data.content) {
     return (
-      <p className="text-xs text-slate-500 italic">
-        Only {data.failure_count} recent failure{data.failure_count === 1 ? "" : "s"} — not enough of
-        a pattern to analyse yet.
+      <p className="py-2 text-[13px] text-muted">
+        Only {data.failure_count} recent failure{data.failure_count === 1 ? "" : "s"} — not enough of a pattern to analyse yet.
       </p>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div>
       {data.partial && (
-        <p className="text-[11px] text-amber-300/80">
+        <p className="mb-2 text-xs text-status-warn-text">
           Some job details could not be fetched, so this is based on an incomplete sample.
         </p>
       )}
-
-      {data.content.hypotheses.map((h) => (
-        <div
-          key={h.rank}
-          className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-2.5"
-        >
-          <div className="flex items-start gap-3">
-            <span className="shrink-0 w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
-              {h.rank}
-            </span>
-            <p className="text-sm text-slate-100 leading-relaxed flex-1">{h.hypothesis}</p>
-            <span
-              className={cn(
-                "shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border",
-                CONFIDENCE_STYLE[h.confidence],
-              )}
-            >
-              {h.confidence}
-            </span>
-          </div>
-
-          <div className="flex gap-2 pl-8 text-xs text-slate-400">
-            <Search className="w-3 h-3 mt-0.5 shrink-0 text-slate-600" />
-            <span>{h.evidence}</span>
-          </div>
-
-          <div className="flex gap-2 pl-8 text-xs text-violet-300">
-            <ArrowRight className="w-3 h-3 mt-0.5 shrink-0" />
-            <span>{h.next_step}</span>
-          </div>
-        </div>
-      ))}
-
-      <p className="text-[10px] text-slate-600">
+      <ul>
+        {data.content.hypotheses.map((h) => {
+          const c = CONFIDENCE[h.confidence];
+          return (
+            <li key={h.rank} className="py-4 border-b border-line last:border-0 first:pt-2">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-fg">{h.hypothesis}</p>
+                <span className={cn("shrink-0 inline-flex items-center h-[22px] px-2 rounded-chip text-xs font-semibold", c.cls)}>{c.label}</span>
+              </div>
+              <p className="mt-2 flex gap-2 text-[13px] leading-5 text-muted">
+                <Search className="w-3.5 h-3.5 mt-0.5 shrink-0 text-faint" aria-hidden="true" />
+                <span>{h.evidence}</span>
+              </p>
+              <p className="mt-1.5 flex gap-2 text-[13px] leading-5 text-link">
+                <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                <span>{h.next_step}</span>
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="pt-2 text-xs text-faint">
         {data.provider} · {data.model}
         {data.cached && " · cached"} · inferred from job and step metadata, not run logs
       </p>

@@ -11,8 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
 import { getOctokit, listRunJobs } from "@/lib/github";
 import { validateOwner, validateRepo, validatePerPage, safeError } from "@/lib/validation";
-import { withCache, hashKey } from "@/lib/cache";
+import { withCache, hashKey, partialAwareTtl } from "@/lib/cache";
 import { pLimitSettled } from "@/lib/concurrency";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 const CACHE_TTL = 300; // 5 min
 
@@ -41,6 +44,7 @@ function percentile(sorted: number[], p: number): number {
 }
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/runner-stats");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -59,13 +63,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const response = await withCache<RunnerStatsResponse>(
-      `runner-stats:${hashKey(token)}:${owner}/${repo}:${perPage}`,
+      `github/runner-stats:${hashKey(token)}:${owner}/${repo}:${perPage}`,
       CACHE_TTL,
       () => computeRunnerStats(token, owner, repo, perPage),
+      { shared: true, ttlFor: partialAwareTtl(CACHE_TTL) },
     );
 
     return NextResponse.json(response, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=120` },
+      headers: gatedCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to fetch runner statistics");

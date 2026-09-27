@@ -24,13 +24,17 @@ import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { computeScorecard, type OrgHealthScorecardResponse } from "@/lib/org-health-scorecard";
 import { validateOrg, validatePerPage, safeError } from "@/lib/validation";
-import { withCache, hashKey } from "@/lib/cache";
+import { withCache, hashKey, PARTIAL_TTL_SECONDS } from "@/lib/cache";
+
+import { gatedCacheHeaders } from "@/lib/http-cache";
+import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export type { RepoScorecardEntry, OrgHealthScorecardResponse } from "@/lib/org-health-scorecard";
 
 const CACHE_TTL = 900; // 15 min — this fans out DORA + bus-factor per repo
 
 export async function GET(req: NextRequest) {
+  labelGitHubRoute("github/org-health-scorecard");
   const token = await getTokenFromSession();
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -46,13 +50,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const response = await withCache<OrgHealthScorecardResponse>(
-      `org-health-scorecard:${hashKey(token)}:${org}:${limit}`,
+      `github/org-health-scorecard:${hashKey(token)}:${org}:${limit}`,
       CACHE_TTL,
       () => computeScorecard(token, getOctokit(token), org, limit),
+      {
+        shared: true,
+        ttlFor: (r) =>
+          r.repos_analysed < r.repos_attempted || r.repos.some((x) => x.partial) ? PARTIAL_TTL_SECONDS : CACHE_TTL,
+      },
     );
 
     return NextResponse.json(response, {
-      headers: { "Cache-Control": `private, max-age=${CACHE_TTL}, stale-while-revalidate=300` },
+      headers: gatedCacheHeaders(),
     });
   } catch (e) {
     return safeError(e, "Failed to compute org health scorecard");

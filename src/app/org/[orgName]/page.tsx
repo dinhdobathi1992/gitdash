@@ -45,7 +45,7 @@ export default function OrgDashboardPage({
   );
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 space-y-7">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },
@@ -59,7 +59,7 @@ export default function OrgDashboardPage({
           <Building2 className="w-5 h-5 text-violet-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">{orgName}</h1>
+          <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">{orgName}</h1>
           <p className="text-sm text-slate-400">
             Organization CI/CD overview
           </p>
@@ -217,7 +217,7 @@ export default function OrgDashboardPage({
                   );
                 })}
               </div>
-              <div className="flex items-center gap-4 text-[10px] text-slate-500">
+              <div className="flex items-center gap-4 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-sm bg-emerald-500/70" />
                   &gt;90%
@@ -302,7 +302,7 @@ export default function OrgDashboardPage({
                                 {r.repo.name}
                               </Link>
                               {r.summary.latest_sha ? (
-                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                                <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500">
                                   <GitCommit className="w-3 h-3 shrink-0" />
                                   <span className="font-mono">{r.summary.latest_sha}</span>
                                   {r.summary.latest_message && (
@@ -316,7 +316,7 @@ export default function OrgDashboardPage({
                                   )}
                                 </div>
                               ) : r.repo.updated_at ? (
-                                <p className="text-[11px] text-slate-600 mt-0.5">
+                                <p className="text-xs text-slate-600 mt-0.5">
                                   Updated {formatDistanceToNow(new Date(r.repo.updated_at))} ago
                                 </p>
                               ) : null}

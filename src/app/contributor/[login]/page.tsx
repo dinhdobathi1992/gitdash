@@ -24,12 +24,12 @@ import {
 // ── Tooltip style ─────────────────────────────────────────────────────────────
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: "#1e293b",
-    border: "1px solid #334155",
+    background: "#1E242D",
+    border: "1px solid #2A313C",
     borderRadius: 8,
     fontSize: 12,
   },
-  labelStyle: { color: "#94a3b8", marginBottom: 4 },
+  labelStyle: { color: "#A3A9B4", marginBottom: 4 },
 };
 
 // ── Section card ──────────────────────────────────────────────────────────────
@@ -73,16 +73,16 @@ function WeeklyCommitChart({
   return (
     <ResponsiveContainer width="100%" height={160}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
         <XAxis
           dataKey="label"
-          tick={{ fill: "#64748b", fontSize: 9 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           width={24}
@@ -92,7 +92,7 @@ function WeeklyCommitChart({
           {...TOOLTIP_STYLE}
           formatter={(val) => [val ?? 0, "Commits"]}
         />
-        <Bar dataKey="Commits" radius={[3, 3, 0, 0]} fill="#7c3aed" />
+        <Bar dataKey="Commits" radius={[3, 3, 0, 0]} fill="#A48BFF" />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -108,16 +108,16 @@ function CommitHourChart({ hours }: { hours: number[] }) {
   return (
     <ResponsiveContainer width="100%" height={140}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" vertical={false} />
         <XAxis
           dataKey="hour"
-          tick={{ fill: "#64748b", fontSize: 8 }}
+          tick={{ fill: "#7A818D", fontSize: 8 }}
           axisLine={false}
           tickLine={false}
           interval={3}
         />
         <YAxis
-          tick={{ fill: "#64748b", fontSize: 10 }}
+          tick={{ fill: "#7A818D", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           width={24}
@@ -127,7 +127,7 @@ function CommitHourChart({ hours }: { hours: number[] }) {
           {...TOOLTIP_STYLE}
           formatter={(val) => [val ?? 0, "Commits"]}
         />
-        <Bar dataKey="Commits" radius={[2, 2, 0, 0]} fill="#0891b2" />
+        <Bar dataKey="Commits" radius={[2, 2, 0, 0]} fill="#4FD1E8" />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -150,7 +150,7 @@ function LanguageList({ languages }: { languages: { name: string; count: number 
               style={{ width: `${(lang.count / max) * 100}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500 w-8 text-right">{lang.count}</span>
+          <span className="text-xs text-slate-500 w-8 text-right">{lang.count}</span>
         </div>
       ))}
     </div>
@@ -198,7 +198,7 @@ function RecentPrsTable({
               <td className="py-2 px-3">
                 <span
                   className={cn(
-                    "px-1.5 py-0.5 rounded-full text-[10px] font-medium",
+                    "px-1.5 py-0.5 rounded-full text-xs font-medium",
                     pr.state === "merged"
                       ? "bg-violet-500/15 text-violet-300"
                       : "bg-slate-500/15 text-slate-400"
@@ -270,7 +270,7 @@ export default function ContributorProfilePage() {
 
   if (!owner) {
     return (
-      <div className="p-8">
+      <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
         <Breadcrumb items={[{ label: "Contributors" }, { label: login }]} />
         <div className="flex items-center gap-2 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-sm">
           <AlertCircle className="w-4 h-4" />
@@ -281,7 +281,7 @@ export default function ContributorProfilePage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 space-y-7">
       <Breadcrumb
         items={[
           { label: "Repositories", href: "/" },
@@ -317,7 +317,7 @@ export default function ContributorProfilePage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-bold text-white">
+                <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">
                   {data.name ?? data.login}
                 </h1>
                 <a

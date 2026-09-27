@@ -2,97 +2,203 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": true,
-
-  "required": ["config", "secret"],
-
+  "required": [
+    "config",
+    "secret"
+  ],
   "properties": {
     "image": {
       "type": "object",
       "properties": {
-        "repository": { "type": "string", "minLength": 1 },
-        "tag":        { "type": "string" },
-        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
       },
       "additionalProperties": false
     },
-
-    "imagePullSecrets": { "type": "array" },
-
-    "replicaCount": { "type": "integer", "minimum": 1 },
-
-    "strategy": { "type": "object" },
-
+    "imagePullSecrets": {
+      "type": "array"
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "strategy": {
+      "type": "object"
+    },
     "config": {
       "type": "object",
-      "required": ["mode", "appUrl"],
+      "required": [
+        "mode",
+        "appUrl"
+      ],
       "additionalProperties": false,
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["standalone", "organization"],
+          "enum": [
+            "standalone",
+            "organization"
+          ],
           "description": "standalone: users enter their own GitHub PAT. organization: GitHub OAuth app."
         },
         "appUrl": {
           "type": "string",
           "pattern": "^https?://",
           "description": "Public-facing URL including scheme, e.g. https://gitdash.example.com"
+        },
+        "adminGithubIds": {
+          "type": "string",
+          "pattern": "^(\\s*\\d+\\s*(,\\s*\\d+\\s*)*)?$",
+          "description": "Organization mode: comma-separated numeric GitHub user ids that are always admins. Quote it in values files (\"12345678\") \u2014 an unquoted number renders in scientific notation."
+        },
+        "allowedOrgs": {
+          "type": "string",
+          "description": "Optional comma-separated GitHub orgs whose members may sign in."
+        },
+        "rbacEnforce": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Organization mode: enforce group permissions (false during rollout)."
         }
       }
     },
-
     "secret": {
       "type": "object",
-      "required": ["sessionSecret"],
+      "required": [
+        "sessionSecret"
+      ],
       "additionalProperties": false,
       "properties": {
-        "create":             { "type": "boolean" },
-        "existingSecretName": { "type": "string" },
+        "create": {
+          "type": "boolean"
+        },
+        "existingSecretName": {
+          "type": "string"
+        },
         "sessionSecret": {
           "type": "string",
           "minLength": 32,
           "description": "Required. Must be at least 32 characters. Generate with: openssl rand -hex 32"
         },
-        "githubClientId":     { "type": "string" },
-        "githubClientSecret": { "type": "string" }
+        "githubClientId": {
+          "type": "string"
+        },
+        "githubClientSecret": {
+          "type": "string"
+        },
+        "databaseUrl": {
+          "type": "string",
+          "description": "Postgres connection string. Required in organization mode."
+        }
       }
     },
-
     "service": {
       "type": "object",
       "properties": {
-        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        "type": {
+          "type": "string",
+          "enum": [
+            "ClusterIP",
+            "NodePort",
+            "LoadBalancer"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
       },
       "additionalProperties": false
     },
-
-    "ingress":                   { "type": "object" },
-    "resources":                 { "type": "object" },
-    "readinessProbe":            { "type": "object" },
-    "livenessProbe":             { "type": "object" },
-    "podSecurityContext":        { "type": "object" },
-    "containerSecurityContext":  { "type": "object" },
-    "topologySpread":            { "type": "object" },
-    "namespaceOverride":         { "type": "string" },
-    "extraEnv":                  { "type": "array" },
-    "podAnnotations":            { "type": "object" },
-    "podLabels":                 { "type": "object" },
-    "nodeSelector":              { "type": "object" },
-    "tolerations":               { "type": "array" },
-    "affinity":                  { "type": "object" },
-    "serviceAccount":            { "type": "object" },
-    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
-    "nameOverride":              { "type": "string" },
-    "fullnameOverride":          { "type": "string" }
+    "ingress": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "readinessProbe": {
+      "type": "object"
+    },
+    "livenessProbe": {
+      "type": "object"
+    },
+    "podSecurityContext": {
+      "type": "object"
+    },
+    "containerSecurityContext": {
+      "type": "object"
+    },
+    "topologySpread": {
+      "type": "object"
+    },
+    "namespaceOverride": {
+      "type": "string"
+    },
+    "extraEnv": {
+      "type": "array"
+    },
+    "podAnnotations": {
+      "type": "object"
+    },
+    "podLabels": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "serviceAccount": {
+      "type": "object"
+    },
+    "terminationGracePeriodSeconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    }
   },
-
   "if": {
     "properties": {
       "config": {
         "properties": {
-          "mode": { "const": "standalone" }
+          "mode": {
+            "const": "standalone"
+          }
         },
-        "required": ["mode"]
+        "required": [
+          "mode"
+        ]
       }
     }
   },
@@ -103,11 +209,11 @@
         "properties": {
           "githubClientId": {
             "maxLength": 0,
-            "description": "Must be empty in standalone mode — users supply their own PAT."
+            "description": "Must be empty in standalone mode \u2014 users supply their own PAT."
           },
           "githubClientSecret": {
             "maxLength": 0,
-            "description": "Must be empty in standalone mode — users supply their own PAT."
+            "description": "Must be empty in standalone mode \u2014 users supply their own PAT."
           }
         }
       }
@@ -117,7 +223,10 @@
     "title": "organization mode: GitHub OAuth fields are required",
     "properties": {
       "secret": {
-        "required": ["githubClientId", "githubClientSecret"],
+        "required": [
+          "githubClientId",
+          "githubClientSecret"
+        ],
         "properties": {
           "githubClientId": {
             "minLength": 1,
@@ -130,5 +239,36 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "config": {
+            "properties": {
+              "mode": {
+                "const": "organization"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "config": {
+            "required": [
+              "adminGithubIds"
+            ],
+            "properties": {
+              "adminGithubIds": {
+                "not": {
+                  "const": ""
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

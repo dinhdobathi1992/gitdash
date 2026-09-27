@@ -56,7 +56,7 @@ export default function ReviewBottleneck({
     <div className="space-y-5">
       {/* Reviewer load ranking */}
       <div>
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+        <h4 className="text-xs font-semibold text-slate-400 mb-2">
           Reviewer Load
         </h4>
         <div className="flex flex-col gap-2">
@@ -71,7 +71,7 @@ export default function ReviewBottleneck({
                     <img src={r.avatar_url} alt={r.login} width={18} height={18} className="w-[18px] h-[18px] rounded-full shrink-0" />
                     <span className="text-sm text-white truncate">{r.login}</span>
                     {overloaded && (
-                      <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 shrink-0">
+                      <span className="flex items-center gap-1 text-xs font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 shrink-0">
                         <AlertTriangle className="w-2.5 h-2.5" /> Overloaded
                       </span>
                     )}
@@ -95,10 +95,10 @@ export default function ReviewBottleneck({
       {/* Sole-reviewer risk */}
       {soleReviewerRisks.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <h4 className="text-xs font-semibold text-slate-400 mb-2">
             Sole-Reviewer Risk
           </h4>
-          <p className="text-[11px] text-slate-500 mb-2">
+          <p className="text-xs text-slate-500 mb-2">
             These authors&apos; PRs are reviewed almost exclusively by one person — if that
             reviewer is unavailable, reviews stall.
           </p>

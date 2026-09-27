@@ -71,30 +71,30 @@ function DailyChart({ data }: { data: DbDailyTrend[] }) {
       <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
         <defs>
           <linearGradient id="gSuccess" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+            <stop offset="5%" stopColor="#3DD68C" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#3DD68C" stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="gFailure" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+            <stop offset="5%" stopColor="#FF6B6B" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#FF6B6B" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" />
         <XAxis
           dataKey="date"
-          tick={{ fill: "#94a3b8", fontSize: 10 }}
+          tick={{ fill: "#A3A9B4", fontSize: 11 }}
           tickLine={false}
           interval={Math.ceil(chartData.length / 10)}
         />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} tickLine={false} axisLine={false} />
+        <YAxis tick={{ fill: "#A3A9B4", fontSize: 11 }} tickLine={false} axisLine={false} />
         <Tooltip
-          contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
-          labelStyle={{ color: "#94a3b8", fontSize: 11 }}
+          contentStyle={{ background: "#13171D", border: "1px solid #1E242D", borderRadius: 8 }}
+          labelStyle={{ color: "#A3A9B4", fontSize: 11 }}
           itemStyle={{ fontSize: 12 }}
         />
         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-        <Area type="monotone" dataKey="success" name="Success" stroke="#10b981" fill="url(#gSuccess)" strokeWidth={1.5} dot={false} />
-        <Area type="monotone" dataKey="failure" name="Failure" stroke="#ef4444" fill="url(#gFailure)" strokeWidth={1.5} dot={false} />
+        <Area type="monotone" dataKey="success" name="Success" stroke="#3DD68C" fill="url(#gSuccess)" strokeWidth={1.5} dot={false} />
+        <Area type="monotone" dataKey="failure" name="Failure" stroke="#FF6B6B" fill="url(#gFailure)" strokeWidth={1.5} dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -170,16 +170,16 @@ function QuarterlyBarChart({ data }: { data: DbQuarterSummary[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis dataKey="quarter" tick={{ fill: "#94a3b8", fontSize: 10 }} tickLine={false} />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} tickLine={false} axisLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1E242D" />
+        <XAxis dataKey="quarter" tick={{ fill: "#A3A9B4", fontSize: 11 }} tickLine={false} />
+        <YAxis tick={{ fill: "#A3A9B4", fontSize: 11 }} tickLine={false} axisLine={false} />
         <Tooltip
-          contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
-          labelStyle={{ color: "#94a3b8", fontSize: 11 }}
+          contentStyle={{ background: "#13171D", border: "1px solid #1E242D", borderRadius: 8 }}
+          labelStyle={{ color: "#A3A9B4", fontSize: 11 }}
           itemStyle={{ fontSize: 12 }}
         />
-        <Bar dataKey="success" name="Success" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-        <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="success" name="Success" stackId="a" fill="#3DD68C" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="failure" name="Failure" stackId="a" fill="#FF6B6B" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -197,7 +197,9 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function ReportsPage() {
-  const { mode } = useAuth();
+  const { mode, isAdmin } = useAuth();
+  // Syncing writes to the shared database: admins only in organization mode.
+  const canSync = mode === "standalone" || isAdmin;
   const isStandalone = mode === "standalone";
 
   const [activeRepo, setActiveRepo] = useState("");
@@ -256,14 +258,14 @@ export default function ReportsPage() {
 
   if (isStandalone) {
     return (
-      <div className="p-8 space-y-6">
+      <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 space-y-7">
         <Breadcrumb items={[{ label: "Reports" }]} />
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
             <BarChart3 className="w-5 h-5 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Historical Reports</h1>
+            <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">Historical Reports</h1>
             <p className="text-sm text-slate-400">Long-term trends and quarterly comparisons from Neon DB</p>
           </div>
         </div>
@@ -284,7 +286,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="px-4 pt-5 pb-24 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12 space-y-7">
       <Breadcrumb items={[{ label: "Reports" }]} />
 
       {/* Header */}
@@ -293,7 +295,7 @@ export default function ReportsPage() {
           <BarChart3 className="w-5 h-5 text-blue-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">Historical Reports</h1>
+          <h1 className="text-2xl sm:text-[28px] leading-[34px] font-semibold tracking-[-0.02em] text-fg">Historical Reports</h1>
           <p className="text-sm text-slate-400">Long-term trends and quarterly comparisons from Neon DB</p>
         </div>
       </div>
@@ -325,8 +327,8 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Sync button — always visible once a repo is selected */}
-          {activeRepo && (
+          {/* Sync button — once a repo is selected, for users allowed to sync */}
+          {activeRepo && canSync && (
             <button
               onClick={handleSync}
               disabled={syncing}

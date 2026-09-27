@@ -77,7 +77,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
             <p className="text-xs font-mono font-medium text-slate-200 truncate group-hover:text-white transition-colors">
               {mod.module}
             </p>
-            <p className="text-[10px] text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               {mod.total_commits} commit{mod.total_commits !== 1 ? "s" : ""} &middot;{" "}
               {mod.unique_contributors} contributor{mod.unique_contributors !== 1 ? "s" : ""}
             </p>
@@ -87,7 +87,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
         <div className="flex items-center gap-1.5 shrink-0">
           <span
             className={cn(
-              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border",
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium border",
               r.badge
             )}
           >
@@ -96,7 +96,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
           </span>
           <span
             className={cn(
-              "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded",
+              "text-xs font-mono font-bold px-1.5 py-0.5 rounded",
               mod.bus_factor <= 1
                 ? "text-red-300 bg-red-500/15"
                 : mod.bus_factor <= 2
@@ -134,7 +134,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
 
       {/* Top contributor label */}
       {topContributor && !expanded && (
-        <p className="text-[10px] text-slate-500 mt-1.5">
+        <p className="text-xs text-slate-500 mt-1.5">
           Top: <span className="text-slate-300 font-medium">{topContributor.login}</span>{" "}
           ({topContributor.pct}%)
         </p>
@@ -145,7 +145,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
         <div className="mt-3 space-y-1.5">
           {mod.contributors.map((c, i) => (
             <div key={c.login} className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 font-mono w-20 truncate shrink-0">
+              <span className="text-xs text-slate-400 font-mono w-20 truncate shrink-0">
                 {c.login}
               </span>
               <div className="flex-1 h-1.5 bg-slate-800/60 rounded-full overflow-hidden">
@@ -161,7 +161,7 @@ function ModuleCard({ mod }: { mod: ModuleOwnership }) {
                   }}
                 />
               </div>
-              <span className="text-[10px] font-mono text-slate-400 w-14 text-right shrink-0">
+              <span className="text-xs font-mono text-slate-400 w-14 text-right shrink-0">
                 {c.pct}% ({c.commits})
               </span>
             </div>
@@ -236,7 +236,7 @@ export function BusFactorHeatmap({ data }: { data: BusFactorResponse }) {
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Shield className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Overall BF</span>
+            <span className="text-xs text-slate-400">Overall BF</span>
           </div>
           <p
             className={cn(
@@ -255,28 +255,28 @@ export function BusFactorHeatmap({ data }: { data: BusFactorResponse }) {
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Critical</span>
+            <span className="text-xs text-slate-400">Critical</span>
           </div>
           <p className="text-xl font-bold text-red-400">{counts.critical}</p>
-          <p className="text-[10px] text-slate-500">module{counts.critical !== 1 ? "s" : ""} at risk</p>
+          <p className="text-xs text-slate-500">module{counts.critical !== 1 ? "s" : ""} at risk</p>
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Users className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Contributors</span>
+            <span className="text-xs text-slate-400">Contributors</span>
           </div>
           <p className="text-xl font-bold text-white">{data.total_contributors}</p>
-          <p className="text-[10px] text-slate-500">across {data.modules.length} modules</p>
+          <p className="text-xs text-slate-500">across {data.modules.length} modules</p>
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <FolderTree className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Commits</span>
+            <span className="text-xs text-slate-400">Commits</span>
           </div>
           <p className="text-xl font-bold text-white">{data.total_commits}</p>
-          <p className="text-[10px] text-slate-500">in last 90 days</p>
+          <p className="text-xs text-slate-500">in last 90 days</p>
         </div>
       </div>
 
@@ -302,7 +302,7 @@ export function BusFactorHeatmap({ data }: { data: BusFactorResponse }) {
               key={f}
               onClick={() => setFilterRisk(f)}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border",
+                "px-2.5 py-1 rounded-md text-xs font-medium transition-colors border",
                 filterRisk === f
                   ? f === "critical"
                     ? "bg-red-500/15 border-red-500/25 text-red-300"
@@ -335,12 +335,12 @@ export function BusFactorHeatmap({ data }: { data: BusFactorResponse }) {
 
       {/* Legend */}
       <div className="flex items-center gap-4 pt-1">
-        <span className="text-[9px] text-slate-600 uppercase tracking-wider">Risk levels:</span>
+        <span className="text-xs text-slate-600">Risk levels:</span>
         {(["critical", "warning", "healthy"] as const).map((r) => {
           const cfg = RISK[r];
           const RIcon = cfg.icon;
           return (
-            <span key={r} className="flex items-center gap-1 text-[10px] text-slate-500">
+            <span key={r} className="flex items-center gap-1 text-xs text-slate-500">
               <RIcon className={cn("w-2.5 h-2.5", cfg.text)} />
               <span className={cfg.text}>{cfg.label}</span>
               <span className="text-slate-600">
