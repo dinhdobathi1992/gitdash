@@ -7,7 +7,7 @@
  */
 
 import { BarChart3, Bell, ShieldCheck, CircleCheck } from "lucide-react";
-import { LogoMark, APP_VERSION, shortVersion } from "@/components/shell/Logo";
+import { LogoMark, APP_VERSION } from "@/components/shell/Logo";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { DemoVideoDialog } from "@/components/auth/DemoVideoDialog";
 
@@ -53,9 +53,10 @@ function ProductPreview() {
   );
 }
 
-export function AuthLayout({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+/** Sign-in atmosphere: two faint radial lights and a fading dot grid. Shared with /pending. */
+export function AuthBackdrop() {
   return (
-    <div className="min-h-screen bg-ground overflow-hidden relative">
+    <>
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
@@ -69,12 +70,20 @@ export function AuthLayout({ children, footer }: { children: React.ReactNode; fo
         className="absolute inset-0 pointer-events-none opacity-40"
         style={{ backgroundImage: "radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)", backgroundSize: "24px 24px", maskImage: "linear-gradient(90deg, black, transparent 60%)" }}
       />
+    </>
+  );
+}
+
+export function AuthLayout({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-ground overflow-hidden relative">
+      <AuthBackdrop />
       <div className="relative mx-auto max-w-[1360px] px-5 sm:px-10 lg:px-[72px] py-10 lg:py-14 grid gap-12 lg:grid-cols-[minmax(0,1fr)_420px] items-start">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <LogoMark size={36} />
             <span className="text-lg font-semibold text-fg">GitDash</span>
-            <span className="h-6 inline-flex items-center px-2 rounded-full border border-control bg-surface font-mono text-xs text-muted">{shortVersion()}</span>
+            <span className="h-6 inline-flex items-center px-2 rounded-full border border-control bg-surface font-mono text-xs text-muted">v{APP_VERSION}</span>
           </div>
           <h1 className="mt-14 lg:mt-24 text-[44px] sm:text-[56px] lg:text-[68px] leading-[1] font-semibold tracking-[-0.045em] text-fg">
             Everything metrics,<br />

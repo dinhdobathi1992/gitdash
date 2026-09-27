@@ -18,10 +18,5 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
   );
 }
 
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.0";
-
-/** "4.2.9" → "v4.2" for the compact sidebar label. */
-export function shortVersion(v: string = APP_VERSION): string {
-  const [maj, min] = v.split(".");
-  return `v${maj}${min !== undefined ? `.${min}` : ""}`;
-}
+/** Full app version, e.g. "4.5.1" — injected from package.json at build time (next.config.ts). */
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.1";
