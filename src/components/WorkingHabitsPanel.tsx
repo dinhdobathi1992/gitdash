@@ -69,6 +69,7 @@ function CoverageLine({ data }: { data: WorkingHabitsResponse }) {
 function EmptyState({ data }: { data: WorkingHabitsResponse }) {
   let message: string | null = null;
   if (!data.available) message = "Needs the database (DATABASE_URL) and the nightly pull request sync.";
+  else if (data.noTrackedRepos) message = "No repositories of this owner are synced yet. GitDash syncs a repository once an admin runs Sync from GitHub on it in Reports.";
   else if (data.untrackedRepo) message = "Not tracked: this repository has no GitHub Actions history, so GitDash does not sync its pull requests.";
   else if (data.coverage.mergedPrs > 0 && data.coverage.analysedPrs === 0) message = "Waiting for the first nightly sync.";
   else if (data.totals.commits === 0 && data.totals.prs === 0) message = "No merged pull requests in this window.";

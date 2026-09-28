@@ -113,6 +113,8 @@ export interface WorkingHabitsResponse {
   coverage: WorkingHabitsCoverage;
   /** The requested repo is not synced by GitDash (no GitHub Actions history). */
   untrackedRepo?: boolean;
+  /** Owner scope: no repository of this owner that the viewer can open is synced. */
+  noTrackedRepos?: boolean;
   people: WorkingHabitsPerson[];
   commits: WorkingHabitsCommit[];
   prs: WorkingHabitsPr[];

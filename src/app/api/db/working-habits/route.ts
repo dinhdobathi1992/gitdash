@@ -108,6 +108,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(body, { headers });
     }
 
+    if (!repoName && repos.length === 0) {
+      const body: WorkingHabitsResponse = { available: true, noTrackedRepos: true, ...empty(from, to, await getThresholds()) };
+      return NextResponse.json(body, { headers });
+    }
+
     const result = await computeWorkingHabits({ repos, from, to, login });
     return NextResponse.json({ available: true, ...result } satisfies WorkingHabitsResponse, { headers });
   } catch (e) {

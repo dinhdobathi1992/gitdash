@@ -471,6 +471,22 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
       )`,
     ],
   },
+  {
+    // PR-facts sync resume. pr_backfill_page = next page to read while a
+    // backfill is incomplete, so a run cut short continues there instead of
+    // restarting at page 1. pr_sync_cursor becomes a high-water mark: the
+    // newest PR updated_at at the start of the last full pass; later runs
+    // only fetch details for PRs updated after it. Repos already complete
+    // held the OLDEST updated_at under the previous meaning (which made every
+    // run rescan everything); moving it to two days ago re-reads only recent
+    // changes on the first run.
+    version: 11,
+    name: "pr_sync_resume",
+    up: [
+      `ALTER TABLE sync_cursors ADD COLUMN IF NOT EXISTS pr_backfill_page INT`,
+      `UPDATE sync_cursors SET pr_sync_cursor = NOW() - INTERVAL '2 days' WHERE pr_backfill_complete = TRUE`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -846,28 +862,41 @@ export async function listSyncedRepos(): Promise<{ repo: string; last_synced_at:
 
 // ── PR facts sync cursor ──────────────────────────────────────────────────────
 
-export async function getPrSyncCursor(repo: string): Promise<{ cursor: string | null; backfillComplete: boolean }> {
+export async function getPrSyncCursor(
+  repo: string,
+): Promise<{ cursor: string | null; backfillComplete: boolean; backfillPage: number | null }> {
   await ensureSchema();
   const rows = await getDb()`
-    SELECT pr_sync_cursor, pr_backfill_complete
+    SELECT pr_sync_cursor, pr_backfill_complete, pr_backfill_page
     FROM sync_cursors
     WHERE repo = ${repo}
-  ` as { pr_sync_cursor: string | null; pr_backfill_complete: boolean }[];
-  if (!rows.length) return { cursor: null, backfillComplete: false };
-  return { cursor: rows[0].pr_sync_cursor, backfillComplete: rows[0].pr_backfill_complete };
+  ` as { pr_sync_cursor: string | Date | null; pr_backfill_complete: boolean; pr_backfill_page: number | null }[];
+  if (!rows.length) return { cursor: null, backfillComplete: false, backfillPage: null };
+  const c = rows[0].pr_sync_cursor;
+  return {
+    cursor: c === null ? null : new Date(c).toISOString(),
+    backfillComplete: rows[0].pr_backfill_complete,
+    backfillPage: rows[0].pr_backfill_page,
+  };
 }
 
+/**
+ * Save PR-sync state. `backfillPage` is the next page to read while the
+ * backfill is incomplete (null once complete). UPDATE-only: never creates a
+ * sync_cursors row — PR-facts sync only runs for repos already enrolled by
+ * updateSyncCursor (run-sync path).
+ */
 export async function updatePrSyncCursor(
   repo: string,
   cursor: string | null,
   backfillComplete: boolean,
+  backfillPage: number | null = null,
 ): Promise<void> {
   await ensureSchema();
-  // UPDATE-only: never creates a sync_cursors row. PR-facts sync only runs
-  // for repos already enrolled by updateSyncCursor (run-sync path).
   await getDb()`
     UPDATE sync_cursors
-    SET pr_sync_cursor = ${cursor}, pr_backfill_complete = ${backfillComplete}
+    SET pr_sync_cursor = ${cursor}, pr_backfill_complete = ${backfillComplete},
+        pr_backfill_page = ${backfillPage}
     WHERE repo = ${repo}
   `;
 }
