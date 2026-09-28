@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { aggregateContributorProfile, buildContributorProfile, type ProfileInput } from "@/lib/contributor-profile";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { aggregateContributorProfile, buildContributorProfile, serverTiming, type ProfileInput, type StepTiming } from "@/lib/contributor-profile";
+import { __resetCacheForTests } from "@/lib/cache";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 const daysAgo = (d: number, hour = 10) => new Date(NOW.getTime() - d * 86_400_000).toISOString().slice(0, 10) + `T${String(hour).padStart(2, "0")}:00:00Z`;
@@ -75,6 +76,8 @@ describe("aggregateContributorProfile", () => {
 });
 
 describe("buildContributorProfile", () => {
+  beforeEach(() => __resetCacheForTests());
+
   function mockOctokit(opts: { ownerType?: string; failReviewed?: boolean; commitTotal?: number } = {}) {
     const graphql = vi.fn(async (query: string, vars: { q: string; cursor: string | null }) => {
       if (query.includes("reviews(author:") && opts.failReviewed) throw new Error("boom");
@@ -129,5 +132,54 @@ describe("buildContributorProfile", () => {
     expect(p.reviews_given).toBe(0);
     expect(p.prs_opened).toBe(2);
     expect(p.fetched_requests).toBeLessThan(p.total_requests_attempted);
+  });
+});
+
+describe("profile build order and timing", () => {
+  beforeEach(() => __resetCacheForTests());
+
+  function octo(userDelay: number) {
+    const order: string[] = [];
+    let releaseUser!: () => void;
+    const userGate = new Promise<void>((r) => (releaseUser = r));
+    const getByUsername = vi.fn(async ({ username }: { username: string }) => {
+      order.push(`user:${username}`);
+      if (username === "alice") { if (userDelay) await userGate; }
+      return { data: { login: username, type: username === "acme" ? "Organization" : "User", avatar_url: "a", name: null, bio: null, company: null, location: null, html_url: "h" } };
+    });
+    const graphql = vi.fn(async () => {
+      order.push("search");
+      if (userDelay) releaseUser();
+      return { search: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } };
+    });
+    const commits = vi.fn(async () => ({ data: { total_count: 0, incomplete_results: false, items: [] } }));
+    return { octokit: { graphql, rest: { search: { commits }, users: { getByUsername } } } as never, order, getByUsername };
+  }
+
+  it("starts the searches while the person lookup is still pending", async () => {
+    const m = octo(1);
+    // The user lookup only resolves once a search has run; the old order deadlocks here.
+    await buildContributorProfile(m.octokit, "acme", "alice", NOW);
+    expect(m.order.indexOf("search")).toBeGreaterThan(-1);
+  });
+
+  it("caches the owner's account type across builds", async () => {
+    const m = octo(0);
+    await buildContributorProfile(m.octokit, "acme", "alice", NOW);
+    await buildContributorProfile(m.octokit, "acme", "bob", NOW);
+    expect(m.getByUsername.mock.calls.filter(([a]) => (a as { username: string }).username === "acme")).toHaveLength(1);
+  });
+
+  it("records one timing per step with page and row counts", async () => {
+    const m = octo(0);
+    const steps: StepTiming[] = [];
+    await buildContributorProfile(m.octokit, "acme", "alice", NOW, steps);
+    expect(steps.map((s) => s.name).sort()).toEqual(["commits", "owner", "prs", "reviews", "user"]);
+    expect(steps.find((s) => s.name === "prs")?.desc).toBe("1 pages, 0 PRs");
+    expect(steps.every((s) => s.ms >= 0)).toBe(true);
+  });
+
+  it("formats Server-Timing and strips quotes from descriptions", () => {
+    expect(serverTiming([{ name: "total", ms: 12.345 }, { name: "cache", ms: 0, desc: 'mi"ss' }])).toBe('total;dur=12.3, cache;dur=0.0;desc="miss"');
   });
 });

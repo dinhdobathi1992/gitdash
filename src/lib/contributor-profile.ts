@@ -13,6 +13,7 @@
  */
 
 import type { getOctokit } from "@/lib/github";
+import { withCache } from "@/lib/cache";
 
 type Octokit = ReturnType<typeof getOctokit>;
 
@@ -303,6 +304,35 @@ export function aggregateContributorProfile(input: ProfileInput, now: Date): Con
   };
 }
 
+// ── Step timing (Server-Timing header) ───────────────────────────────────────
+
+/** One measured step of a profile build: `name;dur=ms;desc="…"` in Server-Timing. */
+export interface StepTiming {
+  name: string;
+  ms: number;
+  desc?: string;
+}
+
+/** Time an async step and record it; the step's result or error passes through unchanged. */
+async function timed<T>(steps: StepTiming[] | undefined, name: string, fn: () => Promise<T>, desc?: (v: T) => string): Promise<T> {
+  const t = performance.now();
+  try {
+    const v = await fn();
+    steps?.push({ name, ms: performance.now() - t, desc: desc?.(v) });
+    return v;
+  } catch (e) {
+    steps?.push({ name, ms: performance.now() - t, desc: "failed" });
+    throw e;
+  }
+}
+
+/** Render steps as a Server-Timing header value (names are fixed identifiers; desc is quoted). */
+export function serverTiming(steps: StepTiming[]): string {
+  return steps
+    .map((s) => `${s.name};dur=${s.ms.toFixed(1)}${s.desc ? `;desc="${s.desc.replace(/["\\]/g, "")}"` : ""}`)
+    .join(", ");
+}
+
 // ── Fetching ─────────────────────────────────────────────────────────────────
 
 /** GraphQL search pages to read (100 PRs each). */
@@ -354,8 +384,9 @@ interface ReviewedNode {
 /** Reads up to `pages` pages of a GraphQL search; returns the PR nodes and whether it stopped short on an error. */
 async function searchPrs<N extends { number: number }>(
   octokit: Octokit, query: string, vars: Record<string, string>, pages: number, counter: { attempted: number; fetched: number },
-): Promise<{ nodes: N[]; failed: boolean }> {
+): Promise<{ nodes: N[]; failed: boolean; pages: number }> {
   const nodes: N[] = [];
+  let read = 0;
   let cursor: string | null = null;
   for (let i = 0; i < pages; i++) {
     counter.attempted++;
@@ -363,14 +394,15 @@ async function searchPrs<N extends { number: number }>(
     try {
       page = await octokit.graphql<SearchPage<N>>(query, { ...vars, cursor });
     } catch {
-      return { nodes, failed: true };
+      return { nodes, failed: true, pages: read };
     }
     counter.fetched++;
+    read++;
     for (const n of page.search.nodes) if ("number" in n) nodes.push(n as N);
     if (!page.search.pageInfo.hasNextPage) break;
     cursor = page.search.pageInfo.endCursor;
   }
-  return { nodes, failed: false };
+  return { nodes, failed: false, pages: read };
 }
 
 /** Commit search: first page for the total, then the remaining pages in parallel. */
@@ -410,25 +442,39 @@ async function searchCommits(
   return { commits, total, failed, incomplete: first.data.incomplete_results };
 }
 
-/** `org:acme` for organizations, `user:alice` for personal accounts. */
+/** How long an owner's account type is remembered; it practically never changes. */
+export const OWNER_TYPE_TTL = 86_400;
+
+/**
+ * `org:acme` for organizations, `user:alice` for personal accounts. Cached in
+ * memory for a day and across users: the account type is public and identical
+ * for every token, so the key and value hold no per-user data. In-memory only —
+ * the shared Postgres layer is opted into from route files, never from libs.
+ */
 async function ownerQualifier(octokit: Octokit, owner: string): Promise<string> {
-  const { data } = await octokit.rest.users.getByUsername({ username: owner });
-  return data.type === "Organization" ? `org:${owner}` : `user:${owner}`;
+  return withCache(`github/owner-qualifier:${owner.toLowerCase()}`, OWNER_TYPE_TTL, async () => {
+    const { data } = await octokit.rest.users.getByUsername({ username: owner });
+    return data.type === "Organization" ? `org:${owner}` : `user:${owner}`;
+  });
 }
 
-export async function buildContributorProfile(octokit: Octokit, owner: string, login: string, now = new Date()): Promise<ContributorProfileResponse> {
+export async function buildContributorProfile(
+  octokit: Octokit, owner: string, login: string, now = new Date(), steps?: StepTiming[],
+): Promise<ContributorProfileResponse> {
   const sinceDate = new Date(now.getTime() - 90 * DAY).toISOString().slice(0, 10);
   const counter = { attempted: 2, fetched: 2 }; // user + owner lookups
 
-  const [userRes, scope] = await Promise.all([
-    octokit.rest.users.getByUsername({ username: login }),
-    ownerQualifier(octokit, owner),
-  ]);
+  // The person's profile is only needed at the end, so it runs alongside the
+  // searches; only the owner qualifier (usually cached) gates them.
+  const userPromise = timed(steps, "user", () => octokit.rest.users.getByUsername({ username: login }));
+  userPromise.catch(() => {}); // awaited below; avoid an unhandled rejection while the searches run
+  const scope = await timed(steps, "owner", () => ownerQualifier(octokit, owner));
 
-  const [authored, reviewed, commits] = await Promise.all([
-    searchPrs<AuthoredNode>(octokit, AUTHORED_QUERY, { q: `type:pr author:${login} ${scope} created:>=${sinceDate} sort:created-desc` }, PR_PAGES, counter),
-    searchPrs<ReviewedNode>(octokit, REVIEWED_QUERY, { q: `type:pr reviewed-by:${login} -author:${login} ${scope} updated:>=${sinceDate} sort:updated-desc`, login }, PR_PAGES, counter),
-    searchCommits(octokit, `author:${login} ${scope} author-date:>=${sinceDate}`, counter),
+  const [userRes, authored, reviewed, commits] = await Promise.all([
+    userPromise,
+    timed(steps, "prs", () => searchPrs<AuthoredNode>(octokit, AUTHORED_QUERY, { q: `type:pr author:${login} ${scope} created:>=${sinceDate} sort:created-desc` }, PR_PAGES, counter), (r) => `${r.pages} pages, ${r.nodes.length} PRs`),
+    timed(steps, "reviews", () => searchPrs<ReviewedNode>(octokit, REVIEWED_QUERY, { q: `type:pr reviewed-by:${login} -author:${login} ${scope} updated:>=${sinceDate} sort:updated-desc`, login }, PR_PAGES, counter), (r) => `${r.pages} pages, ${r.nodes.length} PRs`),
+    timed(steps, "commits", () => searchCommits(octokit, `author:${login} ${scope} author-date:>=${sinceDate}`, counter), (r) => `${r.commits.length} of ${r.total}`),
   ]);
 
   const u = userRes.data;

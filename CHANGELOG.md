@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [Unreleased]
+
+### Changed
+- Contributor profile: the person lookup runs alongside the searches, and the owner's account type
+  (org or user) is cached for a day, so searches no longer wait on either lookup.
+- Contributor profile responses carry a `Server-Timing` header: total time, cache outcome
+  (`hit`, `stale`, `miss`) and, on a miss, each step's duration with page and row counts. Durations only.
+
 ## [4.5.3] - 2026-09-28
 
 Performance and correctness release for the contributor profile. Notes:
