@@ -132,6 +132,7 @@ describe("METRIC_LABELS", () => {
     "afterhours_commit_pct",
     "pr_abandon_rate",
     "unreviewed_pr_age",
+    "oversized_commit_pct",
   ];
 
   it("has labels for all supported metrics", () => {
@@ -216,6 +217,15 @@ describe("deliverLeadershipDigestEmail — HTML escaping", () => {
     expect(body.html).not.toContain("AI summary");
     expect(body.text).not.toContain("AI summary");
   });
+
+  it("renders the working-habits line, escaped, only when supplied", async () => {
+    const withLine = await capture({ ...base, workingHabitsLine: "Working habits: 30% of <10> commits" });
+    expect(withLine.html).toContain("Working habits: 30% of &lt;10&gt; commits");
+    expect(withLine.text).toContain("Working habits: 30% of <10> commits");
+    const without = await capture(base);
+    expect(without.html).not.toContain("Working habits");
+    expect(without.text).not.toContain("Working habits");
+  });
 });
 
 // ── isAllowedSlackWebhook ─────────────────────────────────────────────────────
@@ -281,6 +291,17 @@ describe("deliverLeadershipDigestSlack", () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     const [calledUrl] = vi.mocked(fetch).mock.calls[0];
     expect(calledUrl).toBe(VALID_URL);
+  });
+
+  it("adds the working-habits line as its own section when supplied", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("ok", { status: 200 }));
+    const { deliverLeadershipDigestSlack } = await import("../src/lib/notifier");
+    await deliverLeadershipDigestSlack(VALID_URL, { ...narrative, workingHabitsLine: "Working habits: 12% of 40 commits" });
+    const sent = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+    expect(JSON.stringify(sent.blocks)).toContain("Working habits: 12% of 40 commits");
+    await deliverLeadershipDigestSlack(VALID_URL, narrative);
+    const plain = JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string);
+    expect(JSON.stringify(plain.blocks)).not.toContain("Working habits");
   });
 
   it("returns ok:false when webhook returns non-200", async () => {

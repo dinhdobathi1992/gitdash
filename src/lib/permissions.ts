@@ -121,6 +121,9 @@ export const REGISTRY: Rule[] = [
   ...BASE_GITHUB_ROUTES.map((r): Rule => ({ pattern: `/api/github/${r}`, access: "base" })),
   { pattern: "/api/db/runs", access: "base" },
   { pattern: "/api/db/trends", access: "base" },
+  // Base because engineers may read their own numbers; the handler requires
+  // the workingHabits grant for anyone else's.
+  { pattern: "/api/db/working-habits", access: "base" },
   { pattern: "/api/ai/status", access: "base" },
   { pattern: "/api/demo", access: "base" },
 ];

@@ -61,6 +61,7 @@
 | **Delivery metrics** | DORA four keys per repository (from releases, or estimated from merged pull requests), with cycle-time, size-vs-velocity, throughput and stability drill-downs. |
 | **Workflow intelligence** | Per workflow: why it fails, where the time goes, slowest jobs and steps, flaky branches, anomaly detection, triggers and concrete ways to speed it up. |
 | **Pull requests & people** | Review speed and rounds, stale PRs, reviewer load, bus factor, workload risk, contributor profiles and a printable 1:1 prep sheet. |
+| **Working habits** | Per engineer: share of oversized commits (over 10 files or 200 lines) and pull requests with more than 20 commits, measured inside merged pull requests so squash merges read correctly. Limits are editable; engineers always see their own figures. Needs a database. |
 | **Cost** | GitHub Actions spend by day, runner type and repository, with savings estimates. |
 | **Alerts** | Rules on CI and people metrics, delivered in the browser, by email (optionally a daily digest) or to Slack, plus a weekly leadership digest. |
 | **Security** | GitHub security alerts per repository and static analysis of workflow files. |
@@ -190,7 +191,7 @@ Browser ── /api/* ──► src/proxy.ts ──► route handler ──► G
                 /login, /setup, /pending            JSON for the page
 ```
 
-Almost everything is read live from GitHub with the signed-in person's own token. With a database, GitDash also keeps its own history for Reports and alerts: a nightly sync (`/api/cron/sync`, `/api/cron/sync-pr-facts`) and the `workflow_run` webhook (`/api/webhooks/github`).
+Almost everything is read live from GitHub with the signed-in person's own token. With a database, GitDash also keeps its own history for Reports and alerts: a nightly sync (`/api/cron/sync`, `/api/cron/sync-pr-facts`, `/api/cron/sync-commit-facts`) and the `workflow_run` webhook (`/api/webhooks/github`).
 
 | Path | What lives there |
 | --- | --- |

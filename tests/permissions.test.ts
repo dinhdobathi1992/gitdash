@@ -34,6 +34,7 @@ describe("classify", () => {
       ["/api/github/create-issue", "POST", "flag:githubIssueFromAnomaly"],
       ["/api/github/repos", "GET", "base"],
       ["/api/db/runs", "GET", "base"],
+      ["/api/db/working-habits", "GET", "base"],
       ["/", "GET", "base"],
       ["/repos/acme/web", "GET", "base"],
       ["/api/nope", "GET", "unregistered"],

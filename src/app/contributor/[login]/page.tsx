@@ -10,6 +10,9 @@ import { ContributorKpiCards, ContributorKpiSkeleton } from "@/components/Contri
 import { ContributorActivityHeatmap } from "@/components/ContributorActivityHeatmap";
 import { ContributorPrFunnel } from "@/components/ContributorPrFunnel";
 import PartialDataBadge from "@/components/PartialDataBadge";
+import { WorkingHabitsPanel } from "@/components/WorkingHabitsPanel";
+import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
+import { useAuth } from "@/components/AuthProvider";
 import type { ContributorProfileResponse } from "@/app/api/github/contributor-profile/route";
 import {
   AlertCircle, ExternalLink, MapPin, Building2, ChevronRight,
@@ -260,6 +263,11 @@ export default function ContributorProfilePage() {
   const searchParams = useSearchParams();
   const owner = searchParams.get("owner") ?? "";
   const [showPrs, setShowPrs] = useState(false);
+  const { flags } = useFeatureFlags();
+  const { user } = useAuth();
+  // Engineers always see their own working habits; anyone else's needs the grant.
+  const isSelf = !!user && !!login && user.login.toLowerCase() === login.toLowerCase();
+  const showWorkingHabits = flags.workingHabits || isSelf;
 
   const { data, error, isLoading } = useSWR<ContributorProfileResponse>(
     owner && login
@@ -451,6 +459,8 @@ export default function ContributorProfilePage() {
               <LanguageList languages={data.languages} />
             </SectionCard>
           </div>
+
+          {showWorkingHabits && <WorkingHabitsPanel variant="profile" owner={owner} login={data.login} />}
 
           {/* Recent PRs */}
           <div>

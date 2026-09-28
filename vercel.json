@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/sync-pr-facts",
       "schedule": "17 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-commit-facts",
+      "schedule": "47 4 * * *"
     }
   ]
 }

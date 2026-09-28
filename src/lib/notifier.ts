@@ -36,6 +36,7 @@ export const METRIC_LABELS: Record<string, { label: string; unit: string }> = {
   pr_throughput_drop:     { label: "PR Throughput Drop",    unit: "%" },
   review_response_p90:    { label: "Review Response P90",   unit: " hrs" },
   afterhours_commit_pct:  { label: "After-Hours Commits",   unit: "%" },
+  oversized_commit_pct:   { label: "Oversized Commits",     unit: "%" },
   pr_abandon_rate:        { label: "PR Abandon Rate",       unit: "%" },
   unreviewed_pr_age:      { label: "Unreviewed PR Age",     unit: " days" },
   anomaly_count:          { label: "Statistical Anomalies", unit: " runs" },
@@ -420,6 +421,11 @@ export interface LeadershipDigestEmailInput {
    * configured or the generation failed — the digest sends regardless.
    */
   aiSummary?: string;
+  /**
+   * Optional working-habits totals (no names). Absent when there is no data
+   * or computing it failed — the digest sends regardless.
+   */
+  workingHabitsLine?: string;
 }
 
 export async function deliverLeadershipDigestEmail(
@@ -446,6 +452,7 @@ export async function deliverLeadershipDigestEmail(
     ${listHtml(narrative.highlights)}
     <h3>Needs attention</h3>
     ${listHtml(narrative.concerns)}
+    ${narrative.workingHabitsLine ? `<p>${escapeHtml(narrative.workingHabitsLine)}</p>` : ""}
     <hr/>
     <p style="color:#888;font-size:12px">Sent by GitDash. To stop receiving this, delete the Weekly Leadership Digest rule in the Alerts page.</p>
   `;
@@ -455,7 +462,8 @@ export async function deliverLeadershipDigestEmail(
   const text =
     `GitDash Weekly Leadership Digest\n\n${aiText}${narrative.summary_line}\n\n` +
     `Highlights:\n${narrative.highlights.length ? narrative.highlights.map((i) => `- ${i}`).join("\n") : "None this week."}\n\n` +
-    `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}`;
+    `Needs attention:\n${narrative.concerns.length ? narrative.concerns.map((i) => `- ${i}`).join("\n") : "None this week."}` +
+    (narrative.workingHabitsLine ? `\n\n${narrative.workingHabitsLine}` : "");
 
   return sendEmail(to, narrative.subject, html, text);
 }
@@ -514,6 +522,9 @@ export async function deliverLeadershipDigestSlack(
       type: "section",
       text: { type: "mrkdwn", text: `*Needs attention*\n${concernText}` },
     },
+    ...(narrative.workingHabitsLine
+      ? [{ type: "section", text: { type: "mrkdwn", text: narrative.workingHabitsLine } }]
+      : []),
     {
       type: "context",
       elements: [{ type: "mrkdwn", text: "Sent by GitDash. To stop receiving this, delete the Weekly Leadership Digest rule in the Alerts page." }],

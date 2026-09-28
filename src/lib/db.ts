@@ -8,6 +8,7 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { buildPayload, dispatchAlert, METRIC_LABELS as _METRIC_LABELS } from "./notifier";
 import { detectAnomalies } from "./anomaly";
+import type { WhPrRow, WhCommitRow } from "./working-habits";
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,9 @@ export interface DbPrFact {
   review_count: number | null;
   state: string | null;
   synced_at: string;
+  commit_count: number | null;
+  changed_files: number | null;
+  commits_synced_at: string | null;
 }
 
 export interface RunUpsertRow {
@@ -197,6 +201,9 @@ export interface PrFactUpsertRow {
   deletions: number | null;
   review_count: number | null;
   state: string | null;
+  /** All commits in the PR, merges included (REST `pulls.get`). */
+  commit_count: number | null;
+  changed_files: number | null;
 }
 
 // ── Versioned migrations ───────────────────────────────────────────────────────
@@ -426,6 +433,44 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
       `CREATE INDEX IF NOT EXISTS idx_perm_audit_created ON permission_audit(created_at DESC)`,
     ],
   },
+  {
+    // Working habits: commit and PR size per engineer. Commits are measured
+    // inside each merged PR (a squash merge would otherwise show one giant
+    // commit on main). commit_count/changed_files are owned by the REST PR
+    // sync; the commit sync only fills commit_count when it is still NULL.
+    version: 10,
+    name: "working_habits",
+    up: [
+      `ALTER TABLE pr_facts ADD COLUMN IF NOT EXISTS commit_count INT`,
+      `ALTER TABLE pr_facts ADD COLUMN IF NOT EXISTS changed_files INT`,
+      `ALTER TABLE pr_facts ADD COLUMN IF NOT EXISTS commits_synced_at TIMESTAMPTZ`,
+      `CREATE INDEX IF NOT EXISTS idx_prf_commits_pending ON pr_facts(repo, merged_at)
+        WHERE merged_at IS NOT NULL AND commits_synced_at IS NULL`,
+      `CREATE TABLE IF NOT EXISTS pr_commit_facts (
+        repo          VARCHAR(300) NOT NULL,
+        sha           VARCHAR(40)  NOT NULL,
+        pr_number     INT NOT NULL,
+        author        VARCHAR(100),
+        author_linked BOOLEAN NOT NULL,
+        files         INT,
+        additions     INT NOT NULL,
+        deletions     INT NOT NULL,
+        is_merge      BOOLEAN NOT NULL,
+        committed_at  TIMESTAMPTZ,
+        PRIMARY KEY (repo, sha)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pcf_pr ON pr_commit_facts(repo, pr_number)`,
+      `CREATE INDEX IF NOT EXISTS idx_pcf_author ON pr_commit_facts(repo, author)`,
+      `CREATE TABLE IF NOT EXISTS working_habits_settings (
+        id               INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        max_commit_files INT NOT NULL DEFAULT 10,
+        max_commit_lines INT NOT NULL DEFAULT 200,
+        max_pr_commits   INT NOT NULL DEFAULT 20,
+        updated_by       VARCHAR(100),
+        updated_at       TIMESTAMPTZ DEFAULT NOW()
+      )`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -549,11 +594,12 @@ export async function upsertPrFacts(rows: PrFactUpsertRow[]): Promise<number> {
       (r) => db`
         INSERT INTO pr_facts
           (repo, pr_number, author, created_at, merged_at, closed_at,
-           first_review_at, approved_at, additions, deletions, review_count, state)
+           first_review_at, approved_at, additions, deletions, review_count, state,
+           commit_count, changed_files)
         VALUES (
           ${r.repo}, ${r.pr_number}, ${r.author}, ${r.created_at}, ${r.merged_at},
           ${r.closed_at}, ${r.first_review_at}, ${r.approved_at}, ${r.additions},
-          ${r.deletions}, ${r.review_count}, ${r.state}
+          ${r.deletions}, ${r.review_count}, ${r.state}, ${r.commit_count}, ${r.changed_files}
         )
         ON CONFLICT (repo, pr_number) DO UPDATE SET
           author          = EXCLUDED.author,
@@ -565,6 +611,8 @@ export async function upsertPrFacts(rows: PrFactUpsertRow[]): Promise<number> {
           deletions       = EXCLUDED.deletions,
           review_count    = EXCLUDED.review_count,
           state           = EXCLUDED.state,
+          commit_count    = COALESCE(EXCLUDED.commit_count, pr_facts.commit_count),
+          changed_files   = COALESCE(EXCLUDED.changed_files, pr_facts.changed_files),
           synced_at       = NOW()
       `
     )
@@ -585,6 +633,181 @@ export async function getPrFactCount(repo: string): Promise<number> {
     SELECT COUNT(*)::int AS cnt FROM pr_facts WHERE repo = ${repo}
   ` as { cnt: number }[];
   return rows[0]?.cnt ?? 0;
+}
+
+// ── PR commit facts (working habits) ─────────────────────────────────────────
+
+export interface PrCommitFactRow {
+  repo: string;
+  sha: string;
+  pr_number: number;
+  /** Linked GitHub login, else the PR author. */
+  author: string | null;
+  /** False when the commit was credited to the PR author (email not linked to GitHub). */
+  author_linked: boolean;
+  /** Null when GitHub cannot compute it (very large commits). */
+  files: number | null;
+  additions: number;
+  deletions: number;
+  is_merge: boolean;
+  committed_at: string | null;
+}
+
+export interface PrNeedingCommitSync {
+  pr_number: number;
+  author: string | null;
+  merged_at: string;
+}
+
+/**
+ * Merged PRs in the window whose commits have not been stored yet, oldest
+ * merge first. Order matters: a commit shared by stacked PRs is claimed by
+ * the first PR stored (ON CONFLICT DO NOTHING), i.e. the PR that introduced it.
+ */
+export async function listPrsNeedingCommitSync(
+  repo: string,
+  since: Date,
+  limit = 200,
+): Promise<PrNeedingCommitSync[]> {
+  await ensureSchema();
+  return await getDb()`
+    SELECT pr_number, author, merged_at FROM pr_facts
+    WHERE repo = ${repo} AND merged_at IS NOT NULL AND commits_synced_at IS NULL
+      AND merged_at >= ${since.toISOString()}
+    ORDER BY merged_at ASC, pr_number ASC
+    LIMIT ${limit}
+  ` as PrNeedingCommitSync[];
+}
+
+/** Multi-row insert; a (repo, sha) already stored keeps its first PR. */
+export async function upsertPrCommitFacts(rows: PrCommitFactRow[]): Promise<number> {
+  if (!rows.length) return 0;
+  await ensureSchema();
+  const col = <K extends keyof PrCommitFactRow>(k: K) => rows.map((r) => r[k]);
+  const result = await getDb()`
+    INSERT INTO pr_commit_facts
+      (repo, sha, pr_number, author, author_linked, files, additions, deletions, is_merge, committed_at)
+    SELECT * FROM unnest(
+      ${col("repo")}::varchar[], ${col("sha")}::varchar[], ${col("pr_number")}::int[],
+      ${col("author")}::varchar[], ${col("author_linked")}::boolean[], ${col("files")}::int[],
+      ${col("additions")}::int[], ${col("deletions")}::int[], ${col("is_merge")}::boolean[],
+      ${col("committed_at")}::timestamptz[]
+    )
+    ON CONFLICT (repo, sha) DO NOTHING
+    RETURNING sha
+  ` as { sha: string }[];
+  return result.length;
+}
+
+/**
+ * Mark PRs' commits as stored, in one statement. commit_count belongs to the
+ * REST PR sync; GraphQL's totalCount only fills it for rows synced before
+ * that column existed.
+ */
+export async function markPrCommitsSynced(
+  repo: string,
+  prs: { pr_number: number; total_count: number }[],
+): Promise<void> {
+  if (!prs.length) return;
+  await ensureSchema();
+  await getDb()`
+    UPDATE pr_facts AS p
+    SET commits_synced_at = NOW(), commit_count = COALESCE(p.commit_count, s.total_count)
+    FROM unnest(${prs.map((x) => x.pr_number)}::int[], ${prs.map((x) => x.total_count)}::int[])
+      AS s(pr_number, total_count)
+    WHERE p.repo = ${repo} AND p.pr_number = s.pr_number
+  `;
+}
+
+/**
+ * Merged PRs of `repos` with merged_at in [from, to), and the non-merge
+ * commits inside them. `login` narrows the commits (case-insensitive); PRs are
+ * always returned for the whole scope because they also measure sync coverage.
+ * Timestamps come back as ISO strings whatever the driver returns.
+ */
+export async function getWorkingHabitsRows(
+  repos: string[],
+  from: Date,
+  to: Date,
+  login: string | null = null,
+): Promise<{ prs: WhPrRow[]; commits: WhCommitRow[] }> {
+  if (!repos.length) return { prs: [], commits: [] };
+  await ensureSchema();
+  const db = getDb();
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+  const [prs, commits] = (await Promise.all([
+    db`
+      SELECT repo, pr_number, author, merged_at, commit_count, commits_synced_at
+      FROM pr_facts
+      WHERE repo = ANY(${repos}::varchar[]) AND merged_at >= ${fromIso} AND merged_at < ${toIso}
+    `,
+    db`
+      SELECT c.repo, c.sha, c.pr_number, c.author, c.author_linked, c.files, c.additions, c.deletions, c.committed_at
+      FROM pr_commit_facts c
+      JOIN pr_facts p ON p.repo = c.repo AND p.pr_number = c.pr_number
+      WHERE p.repo = ANY(${repos}::varchar[]) AND p.merged_at >= ${fromIso} AND p.merged_at < ${toIso}
+        AND NOT c.is_merge
+        AND (${login}::text IS NULL OR lower(c.author) = lower(${login}::text))
+    `,
+  ])) as [WhPrRow[], WhCommitRow[]];
+  const iso = (v: unknown) => (v === null || v === undefined ? null : new Date(v as string).toISOString());
+  return {
+    prs: prs.map((p) => ({ ...p, merged_at: iso(p.merged_at)!, commits_synced_at: iso(p.commits_synced_at) })),
+    commits: commits.map((c) => ({ ...c, committed_at: iso(c.committed_at) })),
+  };
+}
+
+/** Latest commit sync among `repos`' PRs; null when none has run. */
+export async function getLatestCommitSyncAt(repos: string[]): Promise<Date | null> {
+  if (!repos.length) return null;
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT MAX(commits_synced_at) AS latest FROM pr_facts WHERE repo = ANY(${repos}::varchar[])
+  `) as { latest: string | Date | null }[];
+  return rows[0]?.latest ? new Date(rows[0].latest) : null;
+}
+
+// ── Working habits thresholds (organization mode only) ───────────────────────
+
+export interface DbWorkingHabitsSettings {
+  max_commit_files: number;
+  max_commit_lines: number;
+  max_pr_commits: number;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+/** Null when no row exists — callers then use the defaults. */
+export async function getWorkingHabitsSettings(): Promise<DbWorkingHabitsSettings | null> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT max_commit_files, max_commit_lines, max_pr_commits, updated_by, updated_at
+    FROM working_habits_settings WHERE id = 1
+  `) as DbWorkingHabitsSettings[];
+  return rows[0] ?? null;
+}
+
+export async function saveWorkingHabitsSettings(input: {
+  max_commit_files: number;
+  max_commit_lines: number;
+  max_pr_commits: number;
+  updated_by: string | null;
+}): Promise<void> {
+  await ensureSchema();
+  await getDb()`
+    INSERT INTO working_habits_settings
+      (id, max_commit_files, max_commit_lines, max_pr_commits, updated_by, updated_at)
+    VALUES
+      (1, ${input.max_commit_files}, ${input.max_commit_lines}, ${input.max_pr_commits},
+       ${input.updated_by}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      max_commit_files = EXCLUDED.max_commit_files,
+      max_commit_lines = EXCLUDED.max_commit_lines,
+      max_pr_commits   = EXCLUDED.max_pr_commits,
+      updated_by       = EXCLUDED.updated_by,
+      updated_at       = NOW()
+  `;
 }
 
 // ── Sync cursor ───────────────────────────────────────────────────────────────
@@ -908,11 +1131,23 @@ export async function updateAlertEventDeliveryStatus(
 // ── Alert rule evaluation ─────────────────────────────────────────────────────
 
 /**
+ * Metrics computed from pr_commit_facts. They are evaluated by the
+ * /api/cron/sync-commit-facts cron right after that repo's commit sync (with
+ * `only`), never by the default call from the 03:17 run sync, which would
+ * see the previous night's data.
+ */
+export const COMMIT_FACT_METRICS = ["oversized_commit_pct"];
+
+/**
  * Evaluates all enabled, non-muted alert rules for `repoKey`.
  * People-based metrics now use the pr_facts table instead of workflow_runs proxies.
- * Returns the number of new events fired.
+ * `only` restricts evaluation to those metrics; without it, COMMIT_FACT_METRICS
+ * are skipped. Returns the number of new events fired.
  */
-export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number> {
+export async function evaluateAlertRulesForRepo(
+  repoKey: string,
+  opts: { only?: string[] } = {},
+): Promise<number> {
   await ensureSchema();
 
   const parts = repoKey.split("/");
@@ -932,7 +1167,8 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
         AND metric != 'leadership_digest'
         AND (muted_until IS NULL OR muted_until < NOW())
     ` as DbAlertRule[];
-    rules.push(...r);
+    rules.push(...r.filter((rule) =>
+      opts.only ? opts.only.includes(rule.metric) : !COMMIT_FACT_METRICS.includes(rule.metric)));
   }
 
   if (!rules.length) return 0;
@@ -1114,6 +1350,20 @@ export async function evaluateAlertRulesForRepo(repoKey: string): Promise<number
       ` as { max_age_days: number | null; total: number }[];
       sampleSize = rows[0]?.total ?? 0;
       value = rows[0]?.max_age_days ?? null;
+      }
+
+    } else if (rule.metric === "oversized_commit_pct") {
+      // Same calculation as the Team insights page (src/lib/working-habits.ts).
+      // Fires only on a fully analysed window with enough commits to mean something.
+      if (!prBackfillComplete) { /* value remains null — skip silently */ } else {
+      const { computeWorkingHabits, ALERT_MIN_COMMITS } = await import("./working-habits");
+      const to = new Date();
+      const from = new Date(to.getTime() - rule.window_hours * 3_600_000);
+      const wh = await computeWorkingHabits({ repos: [repoKey], from, to });
+      if (wh.coverage.complete && wh.totals.commits >= ALERT_MIN_COMMITS) {
+        sampleSize = wh.totals.commits;
+        value = Math.round((wh.totals.oversizedCommits / wh.totals.commits) * 100);
+      }
       }
 
     } else if (rule.metric === "anomaly_count") {

@@ -40,6 +40,7 @@ export const METRIC_COPY: Record<string, { name: string; unit: string; kind: Ale
   unreviewed_pr_age: { name: "Unreviewed pull request age", unit: " days", kind: "review" },
   pr_abandon_rate: { name: "Pull request abandon rate", unit: "%", kind: "review" },
   afterhours_commit_pct: { name: "After-hours commits", unit: "%", kind: "people" },
+  oversized_commit_pct: { name: "Oversized commits", unit: "%", kind: "people" },
   leadership_digest: { name: "Weekly leadership digest", unit: "", kind: "digest" },
 };
 
