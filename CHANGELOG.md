@@ -7,6 +7,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+## [4.6.1] - 2026-09-29
+
+Nightly pull-request sync fix. Notes:
+[`docs/releases/v4.6.1.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.6.1.md).
+Helm chart 0.7.4 / appVersion 4.6.1. Adds database migration v11.
+
+### Fixed
+- **`/api/cron/sync-pr-facts` could time out every night and never finish.** It had no deadline, so
+  with many synced repositories Vercel killed it at 300 s. It now stops starting new pages at 240 s.
+- **A cut-short or page-capped backfill restarted at page 1 every run**, so repositories with more than
+  1,000 pull requests never completed. The next page is now saved after each page (migration v11,
+  `sync_cursors.pr_backfill_page`) and the next run continues there.
+- **Every run re-fetched every pull request.** The stored cursor was the oldest pull request seen, so
+  the "stop at already-synced" check never fired. It is now a high-water mark: after the backfill,
+  only pull requests updated since the last run get the two detail calls. Migration v11 moves existing
+  complete repositories' cursor to two days ago, so their first run re-reads only recent changes.
+- Repositories with a complete backfill are synced first, so a long backfill cannot starve them.
+
+### Changed
+- Working habits, owner view: when none of the owner's repositories is synced, the panel says so
+  instead of "No merged pull requests in this window".
+
 ## [4.6.0] - 2026-09-29
 
 Working habits: commit and pull-request size per engineer. Notes:
