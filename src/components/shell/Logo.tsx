@@ -19,4 +19,4 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
 }
 
 /** Full app version, e.g. "4.5.1" — injected from package.json at build time (next.config.ts). */
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.2";
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "4.5.3";

@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [4.5.3] - 2026-09-28
+
+Performance and correctness release for the contributor profile. Notes:
+[`docs/releases/v4.5.3.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.5.3.md).
+Helm chart 0.7.2 / appVersion 4.5.3.
+
+### Changed
+- **Contributor profile is ~5× faster.** Built from three parallel GitHub searches (authored pull
+  requests with sizes and reviews, reviews given, commits) instead of walking up to 30 repositories:
+  measured 17.4 s → 3.5 s cold and 227 → 6 GitHub requests for the same person.
+- **Stale-while-revalidate cache option** (`withCache(..., { staleSeconds })`): after the TTL, the old
+  value is served at once while one background refresh (registered with Next `after()`) replaces it.
+  Contributor profiles use a 30-minute TTL with a 6-hour stale window; Refresh bypasses both.
+
+### Fixed
+- Contributor profile undercounted pull requests and reviews (only each repo's 30 latest closed PRs were
+  scanned), always showed an average PR size of 0, and its funnel's "reviewed"/"approved" steps were
+  always 0 (they counted the person's reviews of their own PRs).
+
 ## [4.5.2] - 2026-09-27
 
 Documentation release — no application behaviour changes. Notes:

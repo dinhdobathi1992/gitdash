@@ -7,10 +7,28 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.5.2",
-      date: "2026-09-27",
+      version: "4.5.3",
+      date: "2026-09-28",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Server cache can serve the last result while it refreshes in the background, so an expired entry no longer makes the next visitor wait",
+        ],
+        fixed: [
+          "Contributor profiles undercounted pull requests and reviews — only each repository's 30 most recently closed pull requests were scanned",
+          "Average pull request size on the contributor profile was always 0",
+          "The profile funnel's reviewed and approved steps were always 0; they now count reviews other people left on the person's pull requests",
+        ],
+        improved: [
+          "Contributor profiles load about 5× faster: three parallel GitHub searches instead of walking up to 30 repositories (measured 17.4 s → 3.5 s cold, 227 → 6 GitHub requests)",
+          "Contributor profiles stay cached for 30 minutes and are refreshed in the background for up to 6 hours after that; Refresh always fetches fresh data",
+        ],
+      },
+    },
+    {
+      version: "4.5.2",
+      date: "2026-09-27",
       changes: {
         added: [
           "Quick start, Access control and Caching & rate limits sections in these docs",
