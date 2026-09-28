@@ -7,11 +7,14 @@
  */
 
 import { createHash } from "crypto";
+import { after } from "next/server";
 import { l2Get, l2Set, l2Delete } from "./cache-l2";
 
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
+  /** Past expiresAt but before this, withCache may serve the value while refreshing. */
+  staleUntil: number;
 }
 
 const store = new Map<string, CacheEntry<unknown>>();
@@ -48,6 +51,19 @@ export function cacheGet<T>(key: string): T | undefined {
   const entry = store.get(key) as CacheEntry<T> | undefined;
   if (!entry) return undefined;
   if (Date.now() > entry.expiresAt) {
+    if (Date.now() > entry.staleUntil) store.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+/** Value past its TTL but inside its stale window, else undefined. Expired-beyond-stale entries are dropped. */
+function cacheGetStale<T>(key: string): T | undefined {
+  const entry = store.get(key) as CacheEntry<T> | undefined;
+  if (!entry) return undefined;
+  const now = Date.now();
+  if (now <= entry.expiresAt) return undefined;
+  if (now > entry.staleUntil) {
     store.delete(key);
     return undefined;
   }
@@ -57,12 +73,12 @@ export function cacheGet<T>(key: string): T | undefined {
 /**
  * Set a cache entry with an explicit TTL in seconds.
  */
-export function cacheSet<T>(key: string, value: T, ttlSeconds: number): void {
+export function cacheSet<T>(key: string, value: T, ttlSeconds: number, staleSeconds = 0): void {
   if (store.size >= MAX_ENTRIES && !store.has(key)) {
     // Sweep expired entries first
     const now = Date.now();
     for (const [k, entry] of store.entries()) {
-      if (now > entry.expiresAt) store.delete(k);
+      if (now > entry.staleUntil) store.delete(k);
     }
     // Still over? Evict oldest (Map preserves insertion order)
     while (store.size >= MAX_ENTRIES) {
@@ -71,7 +87,8 @@ export function cacheSet<T>(key: string, value: T, ttlSeconds: number): void {
       store.delete(oldest);
     }
   }
-  store.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+  const expiresAt = Date.now() + ttlSeconds * 1000;
+  store.set(key, { value, expiresAt, staleUntil: expiresAt + staleSeconds * 1000 });
 }
 
 /**
@@ -121,6 +138,27 @@ export interface WithCacheOptions<T> {
    * secrets or AI output, which would be stored as plaintext.
    */
   shared?: boolean;
+  /**
+   * Stale-while-revalidate window in seconds after the TTL. Inside it, callers
+   * get the old value immediately and one background refresh replaces it, so
+   * nobody waits for a slow rebuild just because the TTL ran out. Only for
+   * data where a few minutes of staleness is harmless — never permissions.
+   */
+  staleSeconds?: number;
+}
+
+/**
+ * Keep a background refresh alive after the response is sent. On serverless
+ * platforms work not registered with after() can be frozen; outside a request
+ * scope (tests, scripts) after() throws and the promise simply runs on.
+ */
+function runInBackground(p: Promise<unknown>): void {
+  const settled = p.catch((e) => console.warn("[cache] background refresh failed:", (e as Error)?.message ?? e));
+  try {
+    after(() => settled);
+  } catch {
+    /* no request scope */
+  }
 }
 
 /**
@@ -144,6 +182,14 @@ export async function withCache<T>(
   if (!opts.refresh) {
     const cached = cacheGet<T>(key);
     if (cached !== undefined) return cached;
+    if (opts.staleSeconds) {
+      const stale = cacheGetStale<T>(key);
+      if (stale !== undefined) {
+        // Serve now; refresh once (joins an in-flight run if one exists).
+        if (!inflight.has(key)) runInBackground(withCache(key, ttlSeconds, factory, { ...opts, refresh: true }));
+        return stale;
+      }
+    }
   }
 
   const existing = inflight.get(key);
@@ -160,7 +206,7 @@ export async function withCache<T>(
       if (opts.shared && !opts.refresh) {
         const hit = await l2Get<T>(key);
         if (hit) {
-          if (!superseded()) cacheSet(key, hit.value, hit.ttlSeconds);
+          if (!superseded()) cacheSet(key, hit.value, hit.ttlSeconds, opts.staleSeconds);
           return hit.value;
         }
       }
@@ -169,7 +215,7 @@ export async function withCache<T>(
       const ttl = opts.ttlFor ? opts.ttlFor(value) : ttlSeconds;
       const storable = ttl > 0 && (!opts.shouldCache || opts.shouldCache(value));
       if (storable) {
-        cacheSet(key, value, ttl);
+        cacheSet(key, value, ttl, opts.staleSeconds);
         // Awaited (bounded by the L2 timeout) so a later delete/overwrite from
         // this instance can never be overtaken by this write.
         if (opts.shared) await l2Set(key, value, ttl);
@@ -205,7 +251,7 @@ export function cacheStats(): { size: number; keys: string[] } {
   const now = Date.now();
   // Purge expired before reporting
   for (const [key, entry] of store.entries()) {
-    if (now > entry.expiresAt) store.delete(key);
+    if (now > entry.staleUntil) store.delete(key);
   }
   return { size: store.size, keys: Array.from(store.keys()) };
 }

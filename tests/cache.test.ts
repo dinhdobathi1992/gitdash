@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   withCache,
   cacheGet,
@@ -195,5 +195,70 @@ describe("withCache in-flight rules", () => {
     await expect(a).rejects.toThrow("fail");
     await expect(b).rejects.toThrow("fail");
     expect(await withCache("if:4", 60, async () => 2)).toBe(2);
+  });
+});
+
+describe("withCache staleSeconds (stale-while-revalidate)", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("serves the stale value at once and refreshes it once in the background", async () => {
+    const t0 = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(t0);
+    let n = 0;
+    const factory = async () => ++n;
+    expect(await withCache("t:swr", 60, factory, { staleSeconds: 600 })).toBe(1);
+
+    spy.mockReturnValue(t0 + 61_000); // past TTL, inside the stale window
+    const [a, b] = await Promise.all([
+      withCache("t:swr", 60, factory, { staleSeconds: 600 }),
+      withCache("t:swr", 60, factory, { staleSeconds: 600 }),
+    ]);
+    expect([a, b]).toEqual([1, 1]); // nobody waited for the rebuild
+    await settle();
+    expect(n).toBe(2); // exactly one background refresh
+    expect(await withCache("t:swr", 60, factory, { staleSeconds: 600 })).toBe(2);
+    spy.mockRestore();
+  });
+
+  it("recomputes synchronously once the stale window has passed", async () => {
+    const t0 = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(t0);
+    let n = 0;
+    const factory = async () => ++n;
+    await withCache("t:swr-old", 60, factory, { staleSeconds: 60 });
+    spy.mockReturnValue(t0 + 121_000);
+    expect(await withCache("t:swr-old", 60, factory, { staleSeconds: 60 })).toBe(2);
+    spy.mockRestore();
+  });
+
+  it("keeps serving the stale value when the background refresh fails", async () => {
+    const t0 = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(t0);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let fail = false;
+    const factory = async () => {
+      if (fail) throw new Error("GitHub down");
+      return "good";
+    };
+    await withCache("t:swr-fail", 60, factory, { staleSeconds: 600 });
+    fail = true;
+    spy.mockReturnValue(t0 + 61_000);
+    expect(await withCache("t:swr-fail", 60, factory, { staleSeconds: 600 })).toBe("good");
+    await settle();
+    expect(await withCache("t:swr-fail", 60, factory, { staleSeconds: 600 })).toBe("good");
+    expect(warn).toHaveBeenCalled();
+    spy.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("without staleSeconds an expired value is never served", async () => {
+    const t0 = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(t0);
+    let n = 0;
+    const factory = async () => ++n;
+    await withCache("t:no-swr", 60, factory);
+    spy.mockReturnValue(t0 + 61_000);
+    expect(await withCache("t:no-swr", 60, factory)).toBe(2);
+    spy.mockRestore();
   });
 });
