@@ -10,16 +10,24 @@
  * Identity: GITHUB_TOKEN service identity (same as run-sync cron).
  * Iterates listSyncedRepos() — only repos with Actions-run history get
  * PR-facts synced. New repos are enrolled by the run-sync cron, not here.
+ *
+ * Stops starting new pages at 240 s (maxDuration is 300 s); a repo cut short
+ * resumes at its saved page on the next run. Repos whose backfill is complete
+ * go first — their incremental runs are cheap and keep alerts fresh — then
+ * the ones still backfilling.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getOctokit } from "@/lib/github";
 import { fetchAndUpsertPrFacts, type PrFactsSyncResult } from "@/lib/sync";
-import { listSyncedRepos } from "@/lib/db";
+import { getPrSyncCursor, listSyncedRepos } from "@/lib/db";
 import { pLimitSettled } from "@/lib/concurrency";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
 
 export const maxDuration = 300;
+
+/** Stop starting new pages after this, leaving headroom before maxDuration. */
+const WORK_BUDGET_MS = 240_000;
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -37,13 +45,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "GITHUB_TOKEN not set" }, { status: 500 });
   }
 
+  const deadline = Date.now() + WORK_BUDGET_MS;
   const octokit = getOctokit(process.env.GITHUB_TOKEN);
-  const tracked = await listSyncedRepos();
+  const repos = await listSyncedRepos();
+  const complete = await Promise.all(repos.map(async (r) => (await getPrSyncCursor(r.repo)).backfillComplete));
+  const tracked = repos
+    .map((r, i) => ({ ...r, complete: complete[i] }))
+    .sort((a, b) => Number(b.complete) - Number(a.complete));
 
   const results = await pLimitSettled(
     tracked.map(({ repo }) => async () => {
       const [owner, repoName] = repo.split("/");
-      return fetchAndUpsertPrFacts(octokit, owner, repoName);
+      return fetchAndUpsertPrFacts(octokit, owner, repoName, deadline);
     }),
     { concurrency: 2 }, // lower than run-sync's 3 — PR-facts uses more API calls per repo
   );

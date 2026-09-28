@@ -56,7 +56,7 @@ describe("aggregateWorkingHabits", () => {
     ]);
     expect(r.totals).toEqual({ commits: 6, oversizedCommits: 2, prs: 2, oversizedPrs: 1 });
     expect(r.commits.map((x) => x.additions)).toEqual([500, 1]); // largest first
-    expect(r.commits[0]).toMatchObject({ reasons: ["lines"], url: expect.stringMatching(/github\.com\/acme\/api\/commit\/sha/) });
+    expect(r.commits[0]).toMatchObject({ reasons: ["lines"], url: expect.stringMatching(/^https:\/\/github\.com\/acme\/api\/commit\/sha\d+$/) });
     expect(r.prs).toEqual([expect.objectContaining({ number: 2, commitCount: 21, url: "https://github.com/acme/api/pull/2" })]);
   });
 
@@ -171,7 +171,7 @@ vi.mock("@/lib/permissions", async (orig) => ({
 }));
 vi.mock("@/lib/repo-access", () => ({
   canSeeRepo: async (_t: string, _o: string, repo: string) => repo !== "hidden",
-  canSeeOwner: async (_t: string, o: string) => o === "acme",
+  canSeeOwner: async (_t: string, o: string) => o === "acme" || o === "emptyco",
 }));
 vi.mock("@/lib/working-habits", async (orig) => ({
   ...(await orig<typeof import("@/lib/working-habits")>()),
@@ -264,6 +264,14 @@ describe("GET /api/db/working-habits", () => {
     access.isAdmin = true;
     const { body } = await call("owner=acme&repo=nosync");
     expect(body).toMatchObject({ available: true, untrackedRepo: true, people: [] });
+    expect(computeWorkingHabits).not.toHaveBeenCalled();
+  });
+
+  it("owner scope with no synced repos says so", async () => {
+    access.isAdmin = true;
+    const { status, body } = await call("owner=emptyco");
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ available: true, noTrackedRepos: true, people: [] });
     expect(computeWorkingHabits).not.toHaveBeenCalled();
   });
 

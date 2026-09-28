@@ -266,6 +266,8 @@ export interface PrFactsSyncResult {
   failed: number;
   backfillComplete: boolean;
   apiCallCount: number;
+  /** The run stopped starting pages at the deadline; it resumes next run. */
+  stoppedAtDeadline: boolean;
 }
 
 // Page cap: 10 pages × 100 PRs = 1,000 PRs max per run.
@@ -275,26 +277,44 @@ const PR_PER_PAGE = 100;
 const PR_CONCURRENCY = 5; // lower than github-dora.ts's 10 — cost visibility matters
 
 /**
- * Fetches all PRs for a repo (paginated, mandatory per-PR detail) and upserts
- * into pr_facts. Uses an UPDATE-only cursor so it cannot enroll new repos.
- * Only sets pr_backfill_complete when the page loop exhausted naturally (not
- * truncated by the cap) — a repo that hits the cap stays incomplete and
- * resumes on the next scheduled run from where it left off.
+ * Fetches PRs for a repo (newest update first, mandatory per-PR detail) and
+ * upserts into pr_facts. UPDATE-only cursor, so it cannot enroll new repos.
+ *
+ * Two modes, from the stored state:
+ *  - Backfill (pr_backfill_complete = false): read every page, starting at the
+ *    saved pr_backfill_page, saving the next page after each one, so a run
+ *    cut short by the page cap or the deadline continues there next time.
+ *    The first page's newest updated_at is kept as the high-water mark
+ *    (pr_sync_cursor). Complete when the pages run out.
+ *  - Incremental (complete): only PRs updated after the high-water mark get
+ *    the detail calls; stop at the first page that reaches it, then move the
+ *    mark to the newest PR seen. PRs updated during a multi-run backfill are
+ *    newer than the mark, so the first incremental run picks them up.
+ *
+ * Page shifts while resuming (PRs updated in between move to page 1) only
+ * cause re-reads, never skips; upserts are idempotent.
  */
 export async function fetchAndUpsertPrFacts(
   octokit: Octokit,
   owner: string,
   repoName: string,
+  deadline = Number.POSITIVE_INFINITY,
 ): Promise<PrFactsSyncResult> {
   const repoKey = `${owner}/${repoName}`;
-  const { cursor: lastCursor } = await getPrSyncCursor(repoKey);
+  const state = await getPrSyncCursor(repoKey);
+  const incremental = state.backfillComplete && state.cursor !== null;
+  const markMs = state.cursor ? new Date(state.cursor).getTime() : 0;
+  let cursor = state.cursor;
+  let page = incremental ? 1 : Math.max(1, state.backfillPage ?? 1);
   let apiCallCount = 0;
   let processed = 0;
   let failed = 0;
   let exhausted = false;
-  let oldestProcessedUpdatedAt: string | null = null;
+  let stoppedAtDeadline = false;
+  let newestSeen: string | null = null;
 
-  for (let page = 1; page <= PR_PAGE_CAP; page++) {
+  for (let n = 0; n < PR_PAGE_CAP; n++, page++) {
+    if (Date.now() >= deadline) { stoppedAtDeadline = true; break; }
     const { data: prList } = await octokit.rest.pulls.list({
       owner,
       repo: repoName,
@@ -307,9 +327,12 @@ export async function fetchAndUpsertPrFacts(
     apiCallCount++;
 
     if (prList.length === 0) { exhausted = true; break; }
+    if (page === 1) newestSeen = prList[0].updated_at;
 
-    // Build per-PR detail tasks for ALL PRs in this page
-    const detailTasks = prList.map((pr) => async (): Promise<PrFactUpsertRow | null> => {
+    const todo = incremental ? prList.filter((pr) => new Date(pr.updated_at).getTime() > markMs) : prList;
+
+    // Per-PR detail only for PRs that need it (all of them during a backfill)
+    const detailTasks = todo.map((pr) => async (): Promise<PrFactUpsertRow | null> => {
       try {
         const [reviewsRes, detailRes] = await Promise.all([
           octokit.rest.pulls.listReviews({ owner, repo: repoName, pull_number: pr.number }),
@@ -356,30 +379,29 @@ export async function fetchAndUpsertPrFacts(
     if (rows.length > 0) {
       await upsertPrFacts(rows);
       processed += rows.length;
-      // Track oldest successfully processed PR's updated_at for cursor advancement
-      const oldest = prList
-        .filter((pr) => rows.some((r) => r.pr_number === pr.number))
-        .reduce((min, pr) => pr.updated_at < min ? pr.updated_at : min, prList[0].updated_at);
-      if (oldestProcessedUpdatedAt === null || oldest < oldestProcessedUpdatedAt) {
-        oldestProcessedUpdatedAt = oldest;
-      }
     }
 
-    if (prList.length < PR_PER_PAGE) { exhausted = true; break; }
+    const reachedMark = incremental && new Date(prList[prList.length - 1].updated_at).getTime() <= markMs;
+    if (prList.length < PR_PER_PAGE || reachedMark) { exhausted = true; break; }
 
-    // Cursor-based incremental: stop if we've reached already-processed PRs
-    if (lastCursor) {
-      const lastPr = prList[prList.length - 1];
-      if (lastPr.updated_at <= lastCursor) { exhausted = true; break; }
+    if (!incremental) {
+      // Backfill progress survives a cut-short run: next run starts at page + 1.
+      if (page === 1 && newestSeen) cursor = newestSeen;
+      await updatePrSyncCursor(repoKey, cursor, false, page + 1);
     }
   }
 
-  // Advance cursor to oldest successfully-processed PR's updated_at
-  // Only mark complete if loop exhausted naturally (not page-capped)
-  const newCursor = oldestProcessedUpdatedAt ?? lastCursor;
-  const backfillComplete = exhausted;
-  await updatePrSyncCursor(repoKey, newCursor, backfillComplete);
+  let backfillComplete = state.backfillComplete;
+  if (incremental) {
+    // Move the mark only after a pass that reached it; otherwise redo next run.
+    if (exhausted && newestSeen && new Date(newestSeen).getTime() > markMs) cursor = newestSeen;
+    await updatePrSyncCursor(repoKey, cursor, true, null);
+  } else if (exhausted) {
+    backfillComplete = true;
+    if (newestSeen && (!cursor || new Date(newestSeen).getTime() > new Date(cursor).getTime())) cursor = newestSeen;
+    await updatePrSyncCursor(repoKey, cursor, true, null);
+  }
 
-  console.log(`[pr-facts] ${repoKey}: processed=${processed} failed=${failed} apiCalls=${apiCallCount} complete=${backfillComplete}`);
-  return { repo: repoKey, processed, failed, backfillComplete, apiCallCount };
+  console.log(`[pr-facts] ${repoKey}: processed=${processed} failed=${failed} apiCalls=${apiCallCount} complete=${backfillComplete}${stoppedAtDeadline ? " stopped_at_deadline" : ""}`);
+  return { repo: repoKey, processed, failed, backfillComplete, apiCallCount, stoppedAtDeadline };
 }

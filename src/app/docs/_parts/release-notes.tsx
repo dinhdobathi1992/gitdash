@@ -7,10 +7,25 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.6.0",
+      version: "4.6.1",
       date: "2026-09-29",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "The nightly pull-request sync could time out every night with many repositories; it now stops at 240 s and continues the next night where it stopped",
+          "Repositories with more than 1,000 pull requests never finished their backfill; progress is now saved page by page",
+          "Every nightly run re-fetched every pull request; after the backfill only pull requests updated since the last run are fetched",
+        ],
+        improved: [
+          "Working habits says when none of an owner's repositories is synced yet",
+        ],
+      },
+    },
+    {
+      version: "4.6.0",
+      date: "2026-09-29",
       changes: {
         added: [
           "Working habits on Team insights: per engineer, the share of commits over the size limit (more than 10 files or 200 lines) and pull requests with more than 20 commits, for one repository or the whole owner over 30 or 90 days",
