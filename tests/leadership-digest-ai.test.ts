@@ -14,6 +14,7 @@ const computeScorecard = vi.fn();
 const generateLeadershipNarrative = vi.fn();
 const deliverLeadershipDigestEmail = vi.fn();
 const generateJson = vi.fn();
+const computeWorkingHabitsDigestLine = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   getLeadershipDigestRules: () => getLeadershipDigestRules(),
@@ -28,6 +29,9 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/notifier", () => ({
   deliverLeadershipDigestEmail: (...a: unknown[]) => deliverLeadershipDigestEmail(...a),
   deliverDigestEmail: vi.fn(),
+}));
+vi.mock("@/lib/working-habits", () => ({
+  computeWorkingHabitsDigestLine: (...a: unknown[]) => computeWorkingHabitsDigestLine(...a),
 }));
 vi.mock("@/lib/ai", () => ({ generateJson: (...a: unknown[]) => generateJson(...a) }));
 vi.mock("@/lib/org-health-scorecard", () => ({
@@ -59,6 +63,7 @@ beforeEach(() => {
     { id: 1, scope: "org:acme", destination: "cto@acme.com", enabled: true },
   ]);
   computeScorecard.mockReset().mockResolvedValue(SCORECARD);
+  computeWorkingHabitsDigestLine.mockReset().mockResolvedValue(null);
   generateLeadershipNarrative.mockReset().mockReturnValue(NARRATIVE);
   deliverLeadershipDigestEmail.mockReset().mockResolvedValue({ ok: true });
   generateJson.mockReset().mockResolvedValue({
@@ -166,5 +171,26 @@ describe("sendWeeklyLeadershipDigests — the digest sends regardless of AI", ()
     const res = await run();
     expect(res.sent).toBe(0);
     expect(res.failures).toBe(1);
+  });
+});
+
+describe("sendWeeklyLeadershipDigests — working-habits line", () => {
+  it("adds the line for the rule's org", async () => {
+    computeWorkingHabitsDigestLine.mockResolvedValue("Working habits (7 days to Mon 04:47 UTC): 30% of 10 commits …");
+    await run();
+    expect(computeWorkingHabitsDigestLine).toHaveBeenCalledWith("acme");
+    expect(deliverLeadershipDigestEmail.mock.calls[0][1].workingHabitsLine).toMatch(/^Working habits/);
+  });
+
+  it("sends without the line when there is no data", async () => {
+    await run();
+    expect(deliverLeadershipDigestEmail.mock.calls[0][1].workingHabitsLine).toBeUndefined();
+  });
+
+  it("sends without the line when computing it throws", async () => {
+    computeWorkingHabitsDigestLine.mockRejectedValue(new Error("db down"));
+    const res = await run();
+    expect(res).toMatchObject({ sent: 1, failures: 0 });
+    expect(deliverLeadershipDigestEmail.mock.calls[0][1].workingHabitsLine).toBeUndefined();
   });
 });

@@ -7,6 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+## [4.6.0] - 2026-09-29
+
+Working habits: commit and pull-request size per engineer. Notes:
+[`docs/releases/v4.6.0.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.6.0.md).
+Helm chart 0.7.3 / appVersion 4.6.0. Adds database migration v10 and a third nightly cron.
+
+### Added
+- **Working habits** (feature `workingHabits`, on by default, granted per group in organization mode).
+  Team insights shows, per engineer, the share of commits over the size limit (more than 10 files or
+  200 lines) and pull requests with more than 20 commits, for one repository or the whole owner over
+  30 or 90 days, with the offending commits and pull requests linked to GitHub. Commits are measured
+  inside each merged pull request, so squash merges are judged by their original commits. Engineers
+  see their own figures on their contributor profile without the grant.
+- Nightly cron `/api/cron/sync-commit-facts` (04:47 UTC) stores merged pull requests' commits with
+  their size and backfills 90 days over the first nights. New `vercel.json` cron entry.
+- Alert metric `oversized_commit_pct` (needs 5+ commits and a fully analysed window), hidden from
+  users without the grant; one totals-only line in the Monday leadership digest.
+- Settings → Working habits: admins edit the three limits (organization mode).
+- Migration v10: `pr_facts.commit_count`, `changed_files`, `commits_synced_at`; tables
+  `pr_commit_facts` and `working_habits_settings`. Additive only.
+
 ### Changed
 - Contributor profile: the person lookup runs alongside the searches, and the owner's account type
   (org or user) is cached for a day, so searches no longer wait on either lookup.

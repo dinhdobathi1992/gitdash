@@ -24,6 +24,7 @@ import { ErrorBanner } from "@/components/ui/Card";
 import { ReviewHeatmap } from "@/components/team/ReviewHeatmap";
 import { WorkloadList } from "@/components/team/WorkloadList";
 import { ContributorsTable } from "@/components/team/ContributorsTable";
+import { WorkingHabitsPanel } from "@/components/WorkingHabitsPanel";
 import { useWatchlist } from "@/lib/watchlist";
 import { reviewBusFactor, medianPositive } from "@/lib/team-metrics";
 
@@ -167,6 +168,10 @@ function TeamContent() {
           <div className="card h-[380px] skeleton" />
           <div className="card h-[380px] skeleton" />
         </div>
+      )}
+
+      {selected && flags.workingHabits && (
+        <WorkingHabitsPanel key={repoFullName} variant="team" owner={selected.owner} repo={selected.repo} />
       )}
     </Page>
   );

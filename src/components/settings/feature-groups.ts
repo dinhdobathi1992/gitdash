@@ -36,6 +36,7 @@ export const FEATURE_GROUPS: { label: string; rows: FeatureRow[] }[] = [
       { key: "busFactor", name: "Bus factor", description: "Knowledge concentration by repository" },
       { key: "reviewBottleneck", name: "Review bottlenecks", description: "Who reviews whom, and where it stalls" },
       { key: "workloadRisk", name: "Workload risk", description: "After-hours and overload signals per person" },
+      { key: "workingHabits", name: "Working habits", description: "Oversized commits and pull requests per person" },
     ],
   },
   {

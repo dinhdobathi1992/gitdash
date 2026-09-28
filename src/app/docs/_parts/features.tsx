@@ -324,6 +324,28 @@ export function FeatureTeamInsights() {
         when <Flag k="workloadRisk" /> is on). Open a person for their profile.
       </ProseP>
       <ScreenshotSlot file="team.jpg" alt="Team insights" />
+      <SubHeading>Working habits</SubHeading>
+      <ProseP>
+        With <Flag k="workingHabits" /> and a database, Team insights shows who keeps commits and pull requests small,
+        for this repository or all of its owner, over 30 or 90 days. A commit is over the limit when it changes more
+        than 10 files or more than 200 lines (additions plus deletions); a pull request is over the limit with more
+        than 20 commits. Admins change the limits in Settings → Working habits. Engineers always see their own figures
+        on their contributor profile, even without the feature; the Monday leadership digest carries totals only, no names.
+      </ProseP>
+      <ProseP>
+        How it counts: only merged pull requests, by merge date. Commits are measured inside the pull request that carried
+        them, so a squash merge is judged by its original commits, never by the one large commit it leaves on the default
+        branch. A commit shared by stacked pull requests counts once, for the pull request merged first. Merge commits and
+        bots are left out; when GitHub cannot count a very large commit&apos;s files, its lines alone decide. A commit whose
+        email is not linked to a GitHub account is credited to the pull-request author and marked &quot;via PR author&quot;.
+      </ProseP>
+      <ProseP>
+        Limits: commits pushed straight to the default branch are not counted, and repositories without GitHub Actions
+        history are not synced (the section says &quot;Not tracked&quot;). The first nightly runs backfill 90 days; until
+        that finishes the coverage line reads &quot;backfill in progress&quot;. The <Code>oversized_commit_pct</Code> alert
+        needs at least 5 commits and a fully analysed window, and an organization-wide rule reports the first repository
+        that breaches in a window.
+      </ProseP>
     </section>
   );
 }

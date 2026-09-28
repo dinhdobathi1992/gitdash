@@ -289,6 +289,17 @@ export function APIReference() {
           ],
         },
         {
+          method: "GET",
+          path: "/api/db/working-habits",
+          description: "Working habits from the database: per-person commit and pull-request size in merged pull requests, oversized commits and pull requests, thresholds, and sync coverage. Needs the workingHabits feature to see anyone; without it, a signed-in user may read only their own login. Returns available:false without DATABASE_URL and untrackedRepo:true for a repository GitDash does not sync.",
+          params: [
+            { name: "owner", type: "string", optional: false, desc: "Repository owner." },
+            { name: "repo", type: "string", optional: true, desc: "Repository name (omit for every tracked repository of the owner)." },
+            { name: "login", type: "string", optional: true, desc: "Narrow to one person. Required without the workingHabits grant, and must be your own login." },
+            { name: "days", type: "number", optional: true, desc: "30 (default) or 90, by merge date." },
+          ],
+        },
+        {
           method: "POST",
           path: "/api/github/create-issue",
           description: "File a GitHub issue with the signed-in user's token (used by 'File anomaly as GitHub issue'). Needs the githubIssueFromAnomaly feature; limited to 5 per hour per IP.",
@@ -347,6 +358,18 @@ export function APIReference() {
           method: "GET",
           path: "/api/cron/sync-pr-facts",
           description: "Nightly pull-request sync for the people-metric alert rules. Authenticated by the CRON_SECRET bearer token.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/cron/sync-commit-facts",
+          description: "Nightly working-habits sync at 04:47 UTC: stores the commits of merged pull requests from the last 90 days with their size, then evaluates oversized_commit_pct alert rules. Stops starting new work after 240 s; the rest continues the next night. Authenticated by the CRON_SECRET bearer token.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/settings/working-habits",
+          description: "Organization mode, admin only. Working-habits thresholds in effect (files and lines per commit, commits per pull request). PUT saves them.",
           params: [],
         },
         {

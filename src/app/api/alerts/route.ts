@@ -15,8 +15,14 @@ import {
 } from "@/lib/db";
 import { safeError } from "@/lib/validation";
 import { isAllowedSlackWebhook } from "@/lib/notifier";
-import { requireAccess, isCurrentUserAdmin } from "@/lib/permissions";
+import { requireAccess, isCurrentUserAdmin, resolveAccess, resolveIdentity, type FlagKey } from "@/lib/permissions";
 import { canSeeRepo, canSeeOwner } from "@/lib/repo-access";
+
+/**
+ * Metrics whose rules and events name data behind a feature grant. Non-admins
+ * without the grant never see them. (The older people metrics have no flag.)
+ */
+const METRIC_FLAGS: Record<string, FlagKey> = { oversized_commit_pct: "workingHabits" };
 
 export async function GET(req: NextRequest) {
   const denied = await requireAccess(req, "base");
@@ -35,14 +41,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ rules: allRules, events: allEvents });
     }
     // Non-admins: only rules/events for repos and orgs their own token can see
-    // (alert data is computed from service-token syncs), and never the rule
-    // destinations (Slack webhook URLs, email addresses).
+    // (alert data is computed from service-token syncs), never the rule
+    // destinations (Slack webhook URLs, email addresses), and never a metric
+    // gated by a feature they are not granted.
+    const granted = await grantedFlags(token);
+    const allowedMetric = (metric: string) => !METRIC_FLAGS[metric] || granted.has(METRIC_FLAGS[metric]);
     const rules = [];
     for (const r of allRules) {
-      if (await canSeeScope(token, r.scope)) rules.push({ ...r, destination: null });
+      if (allowedMetric(r.metric) && await canSeeScope(token, r.scope)) rules.push({ ...r, destination: null });
     }
     const events = [];
     for (const e of allEvents) {
+      if (!allowedMetric(e.metric)) continue;
       const repo = typeof e.details?.repo === "string" ? e.details.repo : null;
       const visible = repo ? await canSeeScope(token, `repo:${repo}`) : await canSeeScope(token, e.scope);
       if (visible) events.push(e);
@@ -87,6 +97,8 @@ export async function POST(req: NextRequest) {
     // People-based metrics (Phase 5)
     "pr_throughput_drop", "review_response_p90", "afterhours_commit_pct",
     "pr_abandon_rate", "unreviewed_pr_age",
+    // Working habits: share of oversized commits in merged PRs
+    "oversized_commit_pct",
     // Leadership digest config (v4.0.3) — not a threshold rule, see
     // getLeadershipDigestRules for why this is excluded from normal
     // per-repo alert evaluation.
@@ -176,6 +188,16 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     return safeError(e, "Failed to delete alert rule");
+  }
+}
+
+/** Flags granted to the caller; empty when they cannot be resolved (gated items stay hidden). */
+async function grantedFlags(token: string): Promise<Set<FlagKey>> {
+  try {
+    const { identity } = await resolveIdentity(token);
+    return new Set((await resolveAccess(identity.id)).flags);
+  } catch {
+    return new Set();
   }
 }
 

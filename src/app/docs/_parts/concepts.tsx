@@ -291,6 +291,7 @@ export function CoreConcepts() {
           rows={[
             [<Code key="c1">/api/cron/sync</Code>, "Daily at 03:17 UTC (Vercel Cron): workflow runs, then alert evaluation", <><Code key="t">GITHUB_TOKEN</Code>, <Code key="c">CRON_SECRET</Code></>],
             [<Code key="c2">/api/cron/sync-pr-facts</Code>, "Daily at 04:17 UTC: pull-request facts for the people-metric alerts", <><Code key="t2">GITHUB_TOKEN</Code>, <Code key="c3">CRON_SECRET</Code></>],
+            [<Code key="c4">/api/cron/sync-commit-facts</Code>, "Daily at 04:47 UTC: commits of merged pull requests for working habits, then the oversized-commit alert", <><Code key="t3">GITHUB_TOKEN</Code>, <Code key="c5">CRON_SECRET</Code></>],
             [<Code key="w">/api/webhooks/github</Code>, <>Instantly, for each <Code key="e">workflow_run</Code> event</>, <Code key="s">GITHUB_WEBHOOK_SECRET</Code>],
             ["Reports → Sync now", "On demand (admins in organization mode)", "A signed-in session"],
           ]}

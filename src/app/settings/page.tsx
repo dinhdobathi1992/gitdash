@@ -18,6 +18,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useFeatureFlags } from "@/components/FeatureFlagsProvider";
 import EmailSettingsCard from "@/components/EmailSettingsCard";
 import AiProviderCard from "@/components/AiProviderCard";
+import { WorkingHabitsSettingsCard } from "@/components/settings/WorkingHabitsSettingsCard";
 import { SETTINGS_SECTIONS } from "@/components/settings/sections";
 import { FEATURE_GROUPS } from "@/components/settings/feature-groups";
 import { AccessByGroup, MembersSection, AuditSection } from "@/components/settings/AccessSections";
@@ -282,7 +283,7 @@ function SettingsContent() {
   const pending = (users.data?.users ?? []).filter((u) => u.groups.length === 0 && !u.isBootstrapAdmin).length;
 
   const visible = SETTINGS_SECTIONS.filter((s) => {
-    if (s.key === "access" || s.key === "members" || s.key === "audit") return orgAdmin;
+    if (s.key === "access" || s.key === "members" || s.key === "audit" || s.key === "working-habits") return orgAdmin;
     if (s.key === "ai" || s.key === "email") return standalone || isAdmin;
     return true;
   });
@@ -352,6 +353,7 @@ function SettingsContent() {
           {active === "ai" && <AiProviderCard />}
           {active === "email" && <EmailSettingsCard />}
           {active === "audit" && <AuditSection />}
+          {active === "working-habits" && <WorkingHabitsSettingsCard notify={notify} />}
           {active === "features" && <MyFeatures />}
           {active === "notifications" && <Notifications />}
           {requested && !visible.some((s) => s.key === requested) && (

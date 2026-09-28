@@ -13,10 +13,14 @@ export type FeatureFlags = {
   workloadRisk: boolean;
   aiInsights: boolean;
   githubIssueFromAnomaly: boolean;
+  workingHabits: boolean;
 };
 
 /**
- * Convention: new flags default false until proven stable.
+ * Convention: new flags default false until proven stable, unless the
+ * organization-mode grant is the real gate (workingHabits: a lead's group is
+ * granted it on purpose, so a default of false would make every granted lead
+ * switch it on by hand).
  * Write-capable flags (those that push data to external services) must also
  * set `writes: true` on their FlagDef in settings/page.tsx to be excluded
  * from bulk Enable/Disable-all actions.
@@ -36,6 +40,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   workloadRisk: true,
   aiInsights: true,
   githubIssueFromAnomaly: false,
+  workingHabits: true,
 };
 
 /** Display metadata for each flag (settings page, admin permission matrix). */
@@ -61,6 +66,7 @@ export const FLAG_DEFS: FlagDef[] = [
   { key: "healthScorecard", label: "Team Health Scorecard", description: "Org-wide ranked view combining DORA tier and bus-factor risk per repo, worst-first.", affects: "Organization Overview" },
   { key: "workloadRisk", label: "Workload Risk Radar", description: "Flags sustained after-hours/weekend work, activity cliffs, and concurrent-PR overload per person.", affects: "Repository Team" },
   { key: "aiInsights", label: "AI Insights", description: "LLM-generated analysis of the metrics already on screen. Requires AI provider keys configured on the server — the surfaces stay hidden without them.", affects: "Repository Overview, Organization Health" },
+  { key: "workingHabits", label: "Working Habits", description: "Per-engineer share of oversized commits (too many files or lines) and PRs with too many commits, measured inside merged PRs. Engineers always see their own numbers.", affects: "Team Insights, Contributor Profile" },
   { key: "githubIssueFromAnomaly", label: "File Anomaly as GitHub Issue", description: "Adds a 'File as issue' button to the anomaly card on workflow-detail pages. This is a write capability — it creates issues in the repo on your behalf using your GitHub token. Individual toggle only; excluded from bulk Enable/Disable-all.", affects: "Workflow Detail", writes: true },
 ];
 

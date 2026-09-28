@@ -43,6 +43,7 @@ const DESCRIPTIONS: Record<string, string> = {
   pr_throughput_drop: "Drop in merged pull requests against the prior window",
   review_response_p90: "90th-percentile time to first review",
   afterhours_commit_pct: "Share of commits made after hours",
+  oversized_commit_pct: "Share of commits in merged pull requests over the size limit (files or lines). Needs 5+ commits and a fully analysed window. An organization-wide rule reports the first repository that breaches in a window",
   pr_abandon_rate: "Pull requests closed without merging",
   unreviewed_pr_age: "Business days an open pull request has waited for review",
   leadership_digest: "Every Monday, an org-wide summary of health, trends and what needs attention",
@@ -151,7 +152,7 @@ function NewRulePanel({ onCreated, onClose }: { onCreated: () => void; onClose: 
             {["failure_rate", "duration_p95", "queue_wait_p95", "success_streak", "anomaly_count"].map((k) => <option key={k} value={k}>{METRIC_COPY[k].name}</option>)}
           </optgroup>
           <optgroup label="People">
-            {["pr_throughput_drop", "review_response_p90", "afterhours_commit_pct", "pr_abandon_rate", "unreviewed_pr_age"].map((k) => <option key={k} value={k}>{METRIC_COPY[k].name}</option>)}
+            {["pr_throughput_drop", "review_response_p90", "afterhours_commit_pct", "pr_abandon_rate", "unreviewed_pr_age", "oversized_commit_pct"].map((k) => <option key={k} value={k}>{METRIC_COPY[k].name}</option>)}
           </optgroup>
           <optgroup label="Leadership">
             <option value="leadership_digest">{METRIC_COPY.leadership_digest.name}</option>

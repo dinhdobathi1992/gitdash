@@ -22,6 +22,7 @@ import { DIGEST_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import { parseDigestContent } from "@/lib/ai-schema";
 import { computeScorecard } from "@/lib/org-health-scorecard";
 import { generateLeadershipNarrative } from "@/lib/leadership-narrative";
+import { computeWorkingHabitsDigestLine } from "@/lib/working-habits";
 import { pLimitSettled } from "@/lib/concurrency";
 
 const MAX_PAGES = 5;
@@ -222,16 +223,27 @@ export async function sendWeeklyLeadershipDigests(
         console.warn(`[leadership-digest] AI summary threw for ${org}, sending without it:`, e);
       }
 
+      // Working-habits totals — additive in the same way: any failure sends
+      // the digest without the line.
+      let workingHabitsLine: string | undefined;
+      try {
+        workingHabitsLine = (await computeWorkingHabitsDigestLine(org)) ?? undefined;
+      } catch (e) {
+        console.warn(`[leadership-digest] Working-habits line failed for ${org}, sending without it:`, e);
+      }
+
       let result: { ok: boolean; error?: string };
       if (rule.channel === "slack") {
         result = await deliverLeadershipDigestSlack(rule.destination, {
           ...narrative,
           aiSummary,
+          workingHabitsLine,
         });
       } else {
         result = await deliverLeadershipDigestEmail(rule.destination, {
           ...narrative,
           aiSummary,
+          workingHabitsLine,
         });
       }
       if (result.ok) sent++;
@@ -322,6 +334,8 @@ export async function fetchAndUpsertPrFacts(
           deletions: detailRes.data.deletions ?? null,
           review_count: reviews.length,
           state: pr.state,
+          commit_count: detailRes.data.commits ?? null,
+          changed_files: detailRes.data.changed_files ?? null,
         };
       } catch {
         return null; // detail fetch failed — PR not upserted this run
