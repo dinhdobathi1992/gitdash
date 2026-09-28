@@ -5,7 +5,7 @@ import { getOctokit } from "@/lib/github";
 import { privateCacheHeaders, wantsFresh } from "@/lib/http-cache";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
 import { withCache, hashKey, partialAwareTtl } from "@/lib/cache";
-import { buildContributorProfile } from "@/lib/contributor-profile";
+import { buildContributorProfile, serverTiming, type StepTiming } from "@/lib/contributor-profile";
 
 export type {
   ContributorPrSummary,
@@ -41,16 +41,34 @@ export async function GET(req: NextRequest) {
   }
   const login = loginParam;
 
+  // Server-Timing: per-step durations when this request built the profile,
+  // and the cache outcome — miss (built here), stale (old value served while a
+  // background refresh runs) or hit. Durations only; no data or identifiers.
+  const t0 = performance.now();
+  const steps: StepTiming[] = [];
+  const run: { build: "none" | "started" | "done" } = { build: "none" };
   try {
     const response = await withCache(
       `github/contributor-profile:${hashKey(token)}:${owner}:${login}`,
       CACHE_TTL,
-      () => buildContributorProfile(getOctokit(token), owner, login),
+      async () => {
+        run.build = "started";
+        const v = await buildContributorProfile(getOctokit(token), owner, login, new Date(), steps);
+        run.build = "done";
+        return v;
+      },
       { shared: true, ttlFor: partialAwareTtl(CACHE_TTL), staleSeconds: STALE_SECONDS, refresh: wantsFresh(req) },
     );
+    const outcome = run.build === "done" ? "miss" : run.build === "started" ? "stale" : "hit";
+    const timing = [
+      { name: "total", ms: performance.now() - t0 },
+      { name: "cache", ms: 0, desc: outcome },
+      ...(outcome === "miss" ? steps : []),
+    ];
     return NextResponse.json(response, {
       headers: {
         ...privateCacheHeaders(BROWSER_MAX_AGE, 600),
+        "Server-Timing": serverTiming(timing),
       },
     });
   } catch (e) {
