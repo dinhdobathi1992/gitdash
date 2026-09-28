@@ -7,10 +7,28 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.5.3",
-      date: "2026-09-28",
+      version: "4.6.0",
+      date: "2026-09-29",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Working habits on Team insights: per engineer, the share of commits over the size limit (more than 10 files or 200 lines) and pull requests with more than 20 commits, for one repository or the whole owner over 30 or 90 days",
+          "Commits are measured inside each merged pull request, so a squash merge is judged by its original commits, not the one large commit it leaves behind",
+          "Engineers see their own working-habits figures on their contributor profile, even without the feature",
+          "Settings → Working habits: admins change the three limits",
+          "Alert metric \"Oversized commits\" and a totals-only line in the Monday leadership digest",
+          "Nightly sync at 04:47 UTC (/api/cron/sync-commit-facts) that backfills 90 days over the first nights",
+        ],
+        fixed: [],
+        improved: [
+          "Contributor profile: the person lookup runs alongside the searches, and responses carry a Server-Timing header",
+        ],
+      },
+    },
+    {
+      version: "4.5.3",
+      date: "2026-09-28",
       changes: {
         added: [
           "Server cache can serve the last result while it refreshes in the background, so an expired entry no longer makes the next visitor wait",
