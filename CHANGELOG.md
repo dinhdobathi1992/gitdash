@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [4.5.2] - 2026-09-27
+
+Documentation release — no application behaviour changes. Notes:
+[`docs/releases/v4.5.2.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.5.2.md).
+
+### Docs
+- Built-in documentation (`/docs`) rewritten against the current app: new **Quick start**, **Access control**
+  and **Caching & rate limits** sections; Features follow the app's sidebar, including the repository
+  Workflows and Pull requests tabs; screenshots retaken on a live instance.
+- Corrected: DORA change-failure-rate levels (≤5/15/30%), how deploy frequency, lead time and hotfixes are
+  measured, the Docker image name (`dinhdobathi/gitdash`), nightly (not 15-minute) sync, demo mode requiring
+  sign-in, fine-grained tokens and organizations, and the API reference (admin endpoints, issue creation,
+  organization-mode error codes).
+- `README.md` rewritten to match: modes, access control and sign-in troubleshooting, deployment, configuration,
+  architecture.
+- Docs page split into sections under `src/app/docs/_parts/`; search index matches the sidebar.
+
+---
 ## [4.5.1] - 2026-09-27
 
 First published release of the 4.5 line: it ships everything in [4.5.0](https://github.com/dinhdobathi1992/gitdash/blob/main/CHANGELOG.md#450---2026-09-27) (redesign,

@@ -5,17 +5,17 @@
 <h1 align="center">GitDash</h1>
 
 <p align="center">
-  <strong>Self-Hosted GitHub Actions Metrics Dashboard</strong><br />
-  DORA metrics, workflow analytics, team insights, cost tracking — all in one place.
+  <strong>Everything metrics, measured.</strong><br />
+  DORA, reliability, cost and team health from your GitHub Actions runs and pull requests — on infrastructure you run yourself.
 </p>
 
 <p align="center">
-  <a href="#-intro-video">Video</a> &nbsp;&bull;&nbsp;
-  <a href="#-live-demo">Demo</a> &nbsp;&bull;&nbsp;
-  <a href="#-key-capabilities">Features</a> &nbsp;&bull;&nbsp;
-  <a href="#-quick-start">Quick Start</a> &nbsp;&bull;&nbsp;
+  <a href="#-see-it">See it</a> &nbsp;&bull;&nbsp;
+  <a href="#-what-it-does">Features</a> &nbsp;&bull;&nbsp;
+  <a href="#-quick-start">Quick start</a> &nbsp;&bull;&nbsp;
   <a href="#-deployment">Deployment</a> &nbsp;&bull;&nbsp;
-  <a href="#-documentation">Docs</a>
+  <a href="#-access-control-organization-mode">Access control</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.gitdash.info/docs">Docs</a>
 </p>
 
 <p align="center">
@@ -29,476 +29,217 @@
 
 ---
 
-## 🎬 Intro Video
+## 👀 See it
 
-Get a quick overview of what GitDash can do:
+<p align="center">
+  <img src="public/screenshots/repos.jpg" alt="Repositories: status, success rate, recent runs and p95 duration for every repository" width="860" />
+</p>
 
-https://github.com/user-attachments/assets/e9228cb1-3287-456c-b4f7-e2e351f98beb
+▶ **[Watch the 90-second intro](public/videos/gitdash-4-5-intro.mp4)** — it also plays from **Explore the demo** on the sign-in page.
 
----
+<details>
+<summary><strong>More screenshots</strong></summary>
+<br />
 
-## 🖥 Live Demo
-
-Watch a full walkthrough of GitDash in action — navigating repos, exploring DORA metrics, workflow analytics, team insights, cost tracking, and more:
-
-https://github.com/user-attachments/assets/8cf2625a-3a88-4494-a703-07cb5181c11a
-
----
-
-## 🚀 Key Capabilities
-
-| Capability | Description |
+| | |
 | --- | --- |
-| **DORA Metrics** | Track Deployment Frequency, Lead Time for Changes, Change Failure Rate, and MTTR derived directly from real PR and release data. |
-| **Precision Drill-Downs** | PR Cycle Time Breakdown, PR Size vs. Velocity scatter plots, Throughput Trends, and Workflow Stability charts. |
-| **Workflow Intelligence** | Deep-dive into success rates, queue wait times, run duration trends, and cost estimation across all GitHub Actions. |
-| **Team & Contributor Insights** | CI delivery metrics, reviewer load balances, 52-week activity heatmaps, and PR lifecycle funnels. |
-| **Cost Analytics** | Track GitHub Actions spend month-over-month to identify expensive workflows and optimize CI budgets. |
-| **Metrics Export** | Download any dashboard view as CSV or JSON in one click — DORA metrics, cost breakdown by SKU, and org health scores. Formula-injection safe. |
-| **Alert Rules & Slack Delivery** | Fire alerts on CI and people-based metrics (PR throughput, review response time, abandon rate, unreviewed PR age). Deliver to browser, email, daily digest, or **Slack** webhook. |
-| **Enterprise-Grade Security** | AES-256-GCM encrypted sessions, zero browser token exposure, and workflow configuration static analysis. |
-| **DB-Backed Reporting** | Persist historical data beyond GitHub's 90-day retention and evaluate advanced alerting rules backed by real PR-facts data. |
-| **AI Insights** *(optional)* | Plain-English analysis of your metrics via Gemini or Qwen. Entirely opt-in — hidden unless you configure a provider key, and only aggregate metrics and names are ever sent. |
-| **Anomaly → GitHub Issue** | One-click "File as issue" from any anomaly detection card. Confirmation modal, rate-limited, uses your own GitHub token. Off by default. |
+| <img src="public/screenshots/repo-overview.jpg" alt="Repository overview with DORA four keys" width="420" /> | <img src="public/screenshots/workflow-detail.jpg" alt="Workflow detail" width="420" /> |
+| Repository overview — DORA four keys, deployments, outcomes | Workflow detail — why it fails, where the time goes |
+| <img src="public/screenshots/repo-pulls.jpg" alt="Pull request health" width="420" /> | <img src="public/screenshots/alerts.jpg" alt="Alerts" width="420" /> |
+| Pull requests — review speed, age, stale PRs | Alerts — rules, what is firing, delivery history |
+| <img src="public/screenshots/admin-permissions.jpg" alt="Admin: features granted per group" width="420" /> | <img src="public/screenshots/admin-users.jpg" alt="Admin: users and their groups" width="420" /> |
+| Access control — features granted per group | Users and their groups |
 
----
-
-## 📸 Screenshots
-
-<details>
-<summary><strong>Repository Dashboard</strong> — browse all repositories with health indicators</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/00-repos.png" alt="Repositories" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Repository Overview & DORA Scorecard</strong> — health cards, PR cycle time, workflow trends</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/08-repo-overview.png" alt="Repository Overview" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Workflow Analytics — Overview & Performance</strong> — run stats, job breakdowns, step timing</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/01-overview.png" alt="Workflow Overview" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/03-performance-jobs.png" alt="Performance — Jobs" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Workflow Analytics — Reliability & Triggers</strong> — failure trends, flaky detection, trigger distribution</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/05-reliability.png" alt="Reliability" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/06-triggers.png" alt="Triggers" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Audit Trail & Security Scan</strong> — workflow change log, YAML security analysis</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/09-audit.png" alt="Audit Trail" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/10-security.png" alt="Security Scan" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Team Insights & Contributor Profiles</strong> — delivery metrics, reviewer load, activity heatmaps</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/12-team-insights.png" alt="Team Insights" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/13-contributor.png" alt="Contributor Profile" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Cost Analytics</strong> — billing breakdown by workflow and runner type</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/cost-analytics.png" alt="Cost Analytics" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Reports, Alerts & Settings</strong> — historical trends, alert rules, configuration</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/14-reports.png" alt="Reports" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/15-alerts.png" alt="Alerts" width="800" />
-</p>
-<p align="center">
-  <img src="public/screenshots/16-settings.png" alt="Settings" width="800" />
-</p>
-</details>
-
-<details>
-<summary><strong>Organization Overview</strong> — aggregated org-level metrics</summary>
-<br />
-<p align="center">
-  <img src="public/screenshots/17-org-overview.png" alt="Organization Overview" width="800" />
-</p>
 </details>
 
 ---
 
-## ⚡ Quick Start
+## ✨ What it does
 
-### Prerequisites
+| | |
+| --- | --- |
+| **Delivery metrics** | DORA four keys per repository (from releases, or estimated from merged pull requests), with cycle-time, size-vs-velocity, throughput and stability drill-downs. |
+| **Workflow intelligence** | Per workflow: why it fails, where the time goes, slowest jobs and steps, flaky branches, anomaly detection, triggers and concrete ways to speed it up. |
+| **Pull requests & people** | Review speed and rounds, stale PRs, reviewer load, bus factor, workload risk, contributor profiles and a printable 1:1 prep sheet. |
+| **Cost** | GitHub Actions spend by day, runner type and repository, with savings estimates. |
+| **Alerts** | Rules on CI and people metrics, delivered in the browser, by email (optionally a daily digest) or to Slack, plus a weekly leadership digest. |
+| **Security** | GitHub security alerts per repository and static analysis of workflow files. |
+| **Access control** | In organization mode, admins grant features per group; the server enforces it and audits every change. |
+| **Built for the rate limit** | GitHub reads are cached per token and shared across replicas through Postgres; the sidebar shows your remaining API budget. |
+| **AI insights** *(optional)* | Plain-English analysis of the numbers on screen via Bailian, Gemini or Qwen. Hidden unless a provider key is configured; only metrics and names are sent. |
+| **Export** | CSV or JSON from workflow detail, the health scorecard, the contributors table and Cost. |
 
-- Node.js 20+
-- pnpm (`corepack enable pnpm` — the version is pinned via `packageManager` in `package.json`)
+---
 
-### 1. Clone and install
+## ⚡ Quick start
+
+Requires Node.js 20+ and pnpm (`corepack enable pnpm`).
 
 ```bash
 git clone https://github.com/dinhdobathi1992/gitdash.git
 cd gitdash
 pnpm install --frozen-lockfile
-```
-
-### 2. Configure environment
-
-```bash
 cp .env.local.example .env.local
 ```
 
-Set at minimum:
+Set at least:
 
 ```env
-SESSION_SECRET=replace_with_a_random_32+_char_secret
 MODE=standalone
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+SESSION_SECRET=replace_with_openssl_rand_hex_32
 ```
-
-Generate a secure secret:
 
 ```bash
-openssl rand -hex 32
+pnpm run dev    # http://localhost:3000 → /setup, paste a personal access token
 ```
 
-### 3. Start the dev server
-
-```bash
-pnpm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). In `standalone` mode you'll be redirected to `/setup`; in `organization` mode to `/login`.
+**Token scopes:** a classic PAT needs `repo`, `workflow`, `read:org`, `read:user` and `user:email`. A fine-grained PAT needs read access to Actions, Contents, Metadata and Pull requests; for an organization's repositories, create it with the **organization as resource owner** (and *Members: read* if sign-in is limited to your orgs). The Cost page needs a fine-grained token with the organization's *Administration: read*.
 
 ---
 
-## 🔐 Authentication Modes
+## 🔐 Modes
 
-| Mode | Best for | Login flow |
+| | `standalone` (default) | `organization` |
 | --- | --- | --- |
-| **`standalone`** (default) | Individual / self-hosted use | User enters PAT at `/setup`, token stored in encrypted HttpOnly session cookie |
-| **`organization`** | Shared team deployment | GitHub OAuth **or** a PAT on `/login`, token stored in encrypted session cookie. Features are granted per group by an admin (see below) |
+| For | One person | A team sharing one deployment |
+| Sign in | Personal access token on `/setup` | GitHub OAuth or a personal access token on `/login` |
+| Database | Optional | `DATABASE_URL` required |
+| Who decides what you see | You (Settings → My features) | An admin, per group |
+| Alerts, Reports, sync | — | ✓ |
 
-Mode is controlled by the `MODE` environment variable.
-
-### Organization Mode Setup (OAuth)
-
-Set the following additional variables:
-
-```env
-GITHUB_CLIENT_ID=your_oauth_app_client_id
-GITHUB_CLIENT_SECRET=your_oauth_app_client_secret
-```
-
-Create a GitHub OAuth App with:
-
-- **Homepage URL:** `http://localhost:3000`
-- **Callback URL:** `http://localhost:3000/api/auth/callback`
-
-### Organization Mode Access Control (groups & feature permissions)
-
-In organization mode, what each person can see is decided by an admin, not by the browser:
-
-- **Identity** is the numeric GitHub id of the signed-in token (OAuth or PAT).
-- **Groups** are fixed: `devops`, `security`, `dev`, `pm`, `admin`. A user can be in several.
-- **Grants**: an admin turns feature flags on per group at **`/admin` → Permissions**. A user gets
-  the union of their groups' flags; `admin` gets everything plus `/admin`. Users can still switch
-  granted features off for themselves in Settings, never on.
-- **New users** are recorded on first sign-in and land on `/pending` until an admin assigns a group
-  (**`/admin` → Users**). Every change is written to **`/admin` → Audit**.
-- **Enforcement** is server-side (`src/proxy.ts`): a feature's API routes return 403 without the grant,
-  even when called directly. Grants and revocations reach new requests within **60 seconds**.
-
-Required and optional settings:
-
-```env
-DATABASE_URL=postgres://...          # required in organization mode (users, groups, grants, audit)
-GITDASH_ADMIN_GITHUB_IDS=12345678     # required: numeric ids that are always admins (gh api user --jq .id)
-GITDASH_ALLOWED_ORGS=my-org           # optional: only active members of these orgs may sign in
-GITDASH_RBAC_ENFORCE=false            # rollout switch — see below
-```
-
-**Rollout:** deploy with `GITDASH_RBAC_ENFORCE=false` (everyone keeps today's access; admin pages are
-admin-only), let people sign in, assign groups and grants in `/admin`, then set it to `true`.
-The app refuses to start in organization mode without `DATABASE_URL` and a valid
-`GITDASH_ADMIN_GITHUB_IDS`, and `/api/health` returns 503 so a misconfigured rollout never goes ready.
-
-**PAT sign-in in organization mode** — a fine-grained, read-only PAT is enough for most views. With
-`GITDASH_ALLOWED_ORGS` set it needs `read:org` (classic) or org **Members: read** (fine-grained).
-Note that some orgs forbid classic PATs with a lifetime over 366 days; GitHub then refuses the
-membership check and sign-in is denied (the server log shows GitHub's reason).
-
-**When sign-in is refused with `GITDASH_ALLOWED_ORGS` set**, GitHub declined to confirm membership:
-
-- **Org restricts OAuth Apps** — "Continue with GitHub" fails for everyone until an org owner approves the
-  GitDash OAuth App (org settings → Third-party access). Unapproved, it cannot read the org's private repos either.
-- **Fine-grained PAT created under the user** — the resource owner must be the **org**, with *Members: read*;
-  if the org requires token approval, an owner must approve it first.
-- A new group grant can take up to a minute to reach `/pending` (group lookups are cached for 60 s).
-
-This model gates **GitDash features**, not GitHub itself: data fetched with a user's own token is
-still limited by what that token can see on GitHub. Data GitDash serves from its own database
-(`/api/db/*`) is only returned for repos/orgs the user's token can see.
-
-### Token Scope Guidance
-
-**Standalone PAT (recommended minimum):** `repo`, `workflow`, `read:org`, `read:user`
-
-For tighter access, prefer a fine-grained PAT scoped to only the repositories and read permissions you need.
-
-> **Cost Analytics note:** `/api/github/billing/cost-analysis` uses GitHub Enhanced Billing APIs. Some org/account combinations require fine-grained PAT permissions (e.g. org Administration read).
+Organization mode also needs a GitHub OAuth App (callback `https://<your-host>/api/auth/callback`) with `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 
 ---
 
-## 🏗 Architecture
+## 🛡 Access control (organization mode)
 
-GitDash is a **Next.js App Router** application that proxies authenticated requests to GitHub APIs.
+- **Identity** is the numeric GitHub id of the signed-in token, looked up from GitHub — never taken from the browser.
+- **Groups** are fixed: `admin`, `devops`, `security`, `dev`, `pm`. Admins grant features per group in **Admin** (or Settings → Access by group); a person gets every feature any of their groups has, and can switch granted features off for themselves.
+- **New users** land on `/pending` until an admin adds them to a group; the page moves on by itself within about a minute. Every change is written to the audit log.
+- **Enforcement** happens on the server in `src/proxy.ts`: without the grant, pages redirect and API routes answer 403. Unregistered API routes are denied.
 
+```env
+DATABASE_URL=postgres://...          # required
+GITDASH_ADMIN_GITHUB_IDS=12345678     # required: numeric ids (gh api user --jq .id), comma-separated
+GITDASH_ALLOWED_ORGS=my-org           # optional: only active members of these orgs may sign in
+GITDASH_RBAC_ENFORCE=false            # rollout switch
 ```
-Browser  ──▶  /api/*  ──▶  Server reads token from encrypted session cookie (iron-session)
-                           ──▶  GitHub REST APIs via Octokit / fetch
-                           ──▶  Optional: DB routes persist & query historical workflow runs
-```
 
-**Key code entry points:**
+**Rollout:** deploy with enforcement off (everyone keeps access; admin screens are restricted), assign groups and grants, then set `GITDASH_RBAC_ENFORCE=true` and redeploy. The app refuses to start in organization mode without `DATABASE_URL` and `GITDASH_ADMIN_GITHUB_IDS`, and `/api/health` answers 503.
 
-| Path | Purpose |
-| --- | --- |
-| `src/middleware.ts` | Auth gating + production HTTPS redirect (Next.js middleware) |
-| `src/lib/session.ts` | Encrypted session cookie configuration |
-| `src/lib/mode.ts` | Auth mode selection (`standalone` vs `organization`) |
-| `src/app/api/github/*` | GitHub data endpoints |
-| `src/app/api/db/*` + `src/lib/db.ts` | Optional historical DB layer |
+**When sign-in is refused** with `GITDASH_ALLOWED_ORGS` set, GitHub declined to confirm membership:
+
+- The org **restricts OAuth Apps** — an org owner approves the GitDash OAuth App under the org's *Third-party access* settings.
+- A **fine-grained PAT created under the user** — recreate it with the org as resource owner and *Members: read* (approved by an owner if the org requires it).
+- A **classic PAT** without `read:org`, or one the org rejects for living longer than 366 days.
+
+The server log records GitHub's reason. Details: [Access control](https://www.gitdash.info/docs) in the built-in docs.
 
 ---
 
 ## 🚢 Deployment
 
-### Docker Compose
+**Docker** — images are published to Docker Hub as `dinhdobathi/gitdash` (`latest`, plus version tags on each release; amd64 and arm64):
 
 ```bash
-cp .env.local.example .env.local
-# edit .env.local with your values
+docker run -d -p 3000:3000 -e MODE=standalone -e SESSION_SECRET=... dinhdobathi/gitdash:latest
+```
+
+**Docker Compose** — builds locally from `docker-compose.yml` and reads `.env.local`:
+
+```bash
 docker compose up --build -d
 ```
 
-```bash
-docker compose down   # to stop
-```
-
-**Docker image behavior:** multi-stage build (`deps` → `builder` → `runner`), non-root runtime user (`nextjs`, uid 1001), `DOCKER_BUILD=1` enables Next standalone output during build.
-
-### Kubernetes (Helm)
+**Kubernetes** — the Helm chart lives in `helm/gitdash`; set organization-mode values (`config.adminGithubIds` as a quoted string, `config.allowedOrgs`, `config.rbacEnforce`, `secret.databaseUrl`) in your values file:
 
 ```bash
-helm upgrade --install gitdash ./helm/gitdash -n gitdash --create-namespace
+helm upgrade --install gitdash ./helm/gitdash -n gitdash --create-namespace -f my-values.yaml
 ```
 
-Adjust `helm/gitdash/values.yaml` for mode, ingress, and secrets.
+**Vercel** — import the repository and set the environment variables (changes need a redeploy). `vercel.json` schedules the nightly sync crons, which need `GITHUB_TOKEN` and `CRON_SECRET`. Use one canonical host for the OAuth callback — the sign-in cookie belongs to the host that started sign-in.
 
 ---
 
-## 🗄 Optional: Historical DB + Webhooks
+## ⚙️ Configuration
 
-GitDash works without a database for live GitHub analytics. Add a **Postgres/Neon** database to unlock historical persistence and reporting:
+Every variable is listed with comments in [`.env.local.example`](.env.local.example) and explained in the built-in docs (Configuration). The ones you meet first:
 
-- `DATABASE_URL` enables `/api/db/*` and alert rule storage
-- `/reports` relies on DB data (available in organization mode)
-- `/api/webhooks/github` upserts workflow runs from GitHub webhooks
-- `/api/cron/sync` (Vercel Cron, see `vercel.json`) re-syncs every previously-synced repo daily — set `GITHUB_TOKEN` and `CRON_SECRET` to enable it
-
-Optional webhook hardening: set `GITHUB_WEBHOOK_SECRET` and configure the `workflow_run` event in GitHub.
-
----
-
-## ⚙️ Environment Variables
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `SESSION_SECRET` | Yes | Session encryption key (>= 32 chars in production) |
-| `MODE` | No | `standalone` (default) or `organization` (aliases: `org`, `team`) |
-| `NEXT_PUBLIC_APP_URL` | Recommended | Public app URL for OAuth/callback flows |
-| `GITHUB_CLIENT_ID` | Org mode | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | Org mode | GitHub OAuth App client secret |
-| `DATABASE_URL` | Org mode | Enables historical DB sync, trends, alerts and the shared API cache. **Required** in organization mode (users, groups, grants) |
-| `GITDASH_ADMIN_GITHUB_IDS` | Org mode | Comma-separated numeric GitHub user ids that are always admins |
-| `GITDASH_ALLOWED_ORGS` | Optional | Org mode: comma-separated orgs whose active members may sign in (empty = anyone, lands on `/pending`) |
-| `GITDASH_RBAC_ENFORCE` | Optional | Org mode: `true` enforces group permissions; `false` (default) keeps today's access during rollout |
-| `GITDASH_L2_CACHE` | Optional | `0` keeps API caching in-process only (default: shared `api_cache` table when `DATABASE_URL` is set) |
-| `GITDASH_GH_LOG` | Optional | `1` logs every GitHub API call with route and remaining rate-limit budget |
-| `GITHUB_WEBHOOK_SECRET` | Optional | Signature verification for `/api/webhooks/github` |
-| `GITHUB_TOKEN` | Optional | Fallback when no session token is available. **Required** for the scheduled sync cron (`/api/cron/sync`), which has no user session |
-| `CRON_SECRET` | Optional | Bearer token authorizing `/api/cron/sync`. Vercel Cron sends this automatically when set; the route fails closed (401) if unset |
-| `NEXT_PUBLIC_DEMO_MODE` | Optional | `true` serves sanitized demo data with no token (also enabled per-request via `?demo=1`) |
-| `RESEND_API_KEY` | Optional | Enables Resend email delivery for alert rules (preferred email provider) |
-| `RESEND_FROM` | Optional | From address for Resend emails (default `alerts@gitdash.app`) |
-| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional | Generic SMTP email delivery for alerts when Resend is not used |
-| `SENDGRID_API_KEY` | Optional | Alternative to `SMTP_PASS` for SendGrid-based email delivery |
-
-> `NEXT_PUBLIC_APP_VERSION` is set automatically at build time from `package.json` — you do not set it manually.
-
----
-
-## 🗺 Main Routes
-
-### UI Pages
-
-| Route | Description |
+| Variable | |
 | --- | --- |
-| `/` | Repository dashboard |
-| `/repos/[owner]/[repo]` | Repository overview + links to audit, security, team |
-| `/repos/[owner]/[repo]/workflows/[workflow_id]` | Workflow analytics tabs |
-| `/team` | Team insights |
-| `/cost-analytics` | Cost analytics |
-| `/reports` | Historical reports |
-| `/alerts` | Alert rules & events |
-| `/settings` | Application settings |
-| `/docs` | Built-in documentation |
-
-### API Groups
-
-| Prefix | Purpose |
-| --- | --- |
-| `/api/auth/*` | Session setup, login, logout, whoami |
-| `/api/github/*` | GitHub data + analytics endpoints |
-| `/api/db/*` | Optional historical sync and trend endpoints |
-| `/api/alerts` | Alert-rule CRUD + events |
-| `/api/webhooks/github` | Workflow webhook ingest |
-| `/api/cron/sync` | Scheduled daily sync + digest delivery (Vercel Cron only) |
+| `SESSION_SECRET` | Required. At least 32 characters. |
+| `MODE` | `standalone` (default) or `organization`. |
+| `NEXT_PUBLIC_APP_URL` | Public URL, for OAuth redirects. |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | Organization mode: the OAuth App. |
+| `DATABASE_URL` | Organization mode: users, groups, audit, alerts, reports and the shared cache. |
+| `GITDASH_ADMIN_GITHUB_IDS` / `GITDASH_ALLOWED_ORGS` / `GITDASH_RBAC_ENFORCE` | Organization-mode access control (above). |
+| `GITHUB_TOKEN` / `CRON_SECRET` / `GITHUB_WEBHOOK_SECRET` | Nightly sync and the `workflow_run` webhook. |
+| `GITDASH_L2_CACHE` / `GITDASH_GH_LOG` | Turn off the shared Postgres cache (`0`); log every GitHub call (`1`). |
+| `RESEND_*` / `SMTP_*` | Email delivery for alerts and digests. |
+| `BAILIAN_*` / `GEMINI_*` / `QWEN_*` / `AI_*` | Optional AI insights. |
 
 ---
 
-## 🛠 Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| Framework | Next.js 16 (App Router) |
-| UI | React 19, TypeScript (strict), Tailwind CSS v4 |
-| Data fetching | SWR |
-| Visualizations | Recharts |
-| GitHub integration | Octokit + GitHub REST API |
-| Session management | iron-session (encrypted cookies) |
-| Database (optional) | Neon Postgres (`@neondatabase/serverless`) |
-
----
-
-## 📁 Project Layout
+## 🏗 How it works
 
 ```
-gitdash/
-├── src/
-│   ├── app/                  # Pages + route handlers
-│   ├── components/           # UI and shared client components
-│   ├── lib/                  # Core logic (GitHub, DB, sessions, validation)
-│   └── middleware.ts         # Auth gating + HTTPS redirect (Next.js middleware)
-├── walkthrough-output/       # Intro video + demo walkthrough
-├── public/screenshots/       # Application screenshots
-├── docs/                     # Plans & design docs
-├── helm/gitdash/             # Helm chart
-├── .github/workflows/        # CI/CD workflows
-├── Dockerfile
-└── docker-compose.yml
+Browser ── /api/* ──► src/proxy.ts ──► route handler ──► GitHub REST API
+                      │ decrypts the session cookie      │ token read from the session (never sent to the browser)
+                      │ org mode: identity + grants      │ cached per token (memory + shared Postgres)
+                      ▼                                  ▼
+                /login, /setup, /pending            JSON for the page
 ```
+
+Almost everything is read live from GitHub with the signed-in person's own token. With a database, GitDash also keeps its own history for Reports and alerts: a nightly sync (`/api/cron/sync`, `/api/cron/sync-pr-facts`) and the `workflow_run` webhook (`/api/webhooks/github`).
+
+| Path | What lives there |
+| --- | --- |
+| `src/app/` | Pages, one folder per route; `src/app/api/` holds the API |
+| `src/proxy.ts` | Sign-in and access checks for every request |
+| `src/lib/permissions.ts` | Route → feature registry used by the proxy |
+| `src/lib/` | GitHub client, caching, database and migrations, identity, AI |
+| `src/app/docs/` | The built-in documentation (sections in `_parts/`) |
+| `helm/gitdash/` | Helm chart |
+| `tests/` | Vitest suites |
 
 ---
 
 ## 🔒 Security
 
-- Session cookie: `HttpOnly`, `SameSite=lax`, `Secure` in production
-- `SESSION_SECRET` enforced >= 32 chars in production
-- Auth entry points rate-limited (`/api/auth/setup`, `/api/auth/login`)
-- OAuth `state` verified and expires
-- Input validation centralized in `src/lib/validation.ts`
-- Security headers (CSP, HSTS, X-Frame-Options) configured in `next.config.ts`
+- The GitHub token lives only in an encrypted (iron-session), `HttpOnly`, `SameSite=Lax` cookie — `Secure` in production.
+- The session is replaced on every sign-in; cross-site state-changing requests are rejected.
+- Sign-in endpoints are rate-limited; owner/repo/org parameters are validated before any GitHub call.
+- Organization mode checks every request against the caller's groups on the server; synced data is filtered by what the viewer's own token can see.
+- CSP, HSTS and the other security headers are set in `next.config.ts`; the container runs as a non-root user.
 
-For full details see [`README-SECURITY-ENHANCEMENTS.md`](README-SECURITY-ENHANCEMENTS.md).
-
----
-
-## 🔄 CI/CD Workflows
-
-| Workflow | Purpose |
-| --- | --- |
-| `ci.yml` | Lint, type-check, tests, build, dependency audit, Snyk, CodeQL |
-| `docker.yml` | Multi-arch Docker build and push |
-| `release.yml` | Semver release/tag flow |
-| `vercel.yml` | Production deploy with Vercel CLI |
+More detail: [`README-SECURITY-ENHANCEMENTS.md`](README-SECURITY-ENHANCEMENTS.md) and the built-in docs (Security model).
 
 ---
 
-## 🧑‍💻 Developer Commands
+## 🧑‍💻 Development
 
 ```bash
-pnpm run dev            # local development server
-pnpm run build          # production build
-pnpm run start          # run production build
+pnpm run dev            # development server
 pnpm run lint           # eslint
-pnpm run test           # run tests
-pnpm exec tsc --noEmit  # type-check without emitting
+pnpm exec tsc --noEmit  # type check
+pnpm run test           # vitest (database tests use in-memory Postgres)
+pnpm run build          # production build
 ```
 
----
-
-## 📚 Documentation
-
-GitDash ships with comprehensive **built-in documentation** accessible at the [`/docs`](https://www.gitdash.info/docs) route in the running application.
-
-The docs cover:
-
-- **Getting Started** — installation, deployment, configuration
-- **Core Concepts** — authentication modes, security model, data sources
-- **Feature Guides** — detailed walkthroughs for every dashboard section
-- **Metrics Reference** — DORA 4 Keys, PR Cycle Time, Workflow metrics, Team & People metrics, CI & Alert metrics
-- **API Reference** — all available REST endpoints
-- **FAQ & Troubleshooting** — common issues and solutions
-
-> **Tip:** The docs page includes full-text search, tabbed examples, and interactive code blocks.
-
-For the original DORA Metrics integration plan (now implemented, kept for reference), see [`docs/archive/DORA-REPO-METRICS-PLAN.md`](docs/archive/DORA-REPO-METRICS-PLAN.md).
+CI (`.github/workflows/ci.yml`) runs lint, type check, tests, build, a dependency audit, Snyk and CodeQL. Merging to `main` deploys production (`vercel.yml`) and publishes the `latest` image (`docker.yml`); releases are cut with `release.yml`.
 
 ---
 
-## 📋 Changelog
+## 📚 Documentation & changelog
 
-See [`CHANGELOG.md`](CHANGELOG.md). Upgrade notes for the current release: [`docs/releases/v4.5.1.md`](docs/releases/v4.5.1.md).
+- **Built-in docs:** `/docs` in any running instance — e.g. [www.gitdash.info/docs](https://www.gitdash.info/docs) — covers setup, access control, every screen, metric definitions and the API.
+- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md). Release notes: [`docs/releases/`](docs/releases/).
 
 ---
 
 ## 📄 License
 
 MIT
-
----
 
 <p align="center">
   <sub>Made by <a href="https://github.com/dinhdobathi1992">Dinh Do Ba Thi</a></sub>
