@@ -13,6 +13,7 @@ function fakeGithub(n: number) {
   const updated = new Map<number, number>();
   for (let i = 1; i <= n; i++) updated.set(i, base + i * 60_000);
   const listPages: number[] = [];
+  const reviews = new Map<number, { state: string; submitted_at: string | null }[]>();
   const details: number[] = [];
   const pr = (i: number) => ({
     number: i, user: { login: "alice" }, created_at: new Date(base).toISOString(),
@@ -27,7 +28,7 @@ function fakeGithub(n: number) {
           const sorted = [...updated.entries()].sort((a, b) => b[1] - a[1]).map(([i]) => pr(i));
           return { data: sorted.slice((page - 1) * per_page, page * per_page) };
         }),
-        listReviews: vi.fn(async () => ({ data: [] })),
+        listReviews: vi.fn(async ({ pull_number }: { pull_number: number }) => ({ data: reviews.get(pull_number) ?? [] })),
         get: vi.fn(async ({ pull_number }: { pull_number: number }) => {
           details.push(pull_number);
           return { data: { additions: 1, deletions: 1, commits: 2, changed_files: 1 } };
@@ -36,7 +37,7 @@ function fakeGithub(n: number) {
     },
   };
   return {
-    octokit: octokit as never, listPages, details,
+    octokit: octokit as never, listPages, details, reviews,
     bump: (i: number, at: string) => updated.set(i, Date.parse(at)),
     newest: () => new Date(Math.max(...updated.values())).toISOString(),
   };
@@ -59,6 +60,23 @@ afterEach(() => {
 });
 
 describe("fetchAndUpsertPrFacts — backfill resume and incremental", () => {
+  it("a pending review (no submitted_at) does not break the page; first review is the earliest submitted", async () => {
+    const gh = fakeGithub(3);
+    gh.reviews.set(2, [
+      { state: "PENDING", submitted_at: null },
+      { state: "COMMENTED", submitted_at: "2026-09-05T10:00:00Z" },
+      { state: "APPROVED", submitted_at: "2026-09-04T09:00:00Z" },
+    ]);
+    gh.reviews.set(3, [{ state: "PENDING", submitted_at: null }]);
+    const r = await fetchAndUpsertPrFacts(gh.octokit, "acme", "api");
+    expect(r).toMatchObject({ processed: 3, backfillComplete: true });
+    const rows = (await pg.query<{ pr_number: number; first_review_at: Date | null }>(
+      `SELECT pr_number, first_review_at FROM pr_facts WHERE repo = $1 ORDER BY pr_number`, [REPO])).rows;
+    expect(rows.map((x) => [x.pr_number, x.first_review_at && new Date(x.first_review_at).toISOString()])).toEqual([
+      [1, null], [2, "2026-09-04T09:00:00.000Z"], [3, null],
+    ]);
+  });
+
   it("a backfill that fits in one run completes and sets the high-water mark", async () => {
     const gh = fakeGithub(250);
     const r = await fetchAndUpsertPrFacts(gh.octokit, "acme", "api");

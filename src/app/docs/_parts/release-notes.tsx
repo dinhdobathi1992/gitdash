@@ -7,10 +7,21 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.6.1",
+      version: "4.6.2",
       date: "2026-09-29",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [],
+        fixed: [
+          "A pull request with a pending review made the nightly sync fail for its whole repository; pending reviews are now ignored",
+        ],
+        improved: [],
+      },
+    },
+    {
+      version: "4.6.1",
+      date: "2026-09-29",
       changes: {
         added: [],
         fixed: [

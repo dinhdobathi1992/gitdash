@@ -340,9 +340,9 @@ export async function fetchAndUpsertPrFacts(
         ]);
         apiCallCount += 2;
         const reviews = reviewsRes.data;
-        const firstReview = reviews.length
-          ? reviews.reduce((min, r) => r.submitted_at && r.submitted_at < min ? r.submitted_at : min, reviews[0].submitted_at ?? "")
-          : null;
+        // A pending review has no submitted_at; ignore it rather than store "" as a timestamp.
+        const submitted = reviews.map((r) => r.submitted_at).filter((s): s is string => Boolean(s));
+        const firstReview = submitted.length ? submitted.reduce((min, s) => (s < min ? s : min)) : null;
         const approvedAt = reviews.find((r) => r.state === "APPROVED")?.submitted_at ?? null;
         return {
           repo: repoKey,
