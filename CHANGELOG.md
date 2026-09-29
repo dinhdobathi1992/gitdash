@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+## [4.6.2] - 2026-09-29
+
+Helm chart 0.7.5 / appVersion 4.6.2. No migration.
+
+### Fixed
+- **The nightly pull-request sync failed for a whole repository when a pull request had a pending
+  review.** A pending review has no submission time; the earliest-review calculation then produced an
+  empty string, Postgres rejected it as a timestamp, and the page's transaction failed on every run, so
+  the repository never finished its backfill (seen on `adi-tesda-ds`). Pending reviews are now ignored,
+  and the first review is the earliest *submitted* one.
+
 ## [4.6.1] - 2026-09-29
 
 Nightly pull-request sync fix. Notes:
