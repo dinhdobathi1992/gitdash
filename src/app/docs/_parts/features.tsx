@@ -317,17 +317,54 @@ export function FeatureAlerts() {
 export function FeatureTeamInsights() {
   return (
     <section className="space-y-6">
-      <FeaturePageHeader icon={Users} name="Team insights" path="/team" chips={["Repository picker", "Team KPIs", "Reviewer heatmap", "Contributors"]} />
+      <FeaturePageHeader icon={Users} name="Team insights" path="/team" chips={["What stands out", "30 / 90 days", "Human reviews", "People", "Account links"]} />
       <ProseP>
-        Pick a repository to see its contributors side by side: pull requests merged, median cycle time, reviews
-        given, review bus factor and self-merges, a reviewer heatmap, and a contributors table (with workload signals
-        when <Flag k="workloadRisk" /> is on). Open a person for their profile.
+        Pick a repository and a window — 30 or 90 days, for the whole page (<Code>?days=90</Code> survives reload and
+        sharing). The page starts with <strong>What stands out</strong>: findings computed from the numbers below, worst
+        first, each linking to its section — after-hours work, one person doing every review, merges nobody else
+        reviewed, commits over the size limit, pull requests with too many commits, self-merges. Only findings with
+        evidence appear; when nothing stands out, it says so.
+      </ProseP>
+      <ProseP>
+        Below: merged pull requests (and how many were opened in the window — a different set), the true median time from
+        open to merge, pull requests <strong>reviewed by a human</strong> (a submitted approve, request-changes or comment
+        review by someone who is neither a bot nor the author), the reviewer bus factor (fewest people giving half the
+        human reviews; aim for 2+), and self-merges. <strong>Who reviews whom</strong> lists each pair by pull requests
+        and turns into a heatmap once 4 or more people review. <strong>Workload to watch</strong> (<Flag k="workloadRisk" />)
+        shows after-hours and weekend share and open pull requests against fixed limits (30%, 25%, 4). <strong>People</strong>
+        puts each person&apos;s author, reviewer and habit figures in one table, sortable and exportable as CSV; columns for
+        a feature you are not granted are left out of the table and the file.
+      </ProseP>
+      <ProseP>
+        Bots never count toward the team numbers. <strong>Include bots</strong> shows their rows and review pairs dimmed;
+        otherwise a line says how many are hidden. When some data could not be loaded (GitHub rate limit, a very busy
+        repository, working habits still backfilling), a coverage line says so and findings that depend on it are left out.
       </ProseP>
       <ScreenshotSlot file="team.jpg" alt="Team insights" />
+      <SubHeading>Workday</SubHeading>
+      <ProseP>
+        After hours means outside the organization&apos;s workday, and weekend means Saturday or Sunday, both in one time zone
+        set by an admin in Settings → Team insights (default Asia/Saigon, 08:00–19:00). It applies to Team insights and each
+        repository&apos;s Team tab. The contributor profile&apos;s commit-hour chart and the <Code>afterhours_commit_pct</Code> alert
+        still use UTC 09:00–18:00.
+      </ProseP>
+      <SubHeading>Account links</SubHeading>
+      <ProseP>
+        Some people use two GitHub accounts. When two logins share a name stem (for example <Code>dinhdobathi1992</Code> and
+        <Code>dinhdobathi3</Code>) and one reviewed the other in the window, admins see &quot;Are they the same person?&quot; in
+        What stands out. <strong>Link accounts</strong> makes every Team page count them as one person — pull requests,
+        reviews, commits and working habits are added together, and reviews between them become self-reviews, which never
+        count as a human review or toward the bus factor. <strong>Different people</strong> stops the suggestion. Links change
+        numbers only, never access: an engineer&apos;s own working-habits view stays their own login. Organization mode only;
+        admins review, unlink and undo in Settings → Account links, and every change is in the audit log. On a repository&apos;s
+        Team tab linked people are merged too; their averages there are weighted approximations.
+      </ProseP>
       <SubHeading>Working habits</SubHeading>
       <ProseP>
-        With <Flag k="workingHabits" /> and a database, Team insights shows who keeps commits and pull requests small,
-        for this repository or all of its owner, over 30 or 90 days. A commit is over the limit when it changes more
+        With <Flag k="workingHabits" /> and a database, Team insights shows whether commits and pull requests are kept small,
+        for this repository or all of its owner, over the page&apos;s window: commits over the limit (split by files, lines or
+        both), pull requests over the commit limit, the largest commit, and the oversized commits grouped by pull request.
+        Each person&apos;s share is in the People table. A commit is over the limit when it changes more
         than 10 files or more than 200 lines (additions plus deletions); a pull request is over the limit with more
         than 20 commits. Admins change the limits in Settings → Working habits. Engineers always see their own figures
         on their contributor profile, even without the feature; the Monday leadership digest carries totals only, no names.

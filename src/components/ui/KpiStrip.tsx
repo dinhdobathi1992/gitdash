@@ -24,7 +24,12 @@ const TONE: Record<NonNullable<KpiCell["tone"]>, string> = {
   pass: "text-status-pass-text",
 };
 
-export function KpiStrip({ cells, className }: { cells: KpiCell[]; className?: string }) {
+export function KpiStrip({ cells, className, mobileCols = 1 }: {
+  cells: KpiCell[];
+  className?: string;
+  /** Columns below `sm`. With 2, an odd last cell spans the row. */
+  mobileCols?: 1 | 2;
+}) {
   const dense = cells.length >= 6;
   const cols = {
     2: "sm:grid-cols-2",
@@ -35,7 +40,11 @@ export function KpiStrip({ cells, className }: { cells: KpiCell[]; className?: s
   }[Math.min(6, Math.max(2, cells.length)) as 2 | 3 | 4 | 5 | 6];
   return (
     <section className={cn("card overflow-hidden", className)}>
-      <dl className={cn("grid grid-cols-1 gap-px bg-line", cols)}>
+      <dl className={cn(
+        "grid gap-px bg-line",
+        mobileCols === 2 ? "grid-cols-2 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1" : "grid-cols-1",
+        cols,
+      )}>
         {cells.map((c) => (
           <div
             key={c.key}

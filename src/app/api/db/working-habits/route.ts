@@ -9,6 +9,10 @@
  *  - admins, users granted `workingHabits`, and standalone mode see everyone;
  *  - anyone else may read only their own numbers (login = their GitHub login).
  * Plus repo/owner visibility, because the data was synced with the service token.
+ *
+ * Account links merge a person's logins for granted views only. A self-view
+ * stays the viewer's own login: logins can be renamed and reused, so a link
+ * must never widen what someone without the grant can read.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,6 +25,7 @@ import { safeError, validateOwner, validateRepo } from "@/lib/validation";
 import { privateCacheHeaders } from "@/lib/http-cache";
 import { computeWorkingHabits, type WorkingHabitsResponse } from "@/lib/working-habits";
 import { DEFAULT_THRESHOLDS, getThresholds } from "@/lib/working-habits-settings";
+import { loadCanonical, loginsOf, noLinks } from "@/lib/identity-links";
 
 const VALID_DAYS = [30, 90];
 
@@ -113,7 +118,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(body, { headers });
     }
 
-    const result = await computeWorkingHabits({ repos, from, to, login });
+    // Links are read uncached, after every cache, so a change shows on the next load.
+    const { canonical, links } = scope.full ? await loadCanonical() : { canonical: noLinks, links: [] };
+    const logins = login ? (scope.full ? loginsOf(login, links) : [login]) : null;
+    const result = await computeWorkingHabits({ repos, from, to, logins, canonical });
     return NextResponse.json({ available: true, ...result } satisfies WorkingHabitsResponse, { headers });
   } catch (e) {
     return safeError(e, "Failed to load working habits");

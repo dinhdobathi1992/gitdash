@@ -31,7 +31,8 @@ export interface AuditEntry {
   actor_github_id: number;
   action: string;
   target: string;
-  details: { before?: unknown; after?: unknown } | null;
+  /** Account links store `before_primary` / `after_primary` instead. */
+  details: { before?: unknown; after?: unknown; before_primary?: unknown; after_primary?: unknown } | null;
   created_at: string;
 }
 

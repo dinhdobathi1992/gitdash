@@ -7,6 +7,7 @@ import {
 } from "@/lib/working-habits";
 import { DEFAULT_THRESHOLDS as T } from "@/lib/working-habits-settings";
 import { createPgliteClient } from "./setup/pglite";
+import { makeCanonical } from "@/lib/identity-links";
 
 const WINDOW = { from: new Date("2026-09-01T00:00:00Z"), to: new Date("2026-10-01T00:00:00Z") };
 const pr = (n: number, author: string | null, o: Partial<WhPrRow> = {}): WhPrRow => ({
@@ -19,7 +20,7 @@ const c = (author: string | null, o: Partial<WhCommitRow> = {}): WhCommitRow => 
   additions: 1, deletions: 1, committed_at: null, ...o,
 });
 const agg = (prs: WhPrRow[], commits: WhCommitRow[], login?: string) =>
-  aggregateWorkingHabits({ prs, commits, thresholds: T, window: WINDOW, login });
+  aggregateWorkingHabits({ prs, commits, thresholds: T, window: WINDOW, logins: login ? [login] : null });
 
 describe("isOversizedCommit", () => {
   it("exactly at the limits is fine; one over is not", () => {
@@ -93,6 +94,37 @@ describe("aggregateWorkingHabits", () => {
   });
 });
 
+describe("aggregateWorkingHabits with account links", () => {
+  const canonical = makeCanonical([{ alias_login: "alice-work", primary_login: "alice" }]);
+
+  it("merges linked logins into one person shown by their most active login", () => {
+    const r = aggregateWorkingHabits({
+      prs: [pr(1, "alice"), pr(2, "Alice-Work", { commit_count: 30 })],
+      commits: [c("alice"), c("Alice-Work", { files: 40 }), c("Alice-Work"), c("Alice-Work")],
+      thresholds: T, window: WINDOW, canonical,
+    });
+    expect(r.people).toHaveLength(1);
+    expect(r.people[0]).toMatchObject({ login: "Alice-Work", linkedLogins: ["alice", "Alice-Work"], commits: 4, oversizedCommits: 1, prs: 2, oversizedPrs: 1 });
+    expect(r.commits[0]).toMatchObject({ author: "Alice-Work", person: "Alice-Work" });
+    expect(r.prs[0]).toMatchObject({ author: "Alice-Work", person: "Alice-Work" });
+  });
+
+  it("without links every login is its own person", () => {
+    const r = agg([pr(1, "alice"), pr(2, "alice-work")], [c("alice"), c("alice-work")]);
+    expect(r.people.map((p) => p.login).sort()).toEqual(["alice", "alice-work"]);
+    expect(r.people.every((p) => p.linkedLogins === undefined)).toBe(true);
+  });
+
+  it("logins narrow to one person's logins", () => {
+    const r = aggregateWorkingHabits({
+      prs: [pr(1, "alice"), pr(2, "alice-work"), pr(3, "bob")], commits: [c("alice"), c("alice-work"), c("bob")],
+      thresholds: T, window: WINDOW, canonical, logins: ["alice", "alice-work"],
+    });
+    expect(r.people).toHaveLength(1);
+    expect(r.totals).toMatchObject({ commits: 2, prs: 2 });
+  });
+});
+
 describe("formatWorkingHabitsDigestLine", () => {
   it("totals only — no logins", () => {
     const r = agg([pr(1, "alice", { commit_count: 25 }), pr(2, "bob", { commits_synced_at: null })],
@@ -148,9 +180,11 @@ describe("getWorkingHabitsRows (SQL)", () => {
     expect(all.commits.map((x) => x.sha).sort()).toEqual(["a", "b", "w"]);
     expect(all.prs.find((p) => p.repo === "acme/api")?.commits_synced_at).toMatch(/^\d{4}-\d\d-\d\dT/);
 
-    const alice = await getWorkingHabitsRows(["acme/api"], WINDOW.from, WINDOW.to, "ALICE");
+    const alice = await getWorkingHabitsRows(["acme/api"], WINDOW.from, WINDOW.to, ["ALICE"]);
     expect(alice.commits.map((x) => x.sha)).toEqual(["a"]);
     expect(alice.prs).toHaveLength(1);
+    const both = await getWorkingHabitsRows(["acme/api"], WINDOW.from, WINDOW.to, ["alice", "BOB"]);
+    expect(both.commits.map((x) => x.sha).sort()).toEqual(["a", "b"]);
 
     expect(await getWorkingHabitsRows([], WINDOW.from, WINDOW.to)).toEqual({ prs: [], commits: [] });
   });
@@ -181,6 +215,11 @@ vi.mock("@/lib/db", async (orig) => ({
   ...(await orig<typeof import("@/lib/db")>()),
   listSyncedRepos: async () => [{ repo: "acme/api", last_synced_at: null }, { repo: "acme/web", last_synced_at: null }, { repo: "acme/hidden", last_synced_at: null }, { repo: "zeta/x", last_synced_at: null }],
 }));
+let storedLinks: { alias_login: string; primary_login: string }[] = [];
+vi.mock("@/lib/identity-links", async (orig) => {
+  const real = await orig<typeof import("@/lib/identity-links")>();
+  return { ...real, loadCanonical: async () => ({ canonical: real.makeCanonical(storedLinks), links: storedLinks }) };
+});
 vi.mock("@/lib/working-habits-settings", async (orig) => ({
   ...(await orig<typeof import("@/lib/working-habits-settings")>()),
   getThresholds: async () => T,
@@ -231,17 +270,37 @@ describe("GET /api/db/working-habits", () => {
   it("without the grant: own numbers only, forced to the viewer's login", async () => {
     const { status, body } = await call("owner=acme&login=alice&days=90");
     expect(status).toBe(200);
-    expect(body._args).toMatchObject({ repos: ["acme/api", "acme/web"], login: "Alice" });
+    expect(body._args).toMatchObject({ repos: ["acme/api", "acme/web"], logins: ["Alice"] });
     const span = new Date(body._args.to).getTime() - new Date(body._args.from).getTime();
     expect(span).toBe(90 * 86_400_000);
   });
 
   it("with the grant or as admin: whole team", async () => {
     access.flags = ["workingHabits"];
-    expect((await call("owner=acme&repo=api")).body._args).toMatchObject({ repos: ["acme/api"], login: null });
+    expect((await call("owner=acme&repo=api")).body._args).toMatchObject({ repos: ["acme/api"], logins: null });
     access.flags = [];
     access.isAdmin = true;
     expect((await call("owner=acme")).status).toBe(200);
+  });
+
+  it("granted views merge linked logins; a profile view reads the person's aliases too", async () => {
+    storedLinks = [{ alias_login: "alice-work", primary_login: "alice" }];
+    access.flags = ["workingHabits"];
+    await call("owner=acme&repo=api");
+    const team = computeWorkingHabits.mock.calls.at(-1)![0];
+    expect(team.logins).toBeNull();
+    expect(team.canonical("Alice-Work")).toBe("alice");
+    expect((await call("owner=acme&login=alice")).body._args.logins).toEqual(["alice", "alice-work"]);
+    storedLinks = [];
+  });
+
+  it("self-view never includes aliases, even when links exist", async () => {
+    storedLinks = [{ alias_login: "alice-work", primary_login: "alice" }, { alias_login: "alice", primary_login: "mallory" }];
+    await call("owner=acme&login=alice");
+    const args = computeWorkingHabits.mock.calls.at(-1)![0];
+    expect(args.logins).toEqual(["Alice"]);
+    expect(args.canonical("alice-work")).toBe("alice-work");
+    storedLinks = [];
   });
 
   it("owner scope leaves out tracked repos the viewer's token cannot open", async () => {

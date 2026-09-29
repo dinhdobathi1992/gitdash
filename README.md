@@ -61,6 +61,7 @@
 | **Delivery metrics** | DORA four keys per repository (from releases, or estimated from merged pull requests), with cycle-time, size-vs-velocity, throughput and stability drill-downs. |
 | **Workflow intelligence** | Per workflow: why it fails, where the time goes, slowest jobs and steps, flaky branches, anomaly detection, triggers and concrete ways to speed it up. |
 | **Pull requests & people** | Review speed and rounds, stale PRs, reviewer load, bus factor, workload risk, contributor profiles and a printable 1:1 prep sheet. |
+| **Team insights** | One 30- or 90-day window per repository: what stands out (worst first), merges reviewed by a human, the reviewer bus factor, who reviews whom, workload against the org workday, and a People table. Admins can link two GitHub logins of one person. |
 | **Working habits** | Per engineer: share of oversized commits (over 10 files or 200 lines) and pull requests with more than 20 commits, measured inside merged pull requests so squash merges read correctly. Limits are editable; engineers always see their own figures. Needs a database. |
 | **Cost** | GitHub Actions spend by day, runner type and repository, with savings estimates. |
 | **Alerts** | Rules on CI and people metrics, delivered in the browser, by email (optionally a daily digest) or to Slack, plus a weekly leadership digest. |

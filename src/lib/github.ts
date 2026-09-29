@@ -40,6 +40,10 @@ function etagSet(key: string, entry: EtagEntry): void {
 const octokitCache = new Map<string, Octokit>();
 const OCTOKIT_MAX_INSTANCES = 100;
 
+function noRateLimitWait(options: object): boolean {
+  return (options as { request?: { noRateLimitWait?: boolean } }).request?.noRateLimitWait === true;
+}
+
 export function getOctokit(token?: string): Octokit {
   const pat = token || process.env.GITHUB_TOKEN;
   if (!pat) throw new Error("GitHub token not configured");
@@ -52,11 +56,13 @@ export function getOctokit(token?: string): Octokit {
     auth: pat,
     throttle: {
       // Retry once after the advised wait; on the second hit, give up so the
-      // route can surface a real error instead of hanging.
-      onRateLimit: (_retryAfter: number, _options: object, _octokit: unknown, retryCount: number) =>
-        retryCount < 1,
-      onSecondaryRateLimit: (_retryAfter: number, _options: object, _octokit: unknown, retryCount: number) =>
-        retryCount < 1,
+      // route can surface a real error instead of hanging. A call made with
+      // `request: { noRateLimitWait: true }` never waits: it fails at once and
+      // its caller returns partial data (see team-contributors.ts).
+      onRateLimit: (_retryAfter: number, options: object, _octokit: unknown, retryCount: number) =>
+        retryCount < 1 && !noRateLimitWait(options),
+      onSecondaryRateLimit: (_retryAfter: number, options: object, _octokit: unknown, retryCount: number) =>
+        retryCount < 1 && !noRateLimitWait(options),
     },
     retry: {
       // Defaults plus 304: Not Modified is our ETag signal, not a failure.

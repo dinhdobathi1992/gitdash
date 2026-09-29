@@ -7,6 +7,56 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+## [4.7.0] - 2026-09-29
+
+Team insights v2. Notes:
+[`docs/releases/v4.7.0.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.7.0.md).
+Helm chart 0.7.6 / appVersion 4.7.0. Adds database migration v12. **Back up the database before upgrading.**
+
+### Added
+- **What stands out** on Team insights: findings computed from the page's numbers, worst first, each
+  linking to its section (after-hours work, one reviewer, merges without a human review, oversized
+  commits, pull requests over the commit limit, self-merges). Findings whose data is partial are left out
+  and a coverage line says why.
+- **One window for the whole page**: 30 or 90 days (`?days=90`), shared by every section.
+- New KPIs: merged (with pull requests opened in the window), the **true median** time from open to merge,
+  **reviewed by a human** (submitted approve / request-changes / comment by someone who is neither a bot
+  nor the author) and merges with no human review, reviewer bus factor over human reviews only.
+- **Who reviews whom** as a list of pairs by pull requests, switching to the heatmap at 4+ reviewers;
+  **Workload to watch** with bars against the fixed limits; a grouped **People** table (As author / As
+  reviewer / Habits) with CSV export of the granted columns only; **Include bots** switch.
+- **Working habits v2** layout: commits over the limit split by files / lines / both, pull requests over
+  the commit limit, the largest commit, oversized commits grouped by pull request.
+- **Account links** (organization mode, admins): link two GitHub logins of one person from a suggestion on
+  Team insights; every metric then counts them as one and reviews between them become self-reviews.
+  "Different people" dismisses a suggestion. Settings → Account links lists links and dismissals with
+  Unlink / Undo. Audited per affected login. Links change numbers only, never access.
+- **Org workday** (Settings → Team insights): time zone and hours for after-hours and weekend figures.
+- API: `days=30|90` on `/api/github/repo-contributors` (GraphQL search, facts shared per repository) and
+  `/api/github/team-workload-risk`; `/api/settings/team`; `/api/admin/identity-links` (+ `/distinct`).
+
+### Changed
+- **After-hours and weekend figures now use the org workday, default Asia/Saigon 08:00–19:00** (was UTC
+  09:00–18:00) — on Team insights *and* each repository's Team tab, so those numbers change on upgrade.
+  The contributor profile's commit-hour chart and the `afterhours_commit_pct` alert keep UTC 09–18.
+- Account links are applied on the repository Team tab too; merged people's averages there are
+  weighted approximations.
+- Bot logins are one rule everywhere (`[bot]` suffix, dependabot / renovate / github-actions, or the API
+  says Bot); GraphQL bot logins get the `[bot]` suffix so both APIs agree.
+- The 90-day windowed contributors fetch reads three 30-day slices in parallel (tesda-backend: 4.3 s cold,
+  3 GraphQL points) and up to 100 reviews per pull request.
+- GitHub GraphQL calls made with `request: { noRateLimitWait: true }` fail at once on a rate limit
+  instead of waiting; Team insights then shows partial data.
+- `/api/github/repo-contributors` and `/api/github/team-workload-risk` answer 400 for a `days` other
+  than 30 or 90 (it used to be ignored). The workload cache key changed, so every repository starts cold
+  once after the upgrade.
+- `/api/db/working-habits` with the grant: `people[].login` is the person's most active login when
+  linked logins were merged (`linkedLogins`), and rows carry an opaque `personKey`.
+
+### Removed
+- The v1 Team insights contributors table and workload list (replaced by the People table and Workload
+  to watch).
+
 ## [4.6.2] - 2026-09-29
 
 Helm chart 0.7.5 / appVersion 4.6.2. No migration.

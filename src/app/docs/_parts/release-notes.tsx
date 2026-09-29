@@ -7,10 +7,32 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.6.2",
+      version: "4.7.0",
       date: "2026-09-29",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "Team insights v2: \"What stands out\" lists findings computed from the page's numbers, worst first, each linking to its section",
+          "One 30- or 90-day window for the whole Team insights page, kept in the URL",
+          "Reviewed by a human: merges counted only when someone other than the author and not a bot reviewed them; the reviewer bus factor counts human reviews only",
+          "Who reviews whom by pull request, Workload to watch with limit markers, and a People table with CSV export",
+          "Account links (organization mode, admins): count two GitHub logins of one person as one, from a suggestion on Team insights; manage them in Settings → Account links",
+          "Settings → Team insights: the organization's workday (time zone and hours) for after-hours and weekend figures",
+        ],
+        fixed: [
+          "Team insights' median time to merge is now the median over pull requests, not the median of each person's average",
+        ],
+        improved: [
+          "After-hours and weekend figures follow the organization's workday (default Asia/Saigon 08:00–19:00, was UTC 09:00–18:00), on Team insights and each repository's Team tab",
+          "Working habits on Team insights: commits over the limit by reason, the largest commit, and oversized commits grouped by pull request",
+          "Bots are recognised the same way everywhere and never count toward team numbers; an Include bots switch shows them",
+        ],
+      },
+    },
+    {
+      version: "4.6.2",
+      date: "2026-09-29",
       changes: {
         added: [],
         fixed: [
