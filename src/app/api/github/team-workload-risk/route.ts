@@ -14,6 +14,11 @@
  * than reusing contributor-profile's per-contributor logic — fetching
  * commits once for the whole repo and grouping by author locally is far
  * cheaper than N per-contributor fetches, and open PRs are a single call.
+ *
+ * Without `days`: the legacy 42-day view (repo Team tab), output shape
+ * unchanged. With `days=30|90`: the Team insights window, with `partial`,
+ * the thresholds and the workday. Both count hours in the org workday
+ * (src/lib/team-settings.ts) and merge linked accounts (src/lib/team-workload.ts).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,17 +26,18 @@ import { getTokenFromSession } from "@/lib/session";
 import { getOctokit } from "@/lib/github";
 import { validateOwner, validateRepo, safeError } from "@/lib/validation";
 import { withCache, hashKey } from "@/lib/cache";
-
 import { gatedCacheHeaders } from "@/lib/http-cache";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { loadCanonical } from "@/lib/identity-links";
+import { workdayKey, type Workday } from "@/lib/team-settings";
+import { getWorkday } from "@/lib/workday-setting";
+import {
+  WORKLOAD_THRESHOLDS, computeWorkload, fetchCommitCounters, type WorkloadCounters, type WorkloadPerson,
+} from "@/lib/team-workload";
 
 const CACHE_TTL = 900; // 15 min
-const WINDOW_DAYS = 42; // recent 14d + prior 28d baseline
-const RECENT_DAYS = 14;
-const AFTER_HOURS_THRESHOLD = 0.3; // >=30% of commits outside 9-18 UTC
-const WEEKEND_THRESHOLD = 0.25; // >=25% of commits on Sat/Sun
-const MIN_SAMPLE = 5; // minimum commits before flagging after-hours/weekend risk
-const CONCURRENT_PR_OVERLOAD = 4; // open PRs at once
+const WINDOW_DAYS = 42; // legacy: recent 14d + prior 28d baseline
+const VALID_DAYS = [30, 90];
 
 export interface WorkloadRiskEntry {
   login: string;
@@ -61,6 +67,34 @@ export interface TeamWorkloadRiskResponse {
   total_commits_analysed: number;
 }
 
+/** `days=30|90`: the Team insights window. Rows carry bot/name/link markers. */
+export interface TeamWorkloadRiskWindowResponse {
+  people: WorkloadPerson[];
+  window_days: number;
+  total_commits_analysed: number;
+  /** The commit page cap was reached; the activity cliff is not computed. */
+  partial: boolean;
+  thresholds: typeof WORKLOAD_THRESHOLDS;
+  /** The org workday the after-hours and weekend figures were counted in. */
+  workday: Workday;
+}
+
+/** Legacy output shape — exactly the fields the repo Team tab has always received. */
+function toLegacyEntry(p: WorkloadPerson): WorkloadRiskEntry {
+  return {
+    login: p.login,
+    avatar_url: p.avatar_url,
+    total_commits: p.total_commits,
+    after_hours_pct: p.after_hours_pct,
+    weekend_pct: p.weekend_pct,
+    open_pr_count: p.open_pr_count,
+    prior_period_commits: p.prior_period_commits,
+    recent_period_commits: p.recent_period_commits,
+    flags: p.flags,
+    risk_score: p.risk_score,
+  };
+}
+
 export async function GET(req: NextRequest) {
   labelGitHubRoute("github/team-workload-risk");
   const token = await getTokenFromSession();
@@ -71,145 +105,49 @@ export async function GET(req: NextRequest) {
   if (!ownerResult.ok) return ownerResult.response;
   const repoResult = validateRepo(searchParams.get("repo"));
   if (!repoResult.ok) return repoResult.response;
+  const rawDays = searchParams.get("days");
+  const days = rawDays === null ? null : Number(rawDays);
+  if (days !== null && !VALID_DAYS.includes(days)) {
+    return NextResponse.json({ error: "days must be 30 or 90" }, { status: 400 });
+  }
 
   const owner = ownerResult.data;
   const repo = repoResult.data;
 
   try {
-    const response = await withCache<TeamWorkloadRiskResponse>(
-      `github/team-workload-risk:${hashKey(token)}:${owner}/${repo}`,
+    const workday = await getWorkday();
+    const windowDays = days ?? WINDOW_DAYS;
+    // Counters depend on the workday (hours are read in its zone), so it is part of the key.
+    const counters = await withCache<WorkloadCounters>(
+      `github/team-workload-risk:v2:${hashKey(token)}:${owner}/${repo}:${windowDays}d:${workdayKey(workday)}`,
       CACHE_TTL,
-      () => computeWorkloadRisk(token, owner, repo),
+      () => fetchCommitCounters(getOctokit(token), owner, repo, { windowDays, workday }),
+      // No short TTL for `partial`: here it means the page cap was reached, which a
+      // retry would not change — refetching every 30 s would only burn quota.
       { shared: true },
     );
+    // Links are read uncached, after the cache, so a change shows on the next load.
+    const { canonical } = await loadCanonical();
 
-    return NextResponse.json(response, {
-      headers: gatedCacheHeaders(),
-    });
+    if (days === null) {
+      const response: TeamWorkloadRiskResponse = {
+        people: computeWorkload(counters, canonical).map(toLegacyEntry),
+        window_days: WINDOW_DAYS,
+        total_commits_analysed: counters.total_commits,
+      };
+      return NextResponse.json(response, { headers: gatedCacheHeaders() });
+    }
+
+    const response: TeamWorkloadRiskWindowResponse = {
+      people: computeWorkload(counters, canonical, { cliff: !counters.partial }),
+      window_days: days,
+      total_commits_analysed: counters.total_commits,
+      partial: counters.partial,
+      thresholds: WORKLOAD_THRESHOLDS,
+      workday,
+    };
+    return NextResponse.json(response, { headers: gatedCacheHeaders() });
   } catch (e) {
     return safeError(e, "Failed to compute team workload risk");
   }
-}
-
-async function computeWorkloadRisk(
-  token: string,
-  owner: string,
-  repo: string,
-): Promise<TeamWorkloadRiskResponse> {
-  const octokit = getOctokit(token);
-  const now = Date.now();
-  const windowStart = new Date(now - WINDOW_DAYS * 86_400_000);
-  const recentCutoff = now - RECENT_DAYS * 86_400_000;
-
-  // ── Repo-wide commits, one paginated fetch, grouped by author locally ────
-  interface AuthorAcc {
-    login: string;
-    avatar_url: string;
-    total: number;
-    afterHours: number;
-    weekend: number;
-    recent: number;
-    prior: number;
-  }
-  const authorMap = new Map<string, AuthorAcc>();
-
-  for (let page = 1; page <= 5; page++) {
-    const { data } = await octokit.rest.repos.listCommits({
-      owner,
-      repo,
-      since: windowStart.toISOString(),
-      per_page: 100,
-      page,
-    });
-    if (data.length === 0) break;
-
-    for (const c of data) {
-      const login = c.author?.login ?? c.commit?.author?.name ?? "unknown";
-      const avatar = c.author?.avatar_url ?? "";
-      const dateStr = c.commit.author?.date ?? c.commit.committer?.date;
-      if (!dateStr) continue;
-      const d = new Date(dateStr);
-      const ts = d.getTime();
-
-      if (!authorMap.has(login)) {
-        authorMap.set(login, { login, avatar_url: avatar, total: 0, afterHours: 0, weekend: 0, recent: 0, prior: 0 });
-      }
-      const acc = authorMap.get(login)!;
-      acc.total++;
-      if (!acc.avatar_url && avatar) acc.avatar_url = avatar;
-
-      const hour = d.getUTCHours();
-      if (hour < 9 || hour >= 18) acc.afterHours++;
-
-      const day = d.getUTCDay();
-      if (day === 0 || day === 6) acc.weekend++;
-
-      if (ts >= recentCutoff) acc.recent++;
-      else acc.prior++;
-    }
-
-    if (data.length < 100) break;
-  }
-
-  // ── Open PRs — one call, grouped by author for concurrent-load signal ───
-  const openPrCounts = new Map<string, number>();
-  try {
-    const { data: openPrs } = await octokit.rest.pulls.list({
-      owner,
-      repo,
-      state: "open",
-      per_page: 100,
-    });
-    for (const pr of openPrs) {
-      const login = pr.user?.login;
-      if (!login) continue;
-      openPrCounts.set(login, (openPrCounts.get(login) ?? 0) + 1);
-    }
-  } catch {
-    // Non-fatal — workload risk without concurrent-PR data is still useful.
-  }
-
-  const totalCommitsAnalysed = Array.from(authorMap.values()).reduce((s, a) => s + a.total, 0);
-
-  const people: WorkloadRiskEntry[] = Array.from(authorMap.values())
-    .filter((a) => a.total >= 1)
-    .map((a) => {
-      const afterHoursPct = a.total > 0 ? Math.round((a.afterHours / a.total) * 100) : 0;
-      const weekendPct = a.total > 0 ? Math.round((a.weekend / a.total) * 100) : 0;
-      const openPrCount = openPrCounts.get(a.login) ?? 0;
-
-      const afterHoursFlag = a.total >= MIN_SAMPLE && afterHoursPct / 100 >= AFTER_HOURS_THRESHOLD;
-      const weekendFlag = a.total >= MIN_SAMPLE && weekendPct / 100 >= WEEKEND_THRESHOLD;
-      const overloadFlag = openPrCount >= CONCURRENT_PR_OVERLOAD;
-      // Cliff: meaningfully active in the baseline window, silent in the recent one.
-      const cliffFlag = a.prior >= 3 && a.recent === 0;
-
-      const flags = {
-        after_hours: afterHoursFlag,
-        weekend: weekendFlag,
-        concurrent_pr_overload: overloadFlag,
-        activity_cliff: cliffFlag,
-      };
-      const riskScore = Object.values(flags).filter(Boolean).length;
-
-      return {
-        login: a.login,
-        avatar_url: a.avatar_url,
-        total_commits: a.total,
-        after_hours_pct: afterHoursPct,
-        weekend_pct: weekendPct,
-        open_pr_count: openPrCount,
-        prior_period_commits: a.prior,
-        recent_period_commits: a.recent,
-        flags,
-        risk_score: riskScore,
-      };
-    })
-    .sort((a, b) => b.risk_score - a.risk_score || b.total_commits - a.total_commits);
-
-  return {
-    people,
-    window_days: WINDOW_DAYS,
-    total_commits_analysed: totalCommitsAnalysed,
-  };
 }

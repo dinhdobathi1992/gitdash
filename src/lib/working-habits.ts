@@ -15,14 +15,11 @@
  */
 
 import type { WorkingHabitsThresholds } from "./working-habits-settings";
+import { isBot } from "./bots";
+import { noLinks, personKey, type Canonical } from "./identity-links";
 
-export const BOT_LOGINS = new Set(["dependabot", "renovate", "github-actions"]);
-
-export function isBot(login: string | null): boolean {
-  if (!login) return false;
-  const l = login.toLowerCase();
-  return l.endsWith("[bot]") || BOT_LOGINS.has(l);
-}
+// The bot rule moved to bots.ts (shared by every team metric); re-exported for existing importers.
+export { BOT_LOGINS, isBot } from "./bots";
 
 export type OversizeReason = "files" | "lines";
 
@@ -63,7 +60,12 @@ export interface WhCommitRow {
 // ── Output ───────────────────────────────────────────────────────────────────
 
 export interface WorkingHabitsPerson {
+  /** Display login: the person's most active login in this response. */
   login: string;
+  /** Every login merged into this person (account links), when more than one is present. */
+  linkedLogins?: string[];
+  /** Opaque person key, the same in every Team API (see identity-links.ts). */
+  personKey?: string;
   commits: number;
   oversizedCommits: number;
   oversizedCommitPct: number;
@@ -78,6 +80,10 @@ export interface WorkingHabitsCommit {
   repo: string;
   prNumber: number;
   author: string;
+  /** Display login of the person the commit counts for (differs from `author` for a linked alias). */
+  person: string;
+  /** Commits in the commit's pull request (null when not yet synced). */
+  prCommitCount: number | null;
   authorLinked: boolean;
   files: number | null;
   additions: number;
@@ -91,6 +97,8 @@ export interface WorkingHabitsPr {
   repo: string;
   number: number;
   author: string;
+  /** Display login of the person the PR counts for. */
+  person: string;
   commitCount: number;
   mergedAt: string;
   url: string;
@@ -126,22 +134,27 @@ export const MAX_LISTED_COMMITS = 200;
 export const ALERT_MIN_COMMITS = 5;
 
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /**
- * Pure aggregation. `login`, when given, narrows people, commits and PRs to
- * that person (case-insensitive); coverage always describes the whole scope.
+ * Pure aggregation. `logins`, when given, narrows people, commits and PRs to
+ * those logins (case-insensitive) — one person's own login, or a person and
+ * their linked aliases. `canonical` merges linked logins into one person
+ * (account links); without it every login is its own person. Coverage always
+ * describes the whole scope.
  */
 export function aggregateWorkingHabits(input: {
   prs: WhPrRow[];
   commits: WhCommitRow[];
   thresholds: WorkingHabitsThresholds;
   window: { from: Date; to: Date };
-  login?: string | null;
+  logins?: string[] | null;
+  canonical?: Canonical;
 }): Omit<WorkingHabitsResponse, "available" | "untrackedRepo"> {
-  const { thresholds: t, login } = input;
+  const { thresholds: t } = input;
+  const canonical = input.canonical ?? noLinks;
+  const only = input.logins?.length ? new Set(input.logins.map((l) => l.toLowerCase())) : null;
   const keep = (author: string | null): author is string =>
-    author !== null && !isBot(author) && (!login || same(author, login));
+    author !== null && !isBot(author) && (!only || only.has(author.toLowerCase()));
 
   const analysed = input.prs.filter((p) => p.commits_synced_at !== null);
   const lastSyncedAt = analysed.reduce<string | null>(
@@ -154,18 +167,25 @@ export function aggregateWorkingHabits(input: {
     lastSyncedAt: lastSyncedAt ? new Date(lastSyncedAt).toISOString() : null,
   };
 
+  // Person key = canonical login; activity per raw login picks the display login.
   const people = new Map<string, WorkingHabitsPerson>();
-  const person = (loginKey: string): WorkingHabitsPerson => {
-    const key = loginKey.toLowerCase();
+  const activity = new Map<string, Map<string, number>>();
+  const person = (login: string): WorkingHabitsPerson => {
+    const key = canonical(login);
     let p = people.get(key);
     if (!p) {
-      p = { login: loginKey, commits: 0, oversizedCommits: 0, oversizedCommitPct: 0, viaPrAuthor: 0, prs: 0, oversizedPrs: 0 };
+      p = { login, commits: 0, oversizedCommits: 0, oversizedCommitPct: 0, viaPrAuthor: 0, prs: 0, oversizedPrs: 0 };
       people.set(key, p);
+      activity.set(key, new Map());
     }
+    const a = activity.get(key)!;
+    const seen = [...a.keys()].find((k) => k.toLowerCase() === login.toLowerCase()) ?? login;
+    a.set(seen, (a.get(seen) ?? 0) + 1);
     return p;
   };
 
-  const oversizedCommits: WorkingHabitsCommit[] = [];
+  const prCommits = new Map(input.prs.map((p) => [`${p.repo}#${p.pr_number}`, p.commit_count]));
+  const oversizedCommits: (WorkingHabitsCommit & { key: string })[] = [];
   let commitTotal = 0;
   for (const c of input.commits) {
     if (!keep(c.author)) continue;
@@ -177,7 +197,9 @@ export function aggregateWorkingHabits(input: {
     if (reasons.length) {
       p.oversizedCommits++;
       oversizedCommits.push({
-        sha: c.sha, repo: c.repo, prNumber: c.pr_number, author: c.author, authorLinked: c.author_linked,
+        key: canonical(c.author),
+        sha: c.sha, repo: c.repo, prNumber: c.pr_number, author: c.author, person: c.author, authorLinked: c.author_linked,
+        prCommitCount: prCommits.get(`${c.repo}#${c.pr_number}`) ?? null,
         files: c.files, additions: c.additions, deletions: c.deletions,
         committedAt: c.committed_at ? new Date(c.committed_at).toISOString() : null,
         reasons, url: `https://github.com/${c.repo}/commit/${c.sha}`,
@@ -185,7 +207,7 @@ export function aggregateWorkingHabits(input: {
     }
   }
 
-  const oversizedPrs: WorkingHabitsPr[] = [];
+  const oversizedPrs: (WorkingHabitsPr & { key: string })[] = [];
   let prTotal = 0;
   for (const pr of input.prs) {
     if (!keep(pr.author)) continue;
@@ -195,13 +217,25 @@ export function aggregateWorkingHabits(input: {
     if (pr.commit_count !== null && pr.commit_count > t.maxPrCommits) {
       p.oversizedPrs++;
       oversizedPrs.push({
-        repo: pr.repo, number: pr.pr_number, author: pr.author, commitCount: pr.commit_count,
+        key: canonical(pr.author),
+        repo: pr.repo, number: pr.pr_number, author: pr.author, person: pr.author, commitCount: pr.commit_count,
         mergedAt: new Date(pr.merged_at).toISOString(), url: `https://github.com/${pr.repo}/pull/${pr.pr_number}`,
       });
     }
   }
 
-  for (const p of people.values()) p.oversizedCommitPct = pct(p.oversizedCommits, p.commits);
+  for (const [key, p] of people) {
+    const logins = [...activity.get(key)!.entries()];
+    // Most active login present here is the display name; ties keep first seen.
+    p.login = logins.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0];
+    if (logins.length > 1) p.linkedLogins = logins.map(([l]) => l);
+    p.personKey = personKey(key);
+    p.oversizedCommitPct = pct(p.oversizedCommits, p.commits);
+  }
+  const display = (key: string) => people.get(key)!.login;
+  const strip = <T extends { key: string; person: string }>({ key, ...rest }: T): Omit<T, "key"> =>
+    ({ ...rest, person: display(key) }) as Omit<T, "key">;
+
   const sortedPeople = [...people.values()].sort(
     (a, b) => b.oversizedCommitPct - a.oversizedCommitPct || b.oversizedCommits - a.oversizedCommits || a.login.localeCompare(b.login),
   );
@@ -213,8 +247,8 @@ export function aggregateWorkingHabits(input: {
     window: { from: input.window.from.toISOString(), to: input.window.to.toISOString() },
     coverage,
     people: sortedPeople,
-    commits: oversizedCommits.slice(0, MAX_LISTED_COMMITS),
-    prs: oversizedPrs,
+    commits: oversizedCommits.slice(0, MAX_LISTED_COMMITS).map(strip),
+    prs: oversizedPrs.map(strip),
     totals: {
       commits: commitTotal,
       oversizedCommits: sortedPeople.reduce((s, p) => s + p.oversizedCommits, 0),
@@ -231,18 +265,22 @@ export async function computeWorkingHabits(opts: {
   repos: string[];
   from: Date;
   to: Date;
-  login?: string | null;
+  /** Narrow to these logins (a person, or a person and their linked aliases); null = everyone. */
+  logins?: string[] | null;
+  /** Merge linked logins into one person (account links). */
+  canonical?: Canonical;
 }) {
   const [{ getWorkingHabitsRows }, { getThresholds }] = await Promise.all([
     import("./db"),
     import("./working-habits-settings"),
   ]);
   const [rows, thresholds] = await Promise.all([
-    getWorkingHabitsRows(opts.repos, opts.from, opts.to, opts.login ?? null),
+    getWorkingHabitsRows(opts.repos, opts.from, opts.to, opts.logins ?? null),
     getThresholds(),
   ]);
   return aggregateWorkingHabits({
-    prs: rows.prs, commits: rows.commits, thresholds, window: { from: opts.from, to: opts.to }, login: opts.login,
+    prs: rows.prs, commits: rows.commits, thresholds, window: { from: opts.from, to: opts.to },
+    logins: opts.logins, canonical: opts.canonical,
   });
 }
 

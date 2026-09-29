@@ -27,7 +27,8 @@ export function PageHeading({
         {meta && <div className="mt-1 text-sm text-muted">{meta}</div>}
         {children}
       </div>
-      {actions && <div className="flex items-center gap-3 flex-wrap shrink-0">{actions}</div>}
+      {/* max-w-full: on a phone the actions wrap inside the page width instead of scrolling it sideways. */}
+      {actions && <div className="flex items-center gap-3 flex-wrap shrink-0 max-w-full">{actions}</div>}
     </header>
   );
 }

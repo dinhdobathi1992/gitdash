@@ -13,7 +13,7 @@ import { cn, formatRelative } from "@/lib/utils";
 import { fetcher } from "@/lib/swr";
 import { Button } from "@/components/ui/Button";
 import { ErrorBanner } from "@/components/ui/Card";
-import { Avatar } from "@/components/team/WorkloadList";
+import { Avatar } from "@/components/ui/Avatar";
 import { FEATURE_GROUPS, GROUP_LABEL, GROUP_ORDER } from "@/components/settings/feature-groups";
 import { adminPut, useAdminUsers, useAudit, usePermissions, type AdminUser, type AuditEntry } from "@/components/settings/admin-api";
 
@@ -285,7 +285,11 @@ export function MembersSection({ notify }: { notify: Notify }) {
 }
 
 const fmt = (v: unknown) => (Array.isArray(v) ? (v.length ? v.map((x) => GROUP_LABEL[String(x)] ?? String(x)).join(", ") : "none") : v === undefined || v === null ? "—" : String(v));
-const ACTIONS: Record<string, string> = { group_grant: "Granted", group_revoke: "Removed", user_groups_set: "Set groups for" };
+const ACTIONS: Record<string, string> = {
+  group_grant: "Granted", group_revoke: "Removed", user_groups_set: "Set groups for",
+  identity_link: "Linked account", identity_unlink: "Unlinked account",
+  identity_distinct: "Marked as different people:", identity_distinct_undo: "Undid different people:",
+};
 
 export function AuditSection() {
   const first = useAudit();
@@ -301,7 +305,7 @@ export function AuditSection() {
 
   return (
     <section aria-labelledby="audit-title">
-      <SectionHead title="Audit log">Every grant, removal and membership change, newest first.</SectionHead>
+      <SectionHead title="Audit log">Every grant, removal, membership change and account link, newest first.</SectionHead>
       <h2 id="audit-title" className="sr-only">Audit log</h2>
       {first.error && <ErrorBanner message="Couldn't load the audit log." onRetry={() => first.mutate()} />}
       <div className="card overflow-x-auto">
@@ -321,7 +325,7 @@ export function AuditSection() {
                 <td className="h-12 pl-5 pr-3 text-muted whitespace-nowrap" title={e.created_at}>{formatRelative(e.created_at)}</td>
                 <td className="px-3 font-mono text-fg">{e.actor_login ?? e.actor_github_id}</td>
                 <td className="px-3 text-fg">{ACTIONS[e.action] ?? e.action.replace(/_/g, " ")} <span className="font-mono text-muted">{e.target}</span></td>
-                <td className="px-3 pr-5 text-muted">{fmt(e.details?.before)} → <span className="text-fg">{fmt(e.details?.after)}</span></td>
+                <td className="px-3 pr-5 text-muted">{fmt(e.details?.before ?? e.details?.before_primary)} → <span className="text-fg">{fmt(e.details?.after ?? e.details?.after_primary)}</span></td>
               </tr>
             ))}
           </tbody>

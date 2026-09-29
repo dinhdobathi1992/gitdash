@@ -63,10 +63,11 @@ export function APIReference() {
         {
           method: "GET",
           path: "/api/github/repo-contributors",
-          description: "Per-contributor delivery stats for a repository: PRs merged, reviews given, avg lead time, avg PR size, review turnaround, first-pass approval rate, self-merges. Also returns reviewer load matrix and bus factor.",
+          description: "Per-contributor delivery stats for a repository: PRs merged, reviews given, avg lead time, avg PR size, review turnaround, first-pass approval rate, self-merges. Also returns reviewer load matrix and bus factor. Without days: the last 60 closed pull requests (repo Team tab). With days=30|90: every pull request merged in the window, read through GraphQL search and shared by everyone who can see the repository, plus window_days, median_hours_to_merge (the true median), prs_merged_total, prs_opened_in_window, prs_human_reviewed, prs_no_human_review, prs_self_merged, bot_reviews, review_pairs (pull requests, not review events), coverage, and is_bot / linked_logins / median_hours_to_merge / reviewed_prs on each row. A human review is a submitted APPROVED, CHANGES_REQUESTED or COMMENTED review by someone who is neither a bot nor the author. Account links are applied in both modes.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner." },
             { name: "repo", type: "string", optional: false, desc: "Repository name." },
+            { name: "days", type: "number", optional: true, desc: "30 or 90: the Team insights window (see description)." },
           ],
         },
         {
@@ -140,10 +141,11 @@ export function APIReference() {
         {
           method: "GET",
           path: "/api/github/team-workload-risk",
-          description: "Team-wide people-risk signals for a repo: after-hours/weekend commit patterns, activity cliffs, and concurrent open-PR overload, per contributor. A conversation-starter signal, not a verdict.",
+          description: "Team-wide people-risk signals for a repo: after-hours/weekend commit patterns, activity cliffs, and concurrent open-PR overload, per contributor. A conversation-starter signal, not a verdict. Hours and weekdays are read in the org workday (Settings → Team insights; default Asia/Saigon 08:00–19:00). Without days: the last 42 days. With days=30|90: that window, plus partial (the commit page cap was reached; no activity cliff then), thresholds, workday, and is_bot / unlinked_name / linked_logins on each row. Account links are applied in both modes.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner." },
             { name: "repo", type: "string", optional: false, desc: "Repository name." },
+            { name: "days", type: "number", optional: true, desc: "30 or 90: the Team insights window." },
           ],
         },
         {
@@ -291,7 +293,7 @@ export function APIReference() {
         {
           method: "GET",
           path: "/api/db/working-habits",
-          description: "Working habits from the database: per-person commit and pull-request size in merged pull requests, oversized commits and pull requests, thresholds, and sync coverage. Needs the workingHabits feature to see anyone; without it, a signed-in user may read only their own login. Returns available:false without DATABASE_URL and untrackedRepo:true for a repository GitDash does not sync.",
+          description: "Working habits from the database: per-person commit and pull-request size in merged pull requests, oversized commits and pull requests, thresholds, and sync coverage. Needs the workingHabits feature to see anyone; without it, a signed-in user may read only their own login. Returns available:false without DATABASE_URL and untrackedRepo:true for a repository GitDash does not sync. With the grant, account links merge a person's logins (linkedLogins); your own view without the grant is always your own login only.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner." },
             { name: "repo", type: "string", optional: true, desc: "Repository name (omit for every tracked repository of the owner)." },
@@ -370,6 +372,24 @@ export function APIReference() {
           method: "GET",
           path: "/api/settings/working-habits",
           description: "Organization mode, admin only. Working-habits thresholds in effect (files and lines per commit, commits per pull request). PUT saves them.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/settings/team",
+          description: "Organization mode, admin only. The org workday in effect — time zone (IANA name) and hours — that decides after-hours and weekend commits. PUT { timezone, start, end } saves it; standalone deployments use the default, Asia/Saigon 08:00–19:00.",
+          params: [],
+        },
+        {
+          method: "GET",
+          path: "/api/admin/identity-links",
+          description: "Organization mode, admin only. Account links (alias → main login) and pairs marked as different people. POST { alias, primary } links (a main login that is itself an alias resolves to its main login; aliases of the alias move along); DELETE ?alias= unlinks. Every change is in the audit log, one row per affected login. Links change numbers only, never access; there is no non-admin endpoint.",
+          params: [],
+        },
+        {
+          method: "POST",
+          path: "/api/admin/identity-links/distinct",
+          description: "Organization mode, admin only. Body { a, b }: these two logins are different people, so Team insights never suggests linking them. DELETE ?a=&b= undoes it.",
           params: [],
         },
         {

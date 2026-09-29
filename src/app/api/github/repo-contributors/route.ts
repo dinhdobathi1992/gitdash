@@ -6,9 +6,18 @@ import { pLimitSettled } from "@/lib/concurrency";
 import { privateCacheHeaders } from "@/lib/http-cache";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
 import { withCache, hashKey, partialAwareTtl } from "@/lib/cache";
+import { canSeeRepo } from "@/lib/repo-access";
+import { loadCanonical } from "@/lib/identity-links";
+import {
+  WINDOW_DAYS, aggregateWindow, applyLinksToLegacy, fetchPrFactsWindow, type PrFactsWindow, type WindowDays,
+} from "@/lib/team-contributors";
+
+export type { RepoContributorsWindowResponse, WindowContributorRow, ReviewPair } from "@/lib/team-contributors";
 
 const CACHE_TTL = 300; // 5 minutes
 const CONCURRENCY = 10;
+/** Windowed facts: shared by every viewer of the repo, so a longer server TTL. */
+const FACTS_TTL = 600;
 
 // ── Response types ────────────────────────────────────────────────────────────
 
@@ -61,15 +70,24 @@ export async function GET(req: NextRequest) {
 
   const owner = ownerResult.data;
   const repo = repoResult.data;
+  const rawDays = searchParams.get("days");
+  const days = rawDays === null ? null : Number(rawDays);
+  if (days !== null && !(WINDOW_DAYS as readonly number[]).includes(days)) {
+    return NextResponse.json({ error: "days must be 30 or 90" }, { status: 400 });
+  }
 
   try {
+    if (days !== null) return await windowed(token, owner, repo, days as WindowDays);
+
     const response = await withCache(
       `github/repo-contributors:${hashKey(token)}:${owner}:${repo}`,
       CACHE_TTL,
       () => buildRepoContributors(token, owner, repo),
       { shared: true, ttlFor: partialAwareTtl(CACHE_TTL) },
     );
-    return NextResponse.json(response, {
+    // Links are read uncached, after the cache: numbers change on the next load.
+    const { canonical } = await loadCanonical();
+    return NextResponse.json(applyLinksToLegacy(response, canonical), {
       headers: {
         ...privateCacheHeaders(CACHE_TTL, 600),
       },
@@ -77,6 +95,27 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     return safeError(e, "Failed to fetch repo contributors");
   }
+}
+
+/**
+ * `days=30|90`: merged PRs and reviews through GraphQL search. The facts are
+ * cached per repository — not per token — and served only to viewers whose own
+ * token can see the repo, so one fetch serves everyone.
+ */
+async function windowed(token: string, owner: string, repo: string, days: WindowDays) {
+  if (!(await canSeeRepo(token, owner, repo))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const key = `github/repo-contributors:v2:facts:${owner.toLowerCase()}/${repo.toLowerCase()}:${days}`;
+  const facts = await withCache<PrFactsWindow>(
+    key,
+    FACTS_TTL,
+    () => fetchPrFactsWindow(getOctokit(token), owner, repo, days),
+    { shared: true, ttlFor: partialAwareTtl(FACTS_TTL) },
+  );
+  const { canonical } = await loadCanonical();
+  return NextResponse.json(aggregateWindow(facts, canonical), {
+    // Short: links are applied per request, and the facts cache holds the expensive part.
+    headers: privateCacheHeaders(60, 300),
+  });
 }
 
 async function buildRepoContributors(token: string, owner: string, repo: string): Promise<RepoContributorsResponse> {

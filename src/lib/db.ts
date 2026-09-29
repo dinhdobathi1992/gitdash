@@ -487,6 +487,44 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
       `UPDATE sync_cursors SET pr_sync_cursor = NOW() - INTERVAL '2 days' WHERE pr_backfill_complete = TRUE`,
     ],
   },
+  {
+    // Team insights v2. identity_links: GitHub logins that belong to one
+    // person (alias -> primary, always one hop: a primary is never an alias).
+    // identity_distinct: pairs an admin said are different people, so they are
+    // never suggested again. Both change numbers only, never access.
+    // team_settings: the org workday (time zone + hours) that decides what
+    // counts as an after-hours or weekend commit.
+    version: 12,
+    name: "team_insights_v2",
+    up: [
+      `CREATE TABLE IF NOT EXISTS identity_links (
+        alias_login   VARCHAR(100) PRIMARY KEY,
+        primary_login VARCHAR(100) NOT NULL,
+        created_by    VARCHAR(100),
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        CHECK (alias_login <> primary_login),
+        CHECK (alias_login = lower(alias_login) AND primary_login = lower(primary_login))
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_identity_links_primary ON identity_links(primary_login)`,
+      `CREATE TABLE IF NOT EXISTS identity_distinct (
+        login_a    VARCHAR(100) NOT NULL,
+        login_b    VARCHAR(100) NOT NULL,
+        created_by VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (login_a, login_b),
+        CHECK (login_a < login_b COLLATE "C"),
+        CHECK (login_a = lower(login_a) AND login_b = lower(login_b))
+      )`,
+      `CREATE TABLE IF NOT EXISTS team_settings (
+        id            INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        timezone      VARCHAR(64) NOT NULL DEFAULT 'Asia/Saigon',
+        workday_start SMALLINT NOT NULL DEFAULT 8 CHECK (workday_start BETWEEN 0 AND 23),
+        workday_end   SMALLINT NOT NULL DEFAULT 19 CHECK (workday_end BETWEEN 1 AND 24 AND workday_end > workday_start),
+        updated_by    VARCHAR(100),
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      )`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -737,21 +775,23 @@ export async function markPrCommitsSynced(
 
 /**
  * Merged PRs of `repos` with merged_at in [from, to), and the non-merge
- * commits inside them. `login` narrows the commits (case-insensitive); PRs are
- * always returned for the whole scope because they also measure sync coverage.
- * Timestamps come back as ISO strings whatever the driver returns.
+ * commits inside them. `logins` narrows the commits (case-insensitive) — one
+ * person, or a person and their linked aliases; PRs are always returned for
+ * the whole scope because they also measure sync coverage (the aggregation
+ * narrows them). Timestamps come back as ISO strings whatever the driver returns.
  */
 export async function getWorkingHabitsRows(
   repos: string[],
   from: Date,
   to: Date,
-  login: string | null = null,
+  logins: string[] | null = null,
 ): Promise<{ prs: WhPrRow[]; commits: WhCommitRow[] }> {
   if (!repos.length) return { prs: [], commits: [] };
   await ensureSchema();
   const db = getDb();
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
+  const lowered = logins?.length ? logins.map((l) => l.toLowerCase()) : null;
   const [prs, commits] = (await Promise.all([
     db`
       SELECT repo, pr_number, author, merged_at, commit_count, commits_synced_at
@@ -764,7 +804,7 @@ export async function getWorkingHabitsRows(
       JOIN pr_facts p ON p.repo = c.repo AND p.pr_number = c.pr_number
       WHERE p.repo = ANY(${repos}::varchar[]) AND p.merged_at >= ${fromIso} AND p.merged_at < ${toIso}
         AND NOT c.is_merge
-        AND (${login}::text IS NULL OR lower(c.author) = lower(${login}::text))
+        AND (${lowered}::text[] IS NULL OR lower(c.author) = ANY(${lowered}::text[]))
     `,
   ])) as [WhPrRow[], WhCommitRow[]];
   const iso = (v: unknown) => (v === null || v === undefined ? null : new Date(v as string).toISOString());
@@ -824,6 +864,234 @@ export async function saveWorkingHabitsSettings(input: {
       updated_by       = EXCLUDED.updated_by,
       updated_at       = NOW()
   `;
+}
+
+// ── Team workday (organization mode only) ────────────────────────────────────
+
+export interface DbTeamSettings {
+  timezone: string;
+  workday_start: number;
+  workday_end: number;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+/** Null when no row exists — callers then use the defaults. */
+export async function getTeamSettings(): Promise<DbTeamSettings | null> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT timezone, workday_start, workday_end, updated_by, updated_at FROM team_settings WHERE id = 1
+  `) as DbTeamSettings[];
+  const r = rows[0];
+  return r ? { ...r, workday_start: Number(r.workday_start), workday_end: Number(r.workday_end) } : null;
+}
+
+export async function saveTeamSettings(input: {
+  timezone: string;
+  workday_start: number;
+  workday_end: number;
+  updated_by: string | null;
+}): Promise<void> {
+  await ensureSchema();
+  await getDb()`
+    INSERT INTO team_settings (id, timezone, workday_start, workday_end, updated_by, updated_at)
+    VALUES (1, ${input.timezone}, ${input.workday_start}, ${input.workday_end}, ${input.updated_by}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      timezone      = EXCLUDED.timezone,
+      workday_start = EXCLUDED.workday_start,
+      workday_end   = EXCLUDED.workday_end,
+      updated_by    = EXCLUDED.updated_by,
+      updated_at    = NOW()
+  `;
+}
+
+// ── Identity links (organization mode, admin only) ───────────────────────────
+
+/**
+ * Serializes link changes so the one-hop invariant (a primary is never an
+ * alias) holds under concurrent requests. Same READ COMMITTED reasoning as
+ * PERMISSION_LOCK_KEY: the lock is its own statement, so the guarded CTE after
+ * it takes a snapshot that includes every committed change.
+ */
+const IDENTITY_LOCK_KEY = 718_204_553;
+
+export interface DbIdentityLink {
+  alias_login: string;
+  primary_login: string;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface DbIdentityDistinct {
+  login_a: string;
+  login_b: string;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export async function listIdentityLinks(): Promise<DbIdentityLink[]> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT alias_login, primary_login, created_by, created_at FROM identity_links ORDER BY primary_login, alias_login
+  `) as DbIdentityLink[];
+  return rows.map((r) => ({ ...r, created_at: r.created_at ? new Date(r.created_at).toISOString() : null }));
+}
+
+export async function listIdentityDistinct(): Promise<DbIdentityDistinct[]> {
+  await ensureSchema();
+  const rows = (await getDb()`
+    SELECT login_a, login_b, created_by, created_at FROM identity_distinct ORDER BY login_a, login_b
+  `) as DbIdentityDistinct[];
+  return rows.map((r) => ({ ...r, created_at: r.created_at ? new Date(r.created_at).toISOString() : null }));
+}
+
+/**
+ * Link `alias` to `primary` (both lowercase), atomically:
+ *  - a primary that is itself an alias resolves to its own primary (one hop);
+ *  - logins currently pointing at `alias` are re-pointed to that primary;
+ *  - refused (ok=false) when the resolved primary is `alias` itself (a cycle);
+ *  - one audit row per alias whose primary changed, and the pair's
+ *    "different people" row is removed (the admin changed their mind).
+ */
+export async function linkIdentity(
+  actor: { id: number; login: string },
+  alias: string,
+  primary: string,
+): Promise<{ ok: boolean; primary: string }> {
+  await ensureSchema();
+  const db = getDb();
+  const [, rows] = await db.transaction([
+    db`SELECT pg_advisory_xact_lock(${IDENTITY_LOCK_KEY})`,
+    db`
+      WITH resolved AS (
+        SELECT COALESCE((SELECT primary_login FROM identity_links WHERE alias_login = ${primary}), ${primary}::text) AS p
+      ),
+      guard AS (
+        SELECT (SELECT p FROM resolved) <> ${alias}::text AS ok
+      ),
+      before AS (
+        SELECT alias_login, primary_login FROM identity_links
+        WHERE alias_login = ${alias} OR primary_login = ${alias}
+      ),
+      repoint AS (
+        UPDATE identity_links SET primary_login = (SELECT p FROM resolved)
+        WHERE primary_login = ${alias} AND (SELECT ok FROM guard)
+        RETURNING alias_login, primary_login
+      ),
+      up AS (
+        INSERT INTO identity_links (alias_login, primary_login, created_by)
+        SELECT ${alias}, (SELECT p FROM resolved), ${actor.login} WHERE (SELECT ok FROM guard)
+        ON CONFLICT (alias_login) DO UPDATE SET
+          primary_login = EXCLUDED.primary_login, created_by = EXCLUDED.created_by, created_at = NOW()
+        RETURNING alias_login, primary_login
+      ),
+      undistinct AS (
+        -- Pairs are ordered byte-wise (COLLATE "C"), matching the JS ordering in setIdentityDistinct.
+        -- Both the requested and the resolved primary: either may have been dismissed before.
+        DELETE FROM identity_distinct
+        WHERE (SELECT ok FROM guard)
+          AND (login_a, login_b) IN (
+            (least(${alias}::text COLLATE "C", (SELECT p FROM resolved) COLLATE "C"),
+             greatest(${alias}::text COLLATE "C", (SELECT p FROM resolved) COLLATE "C")),
+            (least(${alias}::text COLLATE "C", ${primary}::text COLLATE "C"),
+             greatest(${alias}::text COLLATE "C", ${primary}::text COLLATE "C"))
+          )
+        RETURNING 1
+      ),
+      audit AS (
+        INSERT INTO permission_audit (actor_github_id, action, target, details)
+        SELECT ${actor.id}, 'identity_link', x.alias_login,
+               jsonb_build_object('before_primary', b.primary_login, 'after_primary', x.primary_login)
+        FROM (SELECT * FROM up UNION ALL SELECT * FROM repoint) x
+        LEFT JOIN before b ON b.alias_login = x.alias_login
+        WHERE b.primary_login IS DISTINCT FROM x.primary_login
+        RETURNING 1
+      )
+      SELECT (SELECT ok FROM guard) AS ok, (SELECT p FROM resolved) AS primary_login
+    `,
+  ], { isolationLevel: "ReadCommitted" }) as [unknown, { ok: boolean; primary_login: string }[]];
+  return { ok: rows[0].ok, primary: rows[0].primary_login };
+}
+
+/**
+ * Remove `alias`'s link. `notLinked` when there is no such alias; `isPrimary`
+ * (refused) when other logins point at it — unlink those first.
+ */
+export async function unlinkIdentity(
+  actor: { id: number; login: string },
+  alias: string,
+): Promise<{ ok: boolean; notLinked?: boolean; isPrimary?: boolean; before?: string }> {
+  await ensureSchema();
+  const db = getDb();
+  const [, rows] = await db.transaction([
+    db`SELECT pg_advisory_xact_lock(${IDENTITY_LOCK_KEY})`,
+    db`
+      WITH del AS (
+        DELETE FROM identity_links WHERE alias_login = ${alias} RETURNING alias_login, primary_login
+      ),
+      audit AS (
+        INSERT INTO permission_audit (actor_github_id, action, target, details)
+        SELECT ${actor.id}, 'identity_unlink', alias_login,
+               jsonb_build_object('before_primary', primary_login, 'after_primary', NULL)
+        FROM del
+        RETURNING 1
+      )
+      SELECT (SELECT primary_login FROM del) AS before,
+             EXISTS (SELECT 1 FROM identity_links WHERE primary_login = ${alias}) AS is_primary
+    `,
+  ], { isolationLevel: "ReadCommitted" }) as [unknown, { before: string | null; is_primary: boolean }[]];
+  const r = rows[0];
+  if (r.before) return { ok: true, before: r.before };
+  return r.is_primary ? { ok: false, isPrimary: true } : { ok: false, notLinked: true };
+}
+
+/**
+ * Record (or, with `distinct` false, remove) "these two logins are different
+ * people". Refused (ok=false) while the two are linked. Audited when changed.
+ */
+export async function setIdentityDistinct(
+  actor: { id: number; login: string },
+  a: string,
+  b: string,
+  distinct: boolean,
+): Promise<{ ok: boolean; changed: boolean }> {
+  await ensureSchema();
+  const db = getDb();
+  // Byte-wise order, the same as the table's CHECK (login_a < login_b COLLATE "C").
+  const [loginA, loginB] = a < b ? [a, b] : [b, a];
+  const [, rows] = await db.transaction([
+    db`SELECT pg_advisory_xact_lock(${IDENTITY_LOCK_KEY})`,
+    db`
+      WITH canon AS (
+        SELECT
+          COALESCE((SELECT primary_login FROM identity_links WHERE alias_login = ${loginA}), ${loginA}::text) AS ca,
+          COALESCE((SELECT primary_login FROM identity_links WHERE alias_login = ${loginB}), ${loginB}::text) AS cb
+      ),
+      guard AS (
+        SELECT NOT (${distinct}::boolean AND (SELECT ca = cb FROM canon)) AS ok
+      ),
+      ins AS (
+        INSERT INTO identity_distinct (login_a, login_b, created_by)
+        SELECT ${loginA}, ${loginB}, ${actor.login} WHERE ${distinct}::boolean AND (SELECT ok FROM guard)
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+      ),
+      del AS (
+        DELETE FROM identity_distinct
+        WHERE NOT ${distinct}::boolean AND login_a = ${loginA} AND login_b = ${loginB}
+        RETURNING 1
+      ),
+      audit AS (
+        INSERT INTO permission_audit (actor_github_id, action, target, details)
+        SELECT ${actor.id}, CASE WHEN ${distinct}::boolean THEN 'identity_distinct' ELSE 'identity_distinct_undo' END,
+               ${loginA + " + " + loginB}, jsonb_build_object('before', NOT ${distinct}::boolean, 'after', ${distinct}::boolean)
+        WHERE EXISTS (SELECT 1 FROM ins) OR EXISTS (SELECT 1 FROM del)
+        RETURNING 1
+      )
+      SELECT (SELECT ok FROM guard) AS ok, (EXISTS (SELECT 1 FROM ins) OR EXISTS (SELECT 1 FROM del)) AS changed
+    `,
+  ], { isolationLevel: "ReadCommitted" }) as [unknown, { ok: boolean; changed: boolean }[]];
+  return { ok: rows[0].ok, changed: rows[0].changed };
 }
 
 // ── Sync cursor ───────────────────────────────────────────────────────────────
