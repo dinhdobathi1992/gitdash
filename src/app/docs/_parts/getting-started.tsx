@@ -264,6 +264,7 @@ export function Configuration() {
             [<Code key="4">GITDASH_ADMIN_GITHUB_IDS</Code>, ORG, "Comma-separated numeric GitHub ids that are always admins."],
             [<Code key="5">GITDASH_ALLOWED_ORGS</Code>, OPT, "Comma-separated orgs whose active members may sign in; empty means any GitHub account (it lands on /pending)."],
             [<Code key="6">GITDASH_RBAC_ENFORCE</Code>, OPT, <><Code key="t">true</Code> enforces group permissions; <Code key="f">false</Code> (default) keeps everyone&apos;s access during rollout.</>],
+            [<Code key="7">GITDASH_LANDING_PAGE</Code>, OPT, <><Code key="t">true</Code> shows the /welcome product page to signed-out visitors at /, with Sign in leading to /login. For the public product site; leave unset when self-hosting.</>],
           ]}
         />
       </DocCard>

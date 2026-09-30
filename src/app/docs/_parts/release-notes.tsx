@@ -7,10 +7,22 @@ import { SectionHeading } from "./primitives";
 export function ReleaseNotes() {
   const releases = [
     {
-      version: "4.7.0",
-      date: "2026-09-29",
+      version: "4.7.1",
+      date: "2026-10-01",
       badge: "latest",
       badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+      changes: {
+        added: [
+          "A public product landing page at /welcome: the 90-second tour with chapters, every feature area, security, install snippets, pricing and an FAQ",
+          "GITDASH_LANDING_PAGE=true sends signed-out visitors at / to the landing page; Sign in leads to /login. Off by default for self-hosted instances",
+        ],
+        fixed: [],
+        improved: [],
+      },
+    },
+    {
+      version: "4.7.0",
+      date: "2026-09-29",
       changes: {
         added: [
           "Team insights v2: \"What stands out\" lists findings computed from the page's numbers, worst first, each linking to its section",

@@ -18,11 +18,21 @@ import {
 // src/app/api/cron/sync/route.ts) — it must bypass the session-cookie gate
 // here, since Vercel Cron's request carries no session cookie and would
 // otherwise be redirected to /login before the route's own auth even runs.
-const ALWAYS_PUBLIC = ["/_next", "/favicon.ico", "/docs", "/api/webhooks", "/api/health", "/api/cron"];
+// /welcome is the public product landing page.
+const ALWAYS_PUBLIC = ["/_next", "/favicon.ico", "/docs", "/welcome", "/api/webhooks", "/api/health", "/api/cron"];
 
 // Mode-specific public paths
 const STANDALONE_PUBLIC = ["/setup", "/api/auth/setup"];
 const TEAM_PUBLIC = ["/login", "/api/auth/login", "/api/auth/callback", "/api/auth/setup"];
+
+/**
+ * The product site (gitdash.info) greets signed-out visitors at "/" with the
+ * /welcome landing page instead of the sign-in screen. Off by default, so a
+ * self-hosted GitDash keeps opening straight to sign-in.
+ */
+function landingFor(pathname: string): string | null {
+  return pathname === "/" && process.env.GITDASH_LANDING_PAGE === "true" ? "/welcome" : null;
+}
 
 /** Whole-segment prefix match: "/docs" matches "/docs" and "/docs/x", not "/docsX". */
 function under(pathname: string, prefixes: string[]): boolean {
@@ -88,7 +98,7 @@ export async function proxy(req: NextRequest, event?: NextFetchEvent) {
     // All other routes require a PAT in the session
     const session = await readSession(req);
     if (!session?.pat) {
-      return NextResponse.redirect(publicUrl("/setup", req));
+      return NextResponse.redirect(publicUrl(landingFor(pathname) ?? "/setup", req));
     }
     return NextResponse.next();
   }
@@ -121,7 +131,10 @@ export async function proxy(req: NextRequest, event?: NextFetchEvent) {
 
   const session = await readSession(req);
   const token = session ? sessionToken(session) : null;
-  if (!token) return deny(401, "unauthorized", "/login");
+  if (!token) {
+    const landing = landingFor(pathname);
+    return landing ? NextResponse.redirect(publicUrl(landing, req)) : deny(401, "unauthorized", "/login");
+  }
 
   try {
     const { identity, allowed } = await resolveIdentity(token);

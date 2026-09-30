@@ -39,6 +39,9 @@ config:
   # and grants while everyone keeps today's access (admin pages are always
   # admin-only). Set "true" once groups are assigned.
   rbacEnforce: "false"
+  # "true" shows the /welcome product page to signed-out visitors at "/".
+  # For the public product site only; self-hosted instances leave it off.
+  landingPage: "false"
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 secret:
