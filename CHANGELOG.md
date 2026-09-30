@@ -7,6 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+## [4.7.1] - 2026-10-01
+
+Product landing page. Notes:
+[`docs/releases/v4.7.1.md`](https://github.com/dinhdobathi1992/gitdash/blob/main/docs/releases/v4.7.1.md).
+Helm chart 0.7.7 / appVersion 4.7.1. No database migration.
+
+### Added
+- **`/welcome` product landing page**, public and outside the app shell: hero with an illustrated
+  repositories view, the 90-second tour with nine chapters that seek the video, feature deep dives (DORA,
+  workflows, team insights, cost, alerts), a 16-feature grid, security and privacy, install snippets for
+  Docker / Kubernetes / source / Vercel with copy, pricing (Community, Team, Enterprise marked coming soon)
+  and an FAQ. Product visuals are illustrations labelled "Example". The video loads only on play.
+- **`GITDASH_LANDING_PAGE=true`** (Helm `config.landingPage`): signed-out visitors opening `/` are sent to
+  `/welcome` instead of the sign-in screen; its Sign in links go to `/login` (standalone mode forwards to
+  `/setup`). Off by default, so a self-hosted instance still opens straight to sign-in.
+
+### Changed
+- With `GITDASH_LANDING_PAGE=true`, an expired session that sends the browser back to `/` shows the
+  landing page instead of the sign-in form.
+- The client's 401 and no-group redirects skip `/welcome`, so the page stays put for signed-out visitors.
+
 ## [4.7.0] - 2026-09-29
 
 Team insights v2. Notes:
