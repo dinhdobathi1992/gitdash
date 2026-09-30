@@ -15,7 +15,7 @@ import CommandPalette from "@/components/CommandPalette";
 import TopBar from "@/components/shell/TopBar";
 import MobileTabBar from "@/components/shell/MobileTabBar";
 
-const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo", "/pending"];
+const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo", "/pending", "/welcome"];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();

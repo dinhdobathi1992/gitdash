@@ -123,7 +123,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
             err instanceof FetchError &&
             err.status === 401 &&
             typeof window !== "undefined" &&
-            !["/login", "/setup", "/docs"].includes(window.location.pathname)
+            !["/login", "/setup", "/docs", "/welcome"].includes(window.location.pathname)
           ) {
             // The session expired. A hard reload drops the stale cache rather than
             // carrying it into the re-authenticated session.
@@ -136,7 +136,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
             err.status === 403 &&
             err.code === "no_groups" &&
             typeof window !== "undefined" &&
-            window.location.pathname !== "/pending"
+            !["/pending", "/welcome"].includes(window.location.pathname)
           ) {
             // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.href = "/pending";
