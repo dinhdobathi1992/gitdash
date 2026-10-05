@@ -154,3 +154,66 @@ describe("calculateRepoDora", () => {
     expect(result.change_failure_rate.rate).toBe(0);
   });
 });
+
+// ── Raw GitHub REST → DORA inputs ─────────────────────────────────────────────
+
+import { toMergedPrInputs, toReleaseInputs, toPrDetail, DORA_PR_DETAIL_LIMIT } from "../src/lib/dora";
+import { getRepoDoraSummaryMain } from "./fixtures/github-dora-main";
+import { sampleOctokit } from "./fixtures/sample-octokit";
+import { SAMPLE_REPO } from "../src/lib/playground/source";
+
+describe("toMergedPrInputs / toReleaseInputs", () => {
+  it("keeps merged PRs and published releases only", () => {
+    const pulls = [
+      { number: 1, title: "a", created_at: "2026-09-01T00:00:00Z", merged_at: "2026-09-02T00:00:00Z", head: { ref: "feat/a" } },
+      { number: 2, title: "b", created_at: "2026-09-01T00:00:00Z", merged_at: null, head: { ref: "feat/b" } },
+    ];
+    expect(toMergedPrInputs(pulls)).toEqual([{ number: 1, title: "a", created_at: "2026-09-01T00:00:00Z", merged_at: "2026-09-02T00:00:00Z", head_ref: "feat/a" }]);
+    expect(toReleaseInputs([{ published_at: "2026-09-03T00:00:00Z" }, { published_at: null }])).toEqual([{ published_at: "2026-09-03T00:00:00Z" }]);
+  });
+});
+
+describe("toPrDetail", () => {
+  it("takes the oldest commit, first submitted review and first approval", () => {
+    const d = toPrDetail(
+      7,
+      [
+        { commit: { author: { date: "2026-09-02T00:00:00Z" } } },
+        { commit: { author: null, committer: { date: "2026-09-01T00:00:00Z" } } },
+      ],
+      [
+        { state: "APPROVED", submitted_at: "2026-09-05T00:00:00Z" },
+        { state: "PENDING", submitted_at: null },
+        { state: "COMMENTED", submitted_at: "2026-09-04T00:00:00Z" },
+      ],
+      { additions: 10, deletions: 3 },
+    );
+    expect(d).toEqual({ number: 7, first_commit_at: "2026-09-01T00:00:00Z", first_review_at: "2026-09-04T00:00:00Z", approved_at: "2026-09-05T00:00:00Z", additions: 10, deletions: 3 });
+  });
+  it("is null-safe with no commits or reviews", () => {
+    expect(toPrDetail(1, [], [], { additions: 0, deletions: 0 })).toMatchObject({ first_commit_at: null, first_review_at: null, approved_at: null });
+  });
+});
+
+describe("repo DORA: refactor preserves main's output", () => {
+  it("mappers + calculateRepoDora over the sample repo equal the pre-extraction getRepoDoraSummary", async () => {
+    const octokit = sampleOctokit();
+    const expected = await getRepoDoraSummaryMain(octokit, SAMPLE_REPO.owner, SAMPLE_REPO.repo);
+    const { data: closed } = await octokit.rest.pulls.list({ owner: "o", repo: "r", state: "closed", per_page: 60, sort: "updated", direction: "desc" });
+    const { data: rels } = await octokit.rest.repos.listReleases({ owner: "o", repo: "r", per_page: 30 });
+    const merged = toMergedPrInputs(closed);
+    const detail = new Map<number, PrDetailInput>();
+    for (const pr of merged.slice(0, DORA_PR_DETAIL_LIMIT)) {
+      const [c, r, p] = await Promise.all([
+        octokit.rest.pulls.listCommits({ owner: "o", repo: "r", pull_number: pr.number, per_page: 250 }),
+        octokit.rest.pulls.listReviews({ owner: "o", repo: "r", pull_number: pr.number, per_page: 100 }),
+        octokit.rest.pulls.get({ owner: "o", repo: "r", pull_number: pr.number }),
+      ]);
+      detail.set(pr.number, toPrDetail(pr.number, c.data, r.data, p.data));
+    }
+    const actual = calculateRepoDora(merged, toReleaseInputs(rels), detail);
+    const { partial, fetched_prs, total_prs_attempted, ...rest } = expected;
+    expect(actual).toEqual(rest);
+    expect({ partial, fetched_prs, total_prs_attempted }).toEqual({ partial: false, fetched_prs: detail.size, total_prs_attempted: detail.size });
+  });
+});
