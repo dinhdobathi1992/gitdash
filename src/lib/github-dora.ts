@@ -11,11 +11,10 @@
  */
 
 import { getOctokit } from "@/lib/github";
-import { calculateRepoDora } from "@/lib/dora";
+import { calculateRepoDora, DORA_PR_DETAIL_LIMIT, toMergedPrInputs, toPrDetail, toReleaseInputs } from "@/lib/dora";
 import type { RepoDoraSummary, PrInput, PrDetailInput, ReleaseInput } from "@/lib/dora";
 import { pLimitSettled } from "@/lib/concurrency";
 
-const DETAIL_LIMIT = 20;
 const CONCURRENCY = 10;
 
 export type RepoDoraSummaryWithFetchStatus = RepoDoraSummary & {
@@ -45,22 +44,11 @@ export async function getRepoDoraSummary(
     octokit.rest.repos.listReleases({ owner, repo, per_page: 30 }),
   ]);
 
-  const mergedPrs: PrInput[] = prsRes.data
-    .filter(pr => pr.merged_at != null)
-    .map(pr => ({
-      number: pr.number,
-      title: pr.title,
-      created_at: pr.created_at,
-      merged_at: pr.merged_at!,
-      head_ref: pr.head.ref,
-    }));
+  const mergedPrs: PrInput[] = toMergedPrInputs(prsRes.data);
+  const releases: ReleaseInput[] = toReleaseInputs(releasesRes.data);
 
-  const releases: ReleaseInput[] = releasesRes.data
-    .filter(r => r.published_at != null)
-    .map(r => ({ published_at: r.published_at! }));
-
-  // Per-PR detail fetching for the most recent DETAIL_LIMIT merged PRs
-  const detailPrs = mergedPrs.slice(0, DETAIL_LIMIT);
+  // Per-PR detail fetching for the most recent DORA_PR_DETAIL_LIMIT merged PRs
+  const detailPrs = mergedPrs.slice(0, DORA_PR_DETAIL_LIMIT);
   const detailMap = new Map<number, PrDetailInput>();
 
   const results = await pLimitSettled(
@@ -81,35 +69,7 @@ export async function getRepoDoraSummary(
           octokit.rest.pulls.get({ owner, repo, pull_number: pr.number }),
         ]);
 
-        const commits = commitsRes.data;
-        const reviews = reviewsRes.data;
-
-        // Oldest commit timestamp = true start of the change
-        const commitDates = commits
-          .map(c => c.commit.author?.date ?? c.commit.committer?.date)
-          .filter(Boolean) as string[];
-        const first_commit_at = commitDates.length > 0 ? commitDates.sort()[0] : null;
-
-        // Reviews sorted chronologically
-        const sortedReviews = reviews
-          .filter(r => r.submitted_at != null)
-          .sort(
-            (a, b) =>
-              new Date(a.submitted_at!).getTime() - new Date(b.submitted_at!).getTime(),
-          );
-
-        const first_review_at = sortedReviews[0]?.submitted_at ?? null;
-        const approved_at =
-          sortedReviews.find(r => r.state === "APPROVED")?.submitted_at ?? null;
-
-        return {
-          number: pr.number,
-          first_commit_at,
-          first_review_at,
-          approved_at,
-          additions: detailRes.data.additions,
-          deletions: detailRes.data.deletions,
-        } satisfies PrDetailInput;
+        return toPrDetail(pr.number, commitsRes.data, reviewsRes.data, detailRes.data);
     }),
     { concurrency: CONCURRENCY },
   );

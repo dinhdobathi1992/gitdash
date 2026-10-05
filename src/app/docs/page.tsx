@@ -2,7 +2,8 @@
 
 import { APP_VERSION } from "@/components/shell/Logo";
 import { useState, useEffect } from "react";
-import { BookOpen, Rocket, Server, Settings2, GitBranch, Layers, Shield, HelpCircle, ChevronRight, Tag, Search, Menu, X, Code2, Users, ChevronDown, ExternalLink, GitPullRequest, Cpu, Activity, FileText, ShieldAlert, User, DollarSign, TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders, Sparkles, CircleDot, Terminal, UsersRound, Gauge } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Rocket, Server, Settings2, GitBranch, Layers, Shield, HelpCircle, ChevronRight, Tag, Search, Menu, X, Code2, Users, ChevronDown, ExternalLink, GitPullRequest, Cpu, Activity, FileText, ShieldAlert, User, DollarSign, TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders, Sparkles, CircleDot, Terminal, UsersRound, Gauge, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DocSearch } from "@/components/docs/DocSearch";
 import { GettingStarted, QuickStart, Deployment, Configuration } from "./_parts/getting-started";
@@ -139,6 +140,14 @@ function DocSidebar({
           <span className="flex-1 text-left">Search docs...</span>
           <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-500 font-mono">⌘K</kbd>
         </button>
+        <Link
+          href="/docs/playground"
+          className="mt-2 w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-300 text-sm hover:border-violet-500/40 hover:text-white transition-colors"
+        >
+          <FlaskConical className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left">GitHub API playground</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Navigation */}

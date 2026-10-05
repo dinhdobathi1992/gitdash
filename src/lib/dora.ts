@@ -320,6 +320,83 @@ export interface ReleaseInput {
   published_at: string;
 }
 
+// ── Raw GitHub REST → DORA inputs ────────────────────────────────────────────
+// Pure mappers from the REST payloads github-dora.ts fetches. Kept here (not in
+// the fetch layer) so the public API playground runs the same code in the browser.
+
+/** Branch names that mark a merged PR as a failure fix (hotfix / revert) for CFR and MTTR. */
+export const FAILURE_PR_BRANCH = /hotfix|revert|fix-prod|emergency/i;
+
+/** Merged PRs (most recent first) whose commits/reviews/size are fetched for lead time and cycle breakdown. */
+export const DORA_PR_DETAIL_LIMIT = 20;
+
+/** The fields of a `GET /repos/{o}/{r}/pulls` item the DORA mapping reads. */
+export interface RawPullForDora {
+  number: number;
+  title: string;
+  created_at: string;
+  merged_at: string | null;
+  head: { ref: string };
+}
+
+/** Merged PRs only, as DORA inputs (closed-but-unmerged PRs are dropped). */
+export function toMergedPrInputs(pulls: RawPullForDora[]): PrInput[] {
+  return pulls
+    .filter(pr => pr.merged_at != null)
+    .map(pr => ({
+      number: pr.number,
+      title: pr.title,
+      created_at: pr.created_at,
+      merged_at: pr.merged_at!,
+      head_ref: pr.head.ref,
+    }));
+}
+
+/** Published releases only (drafts have no published_at). */
+export function toReleaseInputs(releases: { published_at: string | null }[]): ReleaseInput[] {
+  return releases
+    .filter(r => r.published_at != null)
+    .map(r => ({ published_at: r.published_at! }));
+}
+
+/**
+ * Per-PR detail from the three per-PR calls: `pulls/{n}/commits`,
+ * `pulls/{n}/reviews` and `pulls/{n}` (for additions/deletions).
+ */
+export function toPrDetail(
+  number: number,
+  commits: { commit: { author?: { date?: string } | null; committer?: { date?: string } | null } }[],
+  reviews: { state: string; submitted_at?: string | null }[],
+  pull: { additions: number; deletions: number },
+): PrDetailInput {
+  // Oldest commit timestamp = true start of the change
+  const commitDates = commits
+    .map(c => c.commit.author?.date ?? c.commit.committer?.date)
+    .filter(Boolean) as string[];
+  const first_commit_at = commitDates.length > 0 ? commitDates.sort()[0] : null;
+
+  // Reviews sorted chronologically
+  const sortedReviews = reviews
+    .filter(r => r.submitted_at != null)
+    .sort(
+      (a, b) =>
+        new Date(a.submitted_at!).getTime() - new Date(b.submitted_at!).getTime(),
+    );
+
+  const first_review_at = sortedReviews[0]?.submitted_at ?? null;
+  const approved_at =
+    sortedReviews.find(r => r.state === "APPROVED")?.submitted_at ?? null;
+
+  return {
+    number,
+    first_commit_at,
+    first_review_at,
+    approved_at,
+    additions: pull.additions,
+    deletions: pull.deletions,
+  };
+}
+
 // ── PR-based DORA output types ────────────────────────────────────────────────
 
 export interface RepoCycleBreakdown {
@@ -422,7 +499,7 @@ export function calculateRepoDora(
 
   // ── 3. Change Failure Rate ────────────────────────────────────────────────
   const isFailurePr = (pr: PrInput) =>
-    /hotfix|revert|fix-prod|emergency/i.test(pr.head_ref) ||
+    FAILURE_PR_BRANCH.test(pr.head_ref) ||
     pr.title.toLowerCase().startsWith("revert ");
   const failurePrs = mergedPrs.filter(isFailurePr);
   const cfr = mergedPrs.length > 0 ? (failurePrs.length / mergedPrs.length) * 100 : 0;
@@ -543,27 +620,27 @@ export function calculateRepoDora(
 /** Benchmark descriptions for each metric and level. */
 export const BENCHMARKS = {
   deployment_frequency: {
-    elite: "Multiple deploys per day",
+    elite: "At least once per day",
     high: "Between once per day and once per week",
     medium: "Between once per week and once per month",
     low: "Less than once per month",
   },
   lead_time: {
     elite: "Less than one hour",
-    high: "Between one day and one week",
-    medium: "Between one week and one month",
-    low: "More than one month",
+    high: "Between one hour and one day",
+    medium: "Between one day and one week",
+    low: "One week or more",
   },
   change_failure_rate: {
     elite: "0-5%",
-    high: "0-15%",
-    medium: "16-30%",
+    high: "5-15%",
+    medium: "15-30%",
     low: "More than 30%",
   },
   mttr: {
     elite: "Less than one hour",
     high: "Less than one day",
     medium: "Less than one week",
-    low: "More than one week",
+    low: "One week or more",
   },
 } as const;

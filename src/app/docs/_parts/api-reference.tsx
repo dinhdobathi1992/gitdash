@@ -123,7 +123,7 @@ export function APIReference() {
         {
           method: "GET",
           path: "/api/github/bus-factor",
-          description: "Bus factor analysis: per-file-prefix contributor count and Herfindahl index. Flags modules with fewer than 2 active contributors.",
+          description: "Bus factor analysis over the last 90 days (up to 300 commits): per module, the smallest number of authors covering 80% of its commits. 1 is critical, 2 a warning.",
           params: [
             { name: "owner", type: "string", optional: false, desc: "Repository owner." },
             { name: "repo", type: "string", optional: false, desc: "Repository name." },

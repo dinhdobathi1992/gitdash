@@ -17,7 +17,7 @@ export function MetricsReference({ onNavigate }: { onNavigate?: (id: string) => 
     { id: "metrics-workflow",    icon: BarChart3,  label: "Workflow Overview",    desc: "Rolling Success Rate, Duration Trend, Outcome Breakdown, Run Frequency, and Optimization Tips." },
     { id: "metrics-performance", icon: TrendingUp, label: "Performance Tab",      desc: "Job Duration avg vs p95, Job Composition per Run, and Slowest Steps rankings." },
     { id: "metrics-reliability", icon: Shield,     label: "Reliability Tab",      desc: "MTTR, Failure Streak, Flaky Branches, Re-run Rate, Pass/Fail Timeline, and Anomaly Detection." },
-    { id: "metrics-team",        icon: Users,      label: "Team & People",        desc: "Leaderboard columns, Reviewer Load Matrix, and Bus Factor (HHI) explained." },
+    { id: "metrics-team",        icon: Users,      label: "Team & People",        desc: "Leaderboard columns, Reviewer Load Matrix, and Bus Factor (80% commit coverage) explained." },
     { id: "metrics-ci-alerts",   icon: Bell,       label: "CI & Alert Metrics",   desc: "CI Workflow metrics, CI-based DORA calculations, and Alert rule trigger conditions." },
   ];
 
@@ -70,7 +70,7 @@ export function MetricsDora() {
           headers={["Metric", "What it measures", "How it is calculated", "DORA levels"]}
           rows={[
             ["Deploy Frequency", "How often the team ships to production", "Releases (the last 30) per day over the span they cover; repositories without releases use merged pull requests (the last 60 closed) instead, and the card says it is an estimate.", "Elite: ≥1/day · High: ≥1/week · Medium: ≥1/month · Low: <1/month"],
-            ["Lead Time for Changes", "Time from writing code to it being in production", "Median time from a pull request's first commit (or its creation) to merge, over the last 60 closed pull requests; p95 is shown alongside.", "Elite: <1h · High: <1d · Medium: <1wk · Low: ≥1wk"],
+            ["Lead Time for Changes", "Time from writing code to it being in production", "Median time from a pull request's first commit to merge over the merged pull requests among the last 60 closed; the first commit is read for the 20 most recently updated, the rest start at the pull request's creation. p95 is shown alongside.", "Elite: <1h · High: <1d · Medium: <1wk · Low: ≥1wk"],
             ["Change Failure Rate", "How often a change needs fixing in production", "Merged pull requests whose branch matches hotfix, revert, fix-prod or emergency — or whose title starts with \"Revert\" — as a share of merged pull requests.", "Elite: ≤5% · High: ≤15% · Medium: ≤30% · Low: >30%"],
             ["Time to Restore (MTTR)", "How quickly the team recovers", "Mean time from opening to merging those hotfix/revert pull requests. No failures in the window counts as High.", "Elite: <1h · High: <1d · Medium: <1wk · Low: ≥1wk"],
           ]}
@@ -201,8 +201,8 @@ export function MetricsPrHealth() {
           rows={[
             ["Approval → Merge P50/P90", "Time between a PR receiving final approval and being merged. Measures how quickly approved work is landed.", "< 2 hours"],
             ["Open PR Age Distribution", "Currently open PRs bucketed by age: <1d, 1–3d, 3–7d, 1–2wk, 2+wk. Large buckets on the right indicate blocked or abandoned work.", "Most PRs should be < 3 days old."],
-            ["Review Round Distribution", "How many review cycles (request → response) merged PRs went through. 0 rounds = merged without review. 3+ rounds = heavy back-and-forth.", "1–2 rounds is healthy. >3 rounds may indicate unclear specs or large PRs."],
-            ["Stale & Unreviewed PRs", "Open PRs older than 5 business days that have received no review activity. These directly inflate Review P90 and Pickup Time.", "0 stale PRs is the target."],
+            ["Review Round Distribution", "How many reviews were submitted on each merged PR (every approval, change request or comment review counts as one). 0 = merged without review. 3+ = heavy back-and-forth.", "1–2 rounds is healthy. >3 rounds may indicate unclear specs or large PRs."],
+            ["Stale & Unreviewed PRs", "Open, non-draft PRs older than 120 hours (5 calendar days) that have received no review. These directly inflate Review P90 and Pickup Time.", "0 stale PRs is the target."],
           ]}
         />
       </DocCard>
@@ -377,7 +377,7 @@ export function MetricsTeam() {
             ["Review Response", "Median time between a PR being opened and this person submitting their first review on that PR.", "High values indicate a slow reviewer or reviewer overload."],
             ["First-Pass Approval Rate", "Percentage of PRs this person authored that were approved on the first review round (no changes-requested cycle).", "High rates indicate clear PR descriptions and well-scoped changes."],
             ["Self-Merges", "PRs the author merged themselves without any other approver.", "Occasional self-merges are fine (hotfixes). A high rate may indicate a lack of code review culture."],
-            ["After-Hours Commits %", "Percentage of commits made outside 09:00–18:00 UTC. Visible in the commit hour distribution chart on the contributor profile.", "A proxy for burnout risk. A sustained high rate warrants a conversation about workload."],
+            ["After-Hours Commits %", "Percentage of commits made outside the organization's workday (default Asia/Saigon 08:00–19:00, set in Settings). Visible in the commit hour distribution chart on the contributor profile.", "A proxy for burnout risk. A sustained high rate warrants a conversation about workload."],
           ]}
         />
       </DocCard>
@@ -401,15 +401,15 @@ export function MetricsTeam() {
         <SubHeading>Bus Factor</SubHeading>
         <ProseP>
           The bus factor of a module is the minimum number of team members whose absence would
-          severely impact the project. GitDash approximates it per file-path prefix using the
-          Herfindahl–Hirschman Index (HHI) on commit authorship.
+          severely impact the project. GitDash computes it per file-path prefix as the smallest
+          number of authors who together made 80% of the module&apos;s commits.
         </ProseP>
         <DocTable
           headers={["Term", "Definition"]}
           rows={[
-            ["HHI (Herfindahl Index)", "Sum of squared contribution shares for a module. HHI = 1 means one person owns 100% of commits. HHI = 0.25 means four equal contributors — safer."],
-            ["Active contributors", "Authors with at least one commit to that module in the last 90 days."],
-            ["Risk threshold", "Modules with fewer than 2 active contributors are flagged. Loss of the single contributor would leave the module unmaintained."],
+            ["Bus factor", "Smallest number of authors whose commits add up to at least 80% of a module's commits. A module is the first two path segments (one for files one level deep, (root) for top-level files)."],
+            ["Window", "The last 90 days, at most 300 commits. A commit counts once per module it touches. Bot commits are counted."],
+            ["Risk threshold", "Bus factor 1 is critical, 2 is a warning, 3 or more is healthy."],
           ]}
         />
       </DocCard>
@@ -432,9 +432,9 @@ export function MetricsCiAlerts() {
         <DocTable
           headers={["Metric", "CI-based calculation", "Difference from repo-level DORA"]}
           rows={[
-            ["Deploy Frequency", "Successful runs on the default branch per day over the last 30 days.", "Repo-level uses Releases or merged PRs. CI-based counts every successful workflow run — useful for workflows that deploy on every merge."],
-            ["Lead Time", "Average time from the triggering commit timestamp to the run completing successfully.", "Repo-level measures first commit → PR merged. CI-based measures commit → CI green — does not include PR review time."],
-            ["Change Failure Rate", "Percentage of default-branch runs that failed (not cancelled/skipped).", "Repo-level uses hotfix/revert PR heuristics. CI-based is a direct CI failure rate — more precise but only reflects build failures, not production incidents."],
+            ["Deploy Frequency", "Completed runs (any result) per day over the span of the runs loaded for this workflow (50 by default). No branch filter.", "Repo-level uses Releases or merged PRs. CI-based counts every successful workflow run — useful for workflows that deploy on every merge."],
+            ["Lead Time", "Median time from a run being created to it completing (queue wait plus execution); p95 alongside.", "Repo-level measures first commit → PR merged. CI-based measures only the CI run itself — no coding or review time."],
+            ["Change Failure Rate", "Percentage of completed runs whose conclusion is failure (timed-out, cancelled and skipped runs are not failures but stay in the denominator).", "Repo-level uses hotfix/revert PR heuristics. CI-based is a direct CI failure rate — more precise but only reflects build failures, not production incidents."],
             ["MTTR", "Average time from a failed run to the next successful run on the same branch.", "Repo-level uses hotfix PR cycle time. CI-based measures build recovery time — does not account for manual intervention or rollbacks."],
           ]}
         />
@@ -459,7 +459,7 @@ export function MetricsCiAlerts() {
             ["Success Streak", "CI", "Consecutive failures without a success exceeds threshold"],
             ["PR Throughput Drop", "People", "Merged PRs this week dropped by more than N% vs the prior week"],
             ["Review Response P90", "People", "P90 time-to-first-review exceeds N hours"],
-            ["After-Hours Commits %", "People", "% of commits outside 09:00–18:00 UTC exceeds threshold"],
+            ["After-Hours Commits %", "People", "% of commits outside the organization's workday exceeds threshold"],
             ["PR Abandon Rate", "People", "% of PRs closed without merge exceeds threshold"],
             ["Unreviewed PR Age", "People", "Any open PR has been waiting for a first review for more than N business days"],
           ]}
