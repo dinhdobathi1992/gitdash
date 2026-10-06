@@ -4,6 +4,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import Link from "next/link";
 import { PatForm } from "@/components/PatForm";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 
@@ -64,7 +65,7 @@ function LoginContent() {
       </PatForm>
 
       <p className="mt-6 text-xs leading-[18px] text-faint">
-        Cost needs a separate fine-grained token with the Administration organization permission. <a href="/docs" className="text-link hover:text-violet-200">Documentation</a>
+        Cost needs a separate fine-grained token with the Administration organization permission. <Link href="/docs" className="text-link hover:text-violet-200">Documentation</Link>
       </p>
     </AuthLayout>
   );

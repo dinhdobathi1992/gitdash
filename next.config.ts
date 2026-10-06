@@ -74,6 +74,12 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Sign-in, onboarding and demo pages are not content: keep them out of
+      // search results. They stay crawlable so crawlers can see this header.
+      ...["/login", "/setup", "/pending", "/demo"].map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      })),
     ];
   },
 };

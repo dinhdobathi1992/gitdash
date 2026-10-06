@@ -14,7 +14,7 @@ export function SectionHeading({ id, icon: Icon, badge, children }: {
         <Icon className="w-4.5 h-4.5 text-violet-400" />
       </div>
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 id={id} className="text-2xl font-semibold tracking-[-0.02em] text-fg scroll-mt-20">{children}</h2>
+        <h1 id={id} className="text-2xl font-semibold tracking-[-0.02em] text-fg scroll-mt-20">{children}</h1>
         {badge && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 font-medium">
             {badge}
@@ -26,7 +26,7 @@ export function SectionHeading({ id, icon: Icon, badge, children }: {
 }
 
 export function SubHeading({ children }: { children: React.ReactNode }) {
-  return <h3 className="font-semibold text-white text-base mb-3">{children}</h3>;
+  return <h2 className="font-semibold text-white text-base mb-3">{children}</h2>;
 }
 
 export function ProseP({ children }: { children: React.ReactNode }) {
@@ -59,7 +59,7 @@ export function FeaturePageHeader({
         </div>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold text-white">{name}</h2>
+            <h1 className="text-2xl font-bold text-white">{name}</h1>
             <Code>{path}</Code>
             {since && <VersionBadge v={since} />}
           </div>

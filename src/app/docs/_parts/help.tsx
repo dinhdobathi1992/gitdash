@@ -1,10 +1,10 @@
 "use client";
 
-import { HelpCircle, Terminal, GitPullRequest, CheckCircle } from "lucide-react";
+import { HelpCircle, Terminal, GitPullRequest, CheckCircle, LockKeyhole } from "lucide-react";
 import { CodeBlock, Code } from "@/components/docs/CodeBlock";
-import { DocCard } from "@/components/docs/DocCard";
+import { DocCard, DocTable } from "@/components/docs/DocCard";
 import { Steps, Step } from "@/components/docs/Steps";
-import { SectionHeading, SubHeading } from "./primitives";
+import { SectionHeading, SubHeading, ProseP } from "./primitives";
 
 export function FAQ() {
   const items = [
@@ -142,7 +142,8 @@ src/app/api/             API routes: github/*, db/*, alerts, admin/*, auth/*, cr
 src/proxy.ts             sign-in and access checks for every request
 src/lib/permissions.ts   route → feature registry used by the proxy
 src/lib/                 GitHub client, caching, database, identity, AI
-src/components/          UI; the docs page is src/app/docs with sections in _parts/
+src/components/          UI
+src/app/docs/            docs: one route per page; add pages in _parts/nav.ts + _parts/registry.tsx
 tests/                   vitest suites
 helm/gitdash/            Helm chart`}
         </CodeBlock>
@@ -155,7 +156,7 @@ helm/gitdash/            Helm chart`}
             "Register every new API route in src/lib/permissions.ts — unregistered routes are denied — and give it the feature that should gate it",
             "Validate owner, repo and org parameters with src/lib/validation.ts before calling GitHub",
             "Wrap new GitHub reads in the shared cache, keyed per token",
-            "Update this documentation and CHANGELOG.md with any user-visible change",
+            "Update this documentation and CHANGELOG.md with any user-visible change; public pages follow DESIGN.md and REVIEW.md",
             "Never log or return credentials; CI runs lint, type check, tests, build, CodeQL and a dependency audit",
           ].map((item) => (
             <li key={item} className="flex items-start gap-2">
@@ -164,6 +165,66 @@ helm/gitdash/            Helm chart`}
             </li>
           ))}
         </ul>
+      </DocCard>
+    </section>
+  );
+}
+
+export function Privacy() {
+  return (
+    <section id="privacy" className="scroll-mt-20 space-y-6">
+      <SectionHeading id="privacy" icon={LockKeyhole}>Data &amp; privacy</SectionHeading>
+
+      <ProseP>
+        GitDash is self-hosted: whoever runs an instance holds its data, and nothing is sent to the GitDash
+        project. This page lists what an instance keeps, where, and for how long. The public site, gitdash.info,
+        runs the same code.
+      </ProseP>
+
+      <DocCard>
+        <SubHeading>What is stored</SubHeading>
+        <DocTable
+          headers={["Data", "Where", "Kept"]}
+          rows={[
+            ["Your GitHub token (PAT or OAuth)", <>Encrypted, HTTP-only session cookie <Code key="c">gitdash_session</Code>. Never sent to the browser&apos;s JavaScript or stored in the database.</>, "7 days, or until you sign out"],
+            ["GitHub API responses", <>In memory, and in the <Code key="a">api_cache</Code> table when organization mode has a database. Keyed per token, so nobody reads another person&apos;s cache.</>, "Minutes to hours, per endpoint"],
+            ["Your GitHub id, login and avatar URL", <>The <Code key="u">users</Code> table (organization mode), so an admin can place you in a group.</>, "Until an admin removes you"],
+            ["Groups, grants and their changes", <><Code key="g">user_groups</Code>, <Code key="f">group_flags</Code> and the <Code key="p">permission_audit</Code> log.</>, "Until deleted by an admin"],
+            ["Workflow-run and pull-request history", <><Code key="w">workflow_runs</Code>, <Code key="pr">pr_facts</Code> and related tables, filled by the nightly sync (which uses the operator&apos;s own service token) for Reports and alerts. Admin-made links between GitHub logins live in <Code key="il">identity_links</Code>.</>, "Until deleted by the operator"],
+            ["Alert rules, deliveries and settings", "Alert, email, AI and team settings tables. Webhook URLs and keys are visible to admins only.", "Until changed or deleted"],
+          ]}
+        />
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>What leaves the instance</SubHeading>
+        <ul className="space-y-2 text-sm text-slate-300">
+          {[
+            "Requests to the GitHub API, made by the server with your own token.",
+            "AI insights, only when an admin has configured a provider: the metrics already on screen go to that provider. Run logs and code are never sent.",
+            "Email and Slack or webhook alerts, only to destinations an admin set up.",
+          ].map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <CheckCircle className="w-3.5 h-3.5 mt-0.5 text-emerald-400 shrink-0" />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <ProseP>
+          GitDash ships no analytics, tracking pixels or third-party scripts. The hosting platform may keep its own
+          request logs; check your host&apos;s policy.
+        </ProseP>
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>Removing your data</SubHeading>
+        <ProseP>
+          Sign out to delete the session cookie, and revoke the token or OAuth App on GitHub to cut access entirely. On
+          an organization-mode instance, ask its admin to remove your user record. For gitdash.info, open an issue at{" "}
+          <a href="https://github.com/dinhdobathi1992/gitdash/issues" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300">
+            github.com/dinhdobathi1992/gitdash
+          </a>.
+        </ProseP>
       </DocCard>
     </section>
   );

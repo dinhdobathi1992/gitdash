@@ -4,10 +4,12 @@ import {
   Activity, Bell, BarChart3, Building2, ChevronRight, CircleDot, DollarSign, FileText, GitPullRequest, Layers,
   List, ListChecks, ShieldAlert, Sliders, Sparkles, TrendingUp, Trophy, User, Users,
 } from "lucide-react";
+import Link from "next/link";
 import { Callout } from "@/components/docs/Callout";
 import { Code } from "@/components/docs/CodeBlock";
 import { DocCard, DocTable } from "@/components/docs/DocCard";
 import { SectionHeading, SubHeading, ProseP, VersionBadge, FeaturePageHeader, ScreenshotSlot } from "./primitives";
+import { docHref } from "./nav";
 
 /** A feature switch, as named in Settings → My features and Admin → Permissions. */
 function Flag({ k }: { k: string }) {
@@ -39,7 +41,7 @@ const PAGES: FeaturePage[] = [
 
 // ── Index ─────────────────────────────────────────────────────────────────────
 
-export function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
+export function Features() {
   return (
     <section id="features" className="scroll-mt-20 space-y-6">
       <SectionHeading id="features" icon={Layers}>Feature overview</SectionHeading>
@@ -52,10 +54,10 @@ export function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
 
       <div className="grid gap-3">
         {PAGES.map((p) => (
-          <button
+          <Link
             key={p.id}
-            onClick={() => onNavigate(p.id)}
-            className="group w-full text-left rounded-card border border-line bg-panel p-4 hover:border-brand-fg/40 hover:bg-raised transition-colors"
+            href={docHref(p.id)}
+            className="group block w-full text-left rounded-card border border-line bg-panel p-4 hover:border-brand-fg/40 hover:bg-raised transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1.5 flex-1 min-w-0">
@@ -69,7 +71,7 @@ export function Features({ onNavigate }: { onNavigate: (id: string) => void }) {
               </div>
               <ChevronRight className="w-4 h-4 text-faint group-hover:text-link shrink-0 mt-0.5" />
             </div>
-          </button>
+          </Link>
         ))}
       </div>
 

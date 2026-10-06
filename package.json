@@ -42,5 +42,10 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "overrides": {
+      "source-map-js": ">=1.2.2"
+    }
   }
 }

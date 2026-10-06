@@ -5,13 +5,18 @@ import { SWRProvider } from "@/lib/swr";
 import { AuthProvider } from "@/components/AuthProvider";
 import { FeatureFlagsProvider } from "@/components/FeatureFlagsProvider";
 import AppShell from "@/components/AppShell";
+import { siteUrl } from "@/lib/site";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  // Canonical, Open Graph and sitemap URLs resolve against the public origin.
+  metadataBase: siteUrl(),
   title: "GitDash — GitHub Actions Dashboard",
   description: "Monitor all your GitHub Actions workflows in one place",
+  openGraph: { siteName: "GitDash", type: "website", locale: "en_US" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

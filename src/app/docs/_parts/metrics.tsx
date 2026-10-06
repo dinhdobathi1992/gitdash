@@ -1,15 +1,17 @@
 "use client";
 
 import { Rocket, GitBranch, Shield, Users, Activity, TrendingUp, Bell, BarChart3 } from "lucide-react";
+import Link from "next/link";
 import { Callout } from "@/components/docs/Callout";
 import { Code } from "@/components/docs/CodeBlock";
 import { DocCard, DocTable } from "@/components/docs/DocCard";
 import { SectionHeading, SubHeading, ProseP, VersionBadge } from "./primitives";
+import { docHref } from "./nav";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Metrics Reference ─────────────────────────────────────────────────────────
 
-export function MetricsReference({ onNavigate }: { onNavigate?: (id: string) => void }) {
+export function MetricsReference() {
   const PAGES = [
     { id: "metrics-dora",        icon: Rocket,     label: "DORA 4 Keys",         desc: "Deploy Frequency, Lead Time, Change Failure Rate, MTTR — the industry standard delivery benchmarks." },
     { id: "metrics-pr-cycle",    icon: GitBranch,  label: "PR Cycle Time",        desc: "The four phases of a PR's life: Time to Open, Pickup Time, Review Time, and Merge Time." },
@@ -27,16 +29,16 @@ export function MetricsReference({ onNavigate }: { onNavigate?: (id: string) => 
       <ProseP>
         Every number GitDash displays is defined here — what it measures, how it is calculated, and
         what a good value looks like. Hover the <Code>?</Code> icon next to any metric in the app
-        for a quick reminder. Select a category below to dive in.
+        for a quick reminder. Pick a category below.
       </ProseP>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {PAGES.map((p) => {
           const Icon = p.icon;
           return (
-            <button
+            <Link
               key={p.id}
-              onClick={() => onNavigate?.(p.id)}
-              className="group text-left rounded-xl border border-slate-800 bg-slate-900/40 p-5 hover:border-violet-500/40 hover:bg-slate-800/60 transition-all"
+              href={docHref(p.id)}
+              className="group block text-left rounded-xl border border-slate-800 bg-slate-900/40 p-5 hover:border-violet-500/40 hover:bg-slate-800/60 transition-all"
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className="p-2 rounded-lg bg-violet-500/10 text-violet-400">
@@ -45,7 +47,7 @@ export function MetricsReference({ onNavigate }: { onNavigate?: (id: string) => 
                 <span className="text-sm font-semibold text-white group-hover:text-violet-300 transition-colors">{p.label}</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">{p.desc}</p>
-            </button>
+            </Link>
           );
         })}
       </div>

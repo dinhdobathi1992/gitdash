@@ -248,7 +248,7 @@ export function Configuration() {
           rows={[
             [<Code key="1">SESSION_SECRET</Code>, REQ, "At least 32 characters; encrypts the session cookie. The app refuses to start in production without it."],
             [<Code key="2">MODE</Code>, OPT, <><Code key="s">standalone</Code> (default) or <Code key="o">organization</Code>.</>],
-            [<Code key="3">NEXT_PUBLIC_APP_URL</Code>, OPT, "Public URL; used for OAuth redirects and same-origin checks."],
+            [<Code key="3">NEXT_PUBLIC_APP_URL</Code>, OPT, "Public URL; used for OAuth redirects, same-origin checks, and the canonical and social-card URLs of public pages. Static pages read it at build time, so pass it to the image build as well when those URLs matter."],
           ]}
         />
       </DocCard>

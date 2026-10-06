@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext } from "react";
 import useSWR from "swr";
+import { usePathname } from "next/navigation";
+import { under } from "@/lib/paths";
 import { fetcher } from "@/lib/swr";
 import type { AppMode } from "@/lib/mode";
 import type { FeatureFlags } from "@/lib/feature-flags";
@@ -54,8 +56,13 @@ const AuthContext = createContext<AuthContextValue>({
 // the same window and re-check when the tab regains focus.
 const ME_REFRESH_MS = 60_000;
 
+/** Public content pages that never use the signed-in user: skip the /api/auth/me call there. */
+const NO_AUTH_PAGES = ["/docs", "/welcome"];
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data, isLoading, mutate } = useSWR<MeResponse>("/api/auth/me", fetcher<MeResponse>, {
+  const pathname = usePathname();
+  const skip = under(pathname, NO_AUTH_PAGES);
+  const { data, isLoading, mutate } = useSWR<MeResponse>(skip ? null : "/api/auth/me", fetcher<MeResponse>, {
     dedupingInterval: ME_REFRESH_MS,
     refreshInterval: ME_REFRESH_MS,
     revalidateOnFocus: true,
