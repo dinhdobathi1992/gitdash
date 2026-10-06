@@ -29,7 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOctokit } from "@/lib/github";
 import { syncRepo, sendPendingDigests, sendWeeklyLeadershipDigests } from "@/lib/sync";
-import { listSyncedRepos, pruneStalePendingUsers } from "@/lib/db";
+import { listSyncedRepos, pruneMcpRetention, pruneStalePendingUsers } from "@/lib/db";
 import { isStandaloneMode } from "@/lib/mode";
 import { pLimitSettled } from "@/lib/concurrency";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
@@ -62,9 +62,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // MCP OAuth retention: used code ids, unredeemed grants, long-revoked grants.
+  let mcpRetention: Awaited<ReturnType<typeof pruneMcpRetention>> | null = null;
+  if (process.env.DATABASE_URL) {
+    try {
+      mcpRetention = await pruneMcpRetention();
+    } catch (err) {
+      console.warn("[cron] MCP retention prune failed", err instanceof Error ? err.message : err);
+    }
+  }
+
   if (!process.env.GITHUB_TOKEN) {
     return NextResponse.json(
-      { error: "GITHUB_TOKEN is not configured — cron sync needs a service-level token", cache_rows_purged: cachePurged },
+      { error: "GITHUB_TOKEN is not configured — cron sync needs a service-level token", cache_rows_purged: cachePurged, mcp_retention: mcpRetention },
       { status: 500 },
     );
   }
@@ -114,5 +124,6 @@ export async function GET(req: NextRequest) {
     leadership_digest: leadershipDigest,
     cache_rows_purged: cachePurged,
     pending_users_pruned: pendingUsersPruned,
+    mcp_retention: mcpRetention,
   });
 }

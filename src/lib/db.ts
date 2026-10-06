@@ -525,6 +525,36 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
       )`,
     ],
   },
+  {
+    // MCP OAuth grants (src/lib/mcp/oauth/grants.ts). Rows hold ids only:
+    // tokens, including the GitHub token, live solely inside sealed tokens.
+    // current_refresh is generated at consent and carried in the code;
+    // redeemed_at stays null until the code is exchanged. mcp_used_jti makes
+    // authorization codes single-use.
+    version: 13,
+    name: "mcp_grants",
+    up: [
+      `CREATE TABLE IF NOT EXISTS mcp_grants (
+        grant_id          UUID PRIMARY KEY,
+        github_id         BIGINT NOT NULL,
+        client_id         TEXT   NOT NULL,
+        client_name       TEXT   NOT NULL,
+        redirect_host     TEXT   NOT NULL,
+        current_refresh   UUID   NOT NULL,
+        previous_refresh  UUID,
+        rotated_at        TIMESTAMPTZ,
+        redeemed_at       TIMESTAMPTZ,
+        absolute_expiry   TIMESTAMPTZ NOT NULL,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_used_at      TIMESTAMPTZ,
+        revoked_at        TIMESTAMPTZ,
+        revoked_reason    TEXT
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mcp_grants_user ON mcp_grants(github_id) WHERE revoked_at IS NULL`,
+      `CREATE TABLE IF NOT EXISTS mcp_used_jti (jti UUID PRIMARY KEY, expires_at TIMESTAMPTZ NOT NULL)`,
+      `CREATE INDEX IF NOT EXISTS idx_mcp_used_jti_exp ON mcp_used_jti(expires_at)`,
+    ],
+  },
 ];
 
 let schemaEnsured = false;
@@ -1914,6 +1944,32 @@ export async function pruneStalePendingUsers(): Promise<number> {
     RETURNING github_id
   ` as { github_id: number }[];
   return rows.length;
+}
+
+/**
+ * MCP OAuth retention, one statement: delete used-code ids past their expiry,
+ * grants whose code was never redeemed within 10 minutes, and grants revoked
+ * more than 90 days ago. Returns the number of rows removed from each.
+ */
+export async function pruneMcpRetention(): Promise<{ used_jti: number; unredeemed: number; revoked: number }> {
+  await ensureSchema();
+  const [row] = await getDb()`
+    WITH j AS (
+      DELETE FROM mcp_used_jti WHERE expires_at < NOW() RETURNING 1
+    ), u AS (
+      DELETE FROM mcp_grants
+      WHERE redeemed_at IS NULL AND created_at < NOW() - INTERVAL '10 minutes'
+      RETURNING 1
+    ), r AS (
+      DELETE FROM mcp_grants
+      WHERE revoked_at < NOW() - INTERVAL '90 days' AND redeemed_at IS NOT NULL
+      RETURNING 1
+    )
+    SELECT (SELECT count(*) FROM j)::int AS used_jti,
+           (SELECT count(*) FROM u)::int AS unredeemed,
+           (SELECT count(*) FROM r)::int AS revoked
+  ` as { used_jti: number; unredeemed: number; revoked: number }[];
+  return row;
 }
 
 /** Groups stored for a user (bootstrap admins are added by src/lib/permissions.ts). */
