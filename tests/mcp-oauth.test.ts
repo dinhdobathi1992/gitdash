@@ -600,6 +600,22 @@ describe("refresh_token grant", () => {
     const [a, b] = await Promise.all([refresh(t.refresh_token), refresh(t.refresh_token)]);
     expect([a.status, b.status]).toEqual([200, 200]);
     expect((await grants())[0].revoked_reason).toBeNull();
+    // Whichever response the client keeps, it still refreshes after the grace window.
+    const kept = (await a.json()).refresh_token;
+    void (await b.json());
+    await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '10 minutes'`);
+    expect((await refresh(kept)).status).toBe(200);
+    expect((await grants())[0].revoked_reason).toBeNull();
+  });
+
+  it("after a parallel refresh, the other kept token also refreshes after the grace window", async () => {
+    const t = await tokens();
+    const [a, b] = await Promise.all([refresh(t.refresh_token), refresh(t.refresh_token)]);
+    const kept = (await b.json()).refresh_token;
+    void (await a.json());
+    await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '10 minutes'`);
+    expect((await refresh(kept)).status).toBe(200);
+    expect((await grants())[0].revoked_reason).toBeNull();
   });
 
   it("a refresh token reused after the 30 s grace window revokes the grant", async () => {

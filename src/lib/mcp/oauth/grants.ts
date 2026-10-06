@@ -30,6 +30,7 @@ export type RevokeReason =
   | "org_removed";
 
 export type RotateOutcome = "ok" | "reuse" | "revoked";
+export type RotateResult = { outcome: "ok"; refreshJti: string } | { outcome: "reuse" } | { outcome: "revoked" };
 
 export interface ActiveGrant {
   grant_id: string;
@@ -141,38 +142,52 @@ export async function redeemGrant(grantId: string, refreshJti: string): Promise<
 
 /**
  * Rotate the refresh id in one statement.
- *  - `presented` is the current id, or the previous one within 30 s of the
- *    last rotation (a benign retry or a parallel refresh) -> "ok"; the grant
- *    now expects `next`.
- *  - any other id on a live grant -> the grant is revoked (`refresh_reuse`)
- *    and the result is "reuse".
+ *  - `presented` is the current id -> "ok"; the grant now expects `next`, and
+ *    `refreshJti` is `next`.
+ *  - `presented` is the previous id within 30 s of the last rotation (a benign
+ *    retry, or the loser of two parallel refreshes) -> "ok" with no further
+ *    rotation; `refreshJti` is the id the winning request already issued, so
+ *    every caller ends up holding the same, valid refresh id.
+ *  - any other id on a live, redeemed grant -> the grant is revoked
+ *    (`refresh_reuse`) and the result is "reuse".
  *  - revoked, expired, unknown or never-redeemed grant -> "revoked".
  */
-export async function rotateRefresh(grantId: string, presented: string, next: string): Promise<RotateOutcome> {
-  if (!isUuid(grantId) || !isUuid(presented) || !isUuid(next)) return "revoked";
+export async function rotateRefresh(grantId: string, presented: string, next: string): Promise<RotateResult> {
+  if (!isUuid(grantId) || !isUuid(presented) || !isUuid(next)) return { outcome: "revoked" };
   await ensureSchema();
   const rows = (await getDb()`
     WITH r AS (
-      UPDATE mcp_grants
-      SET previous_refresh = current_refresh, current_refresh = ${next}::uuid, rotated_at = NOW(), last_used_at = NOW()
+      -- One UPDATE for both the rotation and the grace retry: under concurrency,
+      -- Postgres waits on the row lock and re-checks this WHERE against the
+      -- committed row, so the loser of two parallel refreshes matches the
+      -- previous-id branch here. (A separate UPDATE for the grace path would
+      -- scan the pre-commit snapshot and never match it.) SET expressions read
+      -- the re-checked row; RETURNING gives the id the client must now hold.
+      UPDATE mcp_grants SET
+        previous_refresh = CASE WHEN current_refresh = ${presented}::uuid THEN current_refresh ELSE previous_refresh END,
+        current_refresh  = CASE WHEN current_refresh = ${presented}::uuid THEN ${next}::uuid ELSE current_refresh END,
+        rotated_at       = CASE WHEN current_refresh = ${presented}::uuid THEN NOW() ELSE rotated_at END,
+        last_used_at     = NOW()
       WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND redeemed_at IS NOT NULL AND NOW() < absolute_expiry
         AND (current_refresh = ${presented}::uuid
              OR (previous_refresh = ${presented}::uuid AND rotated_at > NOW() - INTERVAL '30 seconds'))
-      RETURNING 'ok'::text AS outcome
+      RETURNING current_refresh::text AS jti
     ), v AS (
       UPDATE mcp_grants SET revoked_at = NOW(), revoked_reason = 'refresh_reuse'
       WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND redeemed_at IS NOT NULL AND NOW() < absolute_expiry
         AND NOT EXISTS (SELECT 1 FROM r)
-      RETURNING 'reuse'::text AS outcome
+      RETURNING NULL::text AS jti
     )
-    SELECT outcome FROM r UNION ALL SELECT outcome FROM v
-  `) as { outcome: string }[];
-  const outcome = rows[0]?.outcome;
-  if (outcome === "ok" || outcome === "reuse") {
-    if (outcome === "reuse") invalidate(grantId.toLowerCase());
-    return outcome;
+    SELECT 'ok'::text AS outcome, jti FROM r
+    UNION ALL SELECT 'reuse'::text, jti FROM v
+  `) as { outcome: string; jti: string | null }[];
+  const row = rows[0];
+  if (row?.outcome === "ok" && row.jti) return { outcome: "ok", refreshJti: row.jti };
+  if (row?.outcome === "reuse") {
+    invalidate(grantId.toLowerCase());
+    return { outcome: "reuse" };
   }
-  return "revoked";
+  return { outcome: "revoked" };
 }
 
 // ── Active-grant cache (per instance) ────────────────────────────────────────

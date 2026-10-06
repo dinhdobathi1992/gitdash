@@ -158,13 +158,14 @@ async function refreshToken(form: URLSearchParams): Promise<Response> {
     }
 
     const next = randomUUID();
-    const outcome = await rotateRefresh(r.grant_id, r.jti, next);
-    if (outcome === "reuse") {
+    const rotated = await rotateRefresh(r.grant_id, r.jti, next);
+    if (rotated.outcome === "reuse") {
       await audit("mcp.refresh_reuse", r.id, r.grant_id);
       return invalidGrant("The refresh token was already used; the connection has been revoked.");
     }
-    if (outcome !== "ok") return invalidGrant("The connection is no longer active.");
-    return issueTokens({ grant_id: r.grant_id, client_id: r.client_id, aud: r.aud, refresh_jti: next, gh: r.gh, id: r.id, login: r.login });
+    if (rotated.outcome !== "ok") return invalidGrant("The connection is no longer active.");
+    // A retry inside the grace window gets the id the first request issued, not a new one.
+    return issueTokens({ grant_id: r.grant_id, client_id: r.client_id, aud: r.aud, refresh_jti: rotated.refreshJti, gh: r.gh, id: r.id, login: r.login });
   } catch {
     return unavailable();
   }

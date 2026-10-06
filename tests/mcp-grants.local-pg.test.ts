@@ -135,6 +135,9 @@ describe.each(backends)("MCP grants on $name", (backend) => {
     vi.useRealTimers();
   });
 
+  /** rotateRefresh's outcome only. */
+  const rot = async (g: string, presented: string, next: string) => (await rotateRefresh(g, presented, next)).outcome;
+
   async function redeemed() {
     const g = await createGrant(grantInput);
     expect(await redeemGrant(g.grant_id, g.current_refresh)).toBe(true);
@@ -199,7 +202,7 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       const g = await createGrant({ ...grantInput, client_name: "  Evil\u0000‮ App " + "x".repeat(200) });
       const days = (Date.parse(g.absolute_expiry) - Date.now()) / 86_400_000;
       expect(days).toBeGreaterThan(29.9);
-      expect(days).toBeLessThanOrEqual(30);
+      expect(days).toBeLessThanOrEqual(30 + 1 / (24 * 60)); // database and test clocks may differ slightly
       const [row] = await q(`SELECT client_name, redeemed_at FROM mcp_grants WHERE grant_id = $1`, [g.grant_id]);
       expect(row.redeemed_at).toBeNull();
       const name = String(row.client_name);
@@ -245,7 +248,7 @@ describe.each(backends)("MCP grants on $name", (backend) => {
     it("current -> ok, and the grant now expects the next id", async () => {
       const g = await redeemed();
       const next = randomUUID();
-      expect(await rotateRefresh(g.grant_id, g.current_refresh, next)).toBe("ok");
+      expect(await rot(g.grant_id, g.current_refresh, next)).toBe("ok");
       const row = await grantRow(g.grant_id);
       expect(row.current_refresh).toBe(next);
       expect(row.previous_refresh).toBe(g.current_refresh);
@@ -253,55 +256,82 @@ describe.each(backends)("MCP grants on $name", (backend) => {
 
     it("previous within 30 s -> ok, and the grant stays valid", async () => {
       const g = await redeemed();
-      await rotateRefresh(g.grant_id, g.current_refresh, randomUUID());
-      expect(await rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).toBe("ok");
+      await rot(g.grant_id, g.current_refresh, randomUUID());
+      expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("ok");
       expect((await grantRow(g.grant_id)).revoked_at).toBeNull();
       expect(await getActiveGrant(g.grant_id)).not.toBeNull();
     });
 
     it("previous after 30 s -> reuse, and the grant is revoked", async () => {
       const g = await redeemed();
-      await rotateRefresh(g.grant_id, g.current_refresh, randomUUID());
+      await rot(g.grant_id, g.current_refresh, randomUUID());
       await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '31 seconds' WHERE grant_id = $1`, [g.grant_id]);
       expect(await getActiveGrant(g.grant_id)).not.toBeNull(); // warm this instance's cache
-      expect(await rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).toBe("reuse");
+      expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("reuse");
       const row = await grantRow(g.grant_id);
       expect(row.revoked_at).not.toBeNull();
       expect(row.revoked_reason).toBe("refresh_reuse");
       // Reuse evicts the cache at once.
       expect(await getActiveGrant(g.grant_id)).toBeNull();
       // Nothing works afterwards, not even the current id.
-      expect(await rotateRefresh(g.grant_id, row.current_refresh, randomUUID())).toBe("revoked");
+      expect(await rot(g.grant_id, row.current_refresh, randomUUID())).toBe("revoked");
     });
 
     it("an unknown id -> reuse, and the grant is revoked", async () => {
       const g = await redeemed();
-      expect(await rotateRefresh(g.grant_id, randomUUID(), randomUUID())).toBe("reuse");
+      expect(await rot(g.grant_id, randomUUID(), randomUUID())).toBe("reuse");
       expect((await grantRow(g.grant_id)).revoked_reason).toBe("refresh_reuse");
     });
 
     it("two parallel rotations with the same current id both succeed and do not revoke", async () => {
       const g = await redeemed();
       const results = await Promise.all([
-        rotateRefresh(g.grant_id, g.current_refresh, randomUUID()),
-        rotateRefresh(g.grant_id, g.current_refresh, randomUUID()),
+        rot(g.grant_id, g.current_refresh, randomUUID()),
+        rot(g.grant_id, g.current_refresh, randomUUID()),
       ]);
       expect(results).toEqual(["ok", "ok"]);
       expect((await grantRow(g.grant_id)).revoked_at).toBeNull();
     });
 
+    it("the loser of a parallel refresh gets the winner's id, which stays valid after the grace window", async () => {
+      const g = await redeemed();
+      const [a, b] = await Promise.all([
+        rotateRefresh(g.grant_id, g.current_refresh, randomUUID()),
+        rotateRefresh(g.grant_id, g.current_refresh, randomUUID()),
+      ]);
+      expect(a.outcome).toBe("ok");
+      expect(b.outcome).toBe("ok");
+      const ja = a.outcome === "ok" ? a.refreshJti : "";
+      const jb = b.outcome === "ok" ? b.refreshJti : "";
+      expect(ja).toBe(jb);
+      expect((await grantRow(g.grant_id)).current_refresh).toBe(ja);
+      // Long after the window, whichever response the client kept still refreshes.
+      await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '10 minutes' WHERE grant_id = $1`, [g.grant_id]);
+      expect(await rot(g.grant_id, ja, randomUUID())).toBe("ok");
+      expect((await grantRow(g.grant_id)).revoked_at).toBeNull();
+    });
+
+    it("a retry inside the grace window returns the already-issued id without rotating again", async () => {
+      const g = await redeemed();
+      const first = await rotateRefresh(g.grant_id, g.current_refresh, randomUUID());
+      const retry = await rotateRefresh(g.grant_id, g.current_refresh, randomUUID());
+      expect(first).toEqual(retry);
+      const row = await grantRow(g.grant_id);
+      expect(row.previous_refresh).toBe(g.current_refresh);
+    });
+
     it("fails once absolute_expiry has passed, without recording reuse", async () => {
       const g = await redeemed();
       await q(`UPDATE mcp_grants SET absolute_expiry = NOW() - INTERVAL '1 second' WHERE grant_id = $1`, [g.grant_id]);
-      expect(await rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).toBe("revoked");
+      expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("revoked");
       expect((await grantRow(g.grant_id)).revoked_reason).toBeNull();
       expect(await getActiveGrant(g.grant_id)).toBeNull();
     });
 
     it("a never-redeemed grant neither rotates nor gets revoked for reuse", async () => {
       const g = await createGrant(grantInput);
-      expect(await rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).toBe("revoked");
-      expect(await rotateRefresh(g.grant_id, randomUUID(), randomUUID())).toBe("revoked");
+      expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("revoked");
+      expect(await rot(g.grant_id, randomUUID(), randomUUID())).toBe("revoked");
       const [row] = await q(`SELECT revoked_at, redeemed_at FROM mcp_grants WHERE grant_id = $1`, [g.grant_id]);
       expect(row.revoked_at).toBeNull();
       // It can still be redeemed with its original refresh id.
@@ -309,8 +339,8 @@ describe.each(backends)("MCP grants on $name", (backend) => {
     });
 
     it("unknown grant or malformed ids -> revoked", async () => {
-      expect(await rotateRefresh(randomUUID(), randomUUID(), randomUUID())).toBe("revoked");
-      expect(await rotateRefresh("nope", randomUUID(), randomUUID())).toBe("revoked");
+      expect(await rot(randomUUID(), randomUUID(), randomUUID())).toBe("revoked");
+      expect(await rot("nope", randomUUID(), randomUUID())).toBe("revoked");
     });
   });
 
@@ -376,7 +406,7 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       __setDbClientForTests(broken as unknown as DbClient);
       try {
         await expect(getActiveGrant(g.grant_id)).rejects.toThrow();
-        await expect(rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).rejects.toThrow();
+        await expect(rot(g.grant_id, g.current_refresh, randomUUID())).rejects.toThrow();
       } finally {
         backend.attach();
       }
@@ -498,7 +528,7 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       await auditMcp("mcp.token_issued", USER, `grant:${g.grant_id}`, { client_id });
 
       const r = (await open("mcp.refresh", refresh))!;
-      expect(await rotateRefresh(r.grant_id, r.jti, randomUUID())).toBe("ok");
+      expect(await rot(r.grant_id, r.jti, randomUUID())).toBe("ok");
       expect(await open("mcp.access", access)).not.toBeNull();
 
       for (const table of ["mcp_grants", "mcp_used_jti", "permission_audit"]) {
