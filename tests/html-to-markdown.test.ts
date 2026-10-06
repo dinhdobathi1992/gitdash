@@ -82,3 +82,13 @@ describe("html-to-markdown — robustness", () => {
     expect(md("<p>One<p>Two")).toBe("One\n\nTwo");
   });
 });
+
+describe("html-to-markdown — escaping", () => {
+  it("escapes backslashes before pipes in table cells", () => {
+    expect(md("<table><tr><th>A</th></tr><tr><td>x\\|y</td></tr></table>")).toBe("| A |\n| --- |\n| x\\\\\\|y |");
+  });
+
+  it("escapes backslashes before brackets in link text", () => {
+    expect(md('<a href="/a">a\\]b</a>')).toBe("[a\\\\\\]b](https://example.com/a)");
+  });
+});

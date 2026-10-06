@@ -120,7 +120,8 @@ function block(s: string): string {
 }
 
 function cell(n: Node, ctx: Ctx): string {
-  return render(n, ctx).replace(/\s*\n+\s*/g, " ").replace(/\|/g, "\\|").trim();
+  // Backslashes first, so an existing "\|" cannot turn back into a live pipe.
+  return render(n, ctx).replace(/\s*\n+\s*/g, " ").replace(/[\\|]/g, "\\$&").trim();
 }
 
 function table(n: Node, ctx: Ctx): string {
@@ -200,7 +201,7 @@ function render(n: Node | string, ctx: Ctx): string {
       const url = absolute(href.trim(), ctx.base);
       // Only web and mail links survive; javascript:, data: and the like become plain text.
       if (!/^(https?:|mailto:)/i.test(url)) return text;
-      return `[${text.replace(/([[\]])/g, "\\$1")}](${url.replace(/\)/g, "%29")})`;
+      return `[${text.replace(/[\\[\]]/g, "\\$&")}](${url.replace(/\)/g, "%29")})`;
     }
     case "strong": case "b": {
       const t = kids().trim();
