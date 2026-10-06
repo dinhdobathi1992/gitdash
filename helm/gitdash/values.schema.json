@@ -80,6 +80,32 @@
             false
           ],
           "description": "Organization mode: enforce group permissions (false during rollout)."
+        },
+        "landingPage": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Show the /welcome product page to signed-out visitors. Public product site only."
+        },
+        "mcp": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Organization mode: let AI apps sign in at /mcp/me (GITDASH_MCP). Needs a database, appUrl, and a second OAuth callback URL."
         }
       }
     },

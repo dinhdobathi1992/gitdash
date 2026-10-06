@@ -21,6 +21,7 @@ import AiProviderCard from "@/components/AiProviderCard";
 import { WorkingHabitsSettingsCard } from "@/components/settings/WorkingHabitsSettingsCard";
 import { TeamSettingsCard } from "@/components/settings/TeamSettingsCard";
 import { AccountLinksCard } from "@/components/settings/AccountLinksCard";
+import { ConnectedAppsCard } from "@/components/settings/ConnectedAppsCard";
 import { SETTINGS_SECTIONS } from "@/components/settings/sections";
 import { FEATURE_GROUPS } from "@/components/settings/feature-groups";
 import { AccessByGroup, MembersSection, AuditSection } from "@/components/settings/AccessSections";
@@ -358,7 +359,12 @@ function SettingsContent() {
           {active === "working-habits" && <WorkingHabitsSettingsCard notify={notify} />}
           {active === "team" && <TeamSettingsCard notify={notify} />}
           {active === "account-links" && <AccountLinksCard notify={notify} />}
-          {active === "features" && <MyFeatures />}
+          {active === "features" && (
+            <div className="flex flex-col gap-8">
+              <MyFeatures />
+              <ConnectedAppsCard />
+            </div>
+          )}
           {active === "notifications" && <Notifications />}
           {requested && !visible.some((s) => s.key === requested) && (
             <ErrorBanner className="mt-4" message="That section is only available to admins." />

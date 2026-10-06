@@ -92,6 +92,10 @@ export const REGISTRY: Rule[] = [
   { pattern: "/pending", access: "auth" },
   { pattern: "/api/auth/me", access: "auth" },
   { pattern: "/api/auth/logout", access: "auth" },
+  // Connected AI apps: every signed-in user manages their own; the handlers
+  // enforce ownership, and the admin view (?all=1) re-checks admin itself.
+  { pattern: "/api/mcp/grants", access: "auth" },
+  { pattern: "/api/mcp/grants/*", access: "auth" },
 
   // Admin (always enforced)
   { pattern: "/admin/**", access: "admin" },

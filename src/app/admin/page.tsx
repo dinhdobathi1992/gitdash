@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Users, ShieldCheck, History, Lock, AlertTriangle, Search } from "lucide-react";
+import { Users, ShieldCheck, History, Lock, AlertTriangle, Search, Plug } from "lucide-react";
 import { Breadcrumb } from "@/components/Sidebar";
-import { fetcher } from "@/lib/swr";
+import { FetchError, fetcher } from "@/lib/swr";
+import { ConnectedAppsCard } from "@/components/settings/ConnectedAppsCard";
 import { FLAG_DEFS } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,7 @@ interface AuditEntry {
   created_at: string;
 }
 
-type Tab = "users" | "permissions" | "audit";
+type Tab = "users" | "permissions" | "audit" | "apps";
 
 async function send(url: string, body: unknown): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(url, {
@@ -312,10 +313,16 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // The grants API answers 404 when MCP is off; the tab then stays hidden.
+  // Same key as the card's own request, so SWR shares one fetch.
+  const apps = useSWR("/api/mcp/grants?all=1", fetcher, { dedupingInterval: 0, shouldRetryOnError: false });
+  const mcpOff = apps.error instanceof FetchError && apps.error.status === 404;
+
   const tabs: { id: Tab; label: string; icon: typeof Users }[] = [
     { id: "users", label: "Users", icon: Users },
     { id: "permissions", label: "Permissions", icon: ShieldCheck },
     { id: "audit", label: "Audit", icon: History },
+    ...(mcpOff ? [] : [{ id: "apps" as const, label: "Connected apps", icon: Plug }]),
   ];
 
   return (
@@ -348,6 +355,7 @@ export default function AdminPage() {
       {tab === "users" && <UsersTab notify={notify} />}
       {tab === "permissions" && <PermissionsTab notify={notify} />}
       {tab === "audit" && <AuditTab />}
+      {tab === "apps" && !mcpOff && <ConnectedAppsCard scope="all" />}
 
       {toast && (
         <div

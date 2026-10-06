@@ -42,6 +42,11 @@ config:
   # "true" shows the /welcome product page to signed-out visitors at "/".
   # For the public product site only; self-hosted instances leave it off.
   landingPage: "false"
+  # "true" lets AI apps (Claude, Cursor) sign in at /mcp/me and read GitDash data
+  # as the signed-in user, read-only. Off by default. Needs mode: organization,
+  # secret.databaseUrl, and a second callback URL on the GitHub OAuth App:
+  # <appUrl>/api/auth/callback/mcp (see Docs > Configuration).
+  mcp: "false"
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 secret:

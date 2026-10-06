@@ -12,5 +12,6 @@ data:
   GITDASH_ALLOWED_ORGS: {{ .Values.config.allowedOrgs | default "" | quote }}
   GITDASH_RBAC_ENFORCE: {{ .Values.config.rbacEnforce | default "false" | toString | quote }}
   GITDASH_LANDING_PAGE: {{ .Values.config.landingPage | default "false" | toString | quote }}
+  GITDASH_MCP: {{ .Values.config.mcp | default "false" | toString | quote }}
   NODE_ENV: "production"
   NEXT_TELEMETRY_DISABLED: "1"
