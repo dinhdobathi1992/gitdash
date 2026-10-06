@@ -6,7 +6,7 @@
 
 export const MCP_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   // The 2026-07-28 revision mirrors request fields into headers (Mcp-Method,
   // Mcp-Name, Mcp-Param-*), so allow any header; "*" never covers
   // Authorization, which is listed explicitly. No credentials are involved.

@@ -16,7 +16,9 @@ async function handle(req: NextRequest): Promise<Response> {
   return withCors(await docsHandler(req.nextUrl.origin)(req));
 }
 
-export { handle as GET, handle as POST };
+// DELETE (legacy session teardown) also goes to the handler, which answers 405 —
+// the server is stateless — but with CORS headers a browser client can read.
+export { handle as GET, handle as POST, handle as DELETE };
 
 export function OPTIONS(): Response {
   return preflight();

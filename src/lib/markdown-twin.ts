@@ -31,13 +31,18 @@ export const MARKDOWN_HEADERS = {
 
 /** Public pages only change with a deploy, which starts a new process: convert each once. */
 const cache = new Map<string, string>();
+/** Pages that just failed are not refetched for a minute, so a broken page cannot amplify traffic. */
+const FAILURE_TTL_MS = 60_000;
+const failedUntil = new Map<string, number>();
+/** One fetch per page at a time; concurrent callers share it. */
+const inFlight = new Map<string, Promise<string | null>>();
 
 /**
  * Where to fetch this server's own pages. On Vercel that is the request's
  * origin. Elsewhere (Docker, Kubernetes) the public URL may not be reachable
  * from inside the container, so go straight to the local listener.
  */
-function selfOrigin(requestOrigin: string): string {
+export function selfOrigin(requestOrigin: string): string {
   if (process.env.VERCEL) return requestOrigin;
   return `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
 }
@@ -49,6 +54,22 @@ function selfOrigin(requestOrigin: string): string {
 export async function pageMarkdown(pagePath: string, origin: string): Promise<string | null> {
   const hit = cache.get(pagePath);
   if (hit) return hit;
+  if ((failedUntil.get(pagePath) ?? 0) > Date.now()) return null;
+  let pending = inFlight.get(pagePath);
+  if (!pending) {
+    pending = convert(pagePath, origin)
+      .then((md) => {
+        if (md) cache.set(pagePath, md);
+        else failedUntil.set(pagePath, Date.now() + FAILURE_TTL_MS);
+        return md;
+      })
+      .finally(() => inFlight.delete(pagePath));
+    inFlight.set(pagePath, pending);
+  }
+  return pending;
+}
+
+async function convert(pagePath: string, origin: string): Promise<string | null> {
   const url = new URL(pagePath, selfOrigin(origin));
   let html: string;
   try {
@@ -68,7 +89,5 @@ export async function pageMarkdown(pagePath: string, origin: string): Promise<st
     findNode(tree, (n) => n.tag === "main");
   if (!main) return null;
   const canonical = absoluteUrl(pagePath);
-  const md = `> Source: ${canonical} · GitDash v${APP_VERSION}\n\n${nodeToMarkdown(main, canonical)}\n`;
-  cache.set(pagePath, md);
-  return md;
+  return `> Source: ${canonical} · GitDash v${APP_VERSION}\n\n${nodeToMarkdown(main, canonical)}\n`;
 }

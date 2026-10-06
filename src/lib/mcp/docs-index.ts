@@ -109,6 +109,30 @@ export function sections(markdown: string): { heading: string; text: string }[] 
   return out;
 }
 
+export type TableMatch = { heading: string; header: string; row: string };
+
+/**
+ * Table rows whose first cell names the metric, with the table header and the
+ * section heading above them. Metric definitions in the docs live in such rows
+ * ("| Time to Restore (MTTR) | … |").
+ */
+export function tableRowsNaming(markdown: string, aliases: string[]): TableMatch[] {
+  const out: TableMatch[] = [];
+  let heading = "";
+  const lines = markdown.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^#{1,3} (.+)$/);
+    if (h) heading = h[1].trim();
+    if (!lines[i].startsWith("|") || !lines[i + 1]?.startsWith("| ---")) continue;
+    const header = lines[i];
+    for (i += 2; i < lines.length && lines[i].startsWith("|"); i++) {
+      const first = lines[i].split("|")[1]?.trim().toLowerCase() ?? "";
+      if (aliases.some((a) => first.includes(a))) out.push({ heading, header, row: lines[i] });
+    }
+  }
+  return out;
+}
+
 /** Test hook: forget the cached bodies. */
 export function __resetDocsIndexForTests(): void {
   bodies = null;
