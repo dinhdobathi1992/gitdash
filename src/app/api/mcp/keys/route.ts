@@ -14,7 +14,8 @@
  *   401 no session, or GitHub rejects the session's token
  *   403 cross-origin request, or the user is outside GITDASH_ALLOWED_ORGS
  *   404 GITDASH_MCP is off
- *   409 no DATABASE_URL: a key that cannot be revoked is never issued
+ *   409 no DATABASE_URL: a key that cannot be revoked is never issued;
+ *       or the user already has MAX_ACTIVE_KEYS live keys
  *   429 more than 5 keys an hour for this GitHub user (per instance)
  *   503 GitHub or the database is unavailable, or the MCP origin is misconfigured
  *
@@ -28,7 +29,7 @@ import { lookupWhoAmI, type WhoAmI } from "@/lib/identity";
 import { isSameOrigin } from "@/lib/url";
 import { rateLimit } from "@/lib/ratelimit";
 import { noStoreHeaders } from "@/lib/http-cache";
-import { createGrant, redeemGrant, revokeGrant, sanitizeClientName } from "@/lib/mcp/oauth/grants";
+import { createGrant, listGrants, redeemGrant, revokeGrant, sanitizeClientName } from "@/lib/mcp/oauth/grants";
 import { seal, TOKEN_TTL_SEC } from "@/lib/mcp/oauth/tokens";
 import { auditMcp, TOKEN_LIKE } from "@/lib/mcp/oauth/audit";
 import {
@@ -43,6 +44,8 @@ import {
 
 // Route modules may only export handlers and segment config, so these stay private.
 /** Keys a GitHub user may mint per hour (per instance, best effort). */
+/** Live personal keys per user. Each one is a 30-day credential carrying the user's GitHub token. */
+const MAX_ACTIVE_KEYS = 10;
 const KEY_RATE_LIMIT = { limit: 5, windowMs: 60 * 60_000 };
 /** Longest accepted label, in characters. */
 const MAX_LABEL_CHARS = 80;
@@ -118,6 +121,20 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!rl.allowed) {
     const retry = Math.max(1, Math.ceil((rl.retryAfterMs ?? KEY_RATE_LIMIT.windowMs) / 1000));
     return json({ error: `You can create ${KEY_RATE_LIMIT.limit} keys an hour. Try again later.` }, 429, { "Retry-After": String(retry) });
+  }
+
+  // Each live key carries the user's GitHub token: keep the number bounded.
+  try {
+    const live = (await listGrants(who.identity.id)).filter((g) => g.client_id === PERSONAL_KEY_CLIENT_ID).length;
+    if (live >= MAX_ACTIVE_KEYS) {
+      return json(
+        { error: `You already have ${MAX_ACTIVE_KEYS} active MCP keys. Revoke one in Settings → Connected apps first.`, code: "too_many_keys" },
+        409,
+      );
+    }
+  } catch (err) {
+    console.error(`[mcp] key: listing keys failed: ${errName(err)}`);
+    return json({ error: "The database is unavailable. Try again shortly." }, 503, { "Retry-After": "5" });
   }
 
   let grantId: string;

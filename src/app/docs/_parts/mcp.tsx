@@ -115,7 +115,7 @@ export function McpServer() {
           Treat a key like a password: it contains your GitHub access. It holds an encrypted copy of the token you
           signed in to GitDash with (your personal access token or your GitHub sign-in), so it can read what that token
           can, through the same read-only tools and the same group checks. A key expires after 30 days; you can create
-          up to 5 an hour. For keys, sign in with a fine-grained, read-only personal access token limited to the
+          up to 5 an hour and hold up to 10 at once. For keys, sign in with a fine-grained, read-only personal access token limited to the
           repositories you need.
         </Callout>
       </DocCard>

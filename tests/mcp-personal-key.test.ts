@@ -309,6 +309,23 @@ describe("POST /api/mcp/keys", () => {
     expect(await q(`SELECT 1 FROM mcp_grants`)).toHaveLength(5);
   });
 
+  it("at most 10 active keys per user: the 11th is a 409, revoked or OAuth grants do not count", async () => {
+    const live = async () => {
+      const g = await createGrant({ github_id: gh.id, client_id: PERSONAL_KEY_CLIENT_ID, client_name: "k", redirect_host: "personal key" });
+      expect(await redeemGrant(g.grant_id, g.current_refresh)).toBe(true);
+      return g;
+    };
+    // An OAuth connection and a revoked key are not live keys.
+    const oauth = await createGrant({ github_id: gh.id, client_id: "https://claude.ai/oauth/meta.json", client_name: "Claude", redirect_host: "claude.ai" });
+    await redeemGrant(oauth.grant_id, oauth.current_refresh);
+    const gone = await live();
+    await q(`UPDATE mcp_grants SET revoked_at = NOW() WHERE grant_id = $1`, [gone.grant_id]);
+    for (let i = 0; i < 10; i++) await live();
+    const { res, body } = await mintKey("eleventh");
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("too_many_keys");
+  });
+
   it("standalone mode without DATABASE_URL: 409 naming the requirement", async () => {
     standalone(false);
     const { res, body } = await mintKey();
