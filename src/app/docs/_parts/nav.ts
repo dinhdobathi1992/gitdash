@@ -5,7 +5,7 @@
  * component in ./registry.tsx.
  */
 
-import { Rocket, Server, Settings2, GitBranch, Layers, Shield, HelpCircle, Tag, Code2, Users, GitPullRequest, Cpu, Activity, FileText, ShieldAlert, User, DollarSign, TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders, Sparkles, CircleDot, Terminal, UsersRound, Gauge, LockKeyhole } from "lucide-react";
+import { Rocket, Server, Settings2, GitBranch, Layers, Shield, HelpCircle, Tag, Code2, Users, GitPullRequest, Cpu, Activity, FileText, ShieldAlert, User, DollarSign, TrendingUp, Bell, Building2, List, BarChart3, Trophy, Sliders, Sparkles, CircleDot, Terminal, UsersRound, Gauge, LockKeyhole, Plug } from "lucide-react";
 
 export type NavItem = { id: string; label: string; icon: React.ElementType; sub?: boolean };
 export type NavSection = { title: string; items: NavItem[] };
@@ -66,6 +66,7 @@ export const NAV: NavSection[] = [
       { id: "metrics-team",           label: "Team & People",       icon: Users,       sub: true },
       { id: "metrics-ci-alerts",      label: "CI & Alert Metrics",  icon: Bell,        sub: true },
       { id: "api-reference",          label: "API Reference",       icon: Code2 },
+      { id: "mcp",                    label: "MCP server",          icon: Plug },
     ],
   },
   {

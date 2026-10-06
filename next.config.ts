@@ -32,7 +32,9 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Everything except the MCP endpoints, which set their own CORS headers
+        // (MCP clients may run in a browser on another origin).
+        source: "/((?!mcp(?:/|$)).*)",
         headers: [
           // ── HIGH-001: Security headers ────────────────────────────────
           // Clickjacking protection
@@ -72,6 +74,15 @@ const nextConfig: NextConfig = {
               "form-action 'self' https://github.com",
             ].join("; "),
           },
+        ],
+      },
+      // MCP endpoints: keep the basic hardening, never index the JSON-RPC surface.
+      {
+        source: "/mcp/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Robots-Tag", value: "noindex" },
+          ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
         ],
       },
       // Sign-in, onboarding and demo pages are not content: keep them out of

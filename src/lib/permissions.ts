@@ -73,6 +73,7 @@ export const REGISTRY: Rule[] = [
   { pattern: "/_next/**", access: "public" },
   { pattern: "/favicon.ico", access: "public" },
   { pattern: "/docs/**", access: "public" },
+  { pattern: "/mcp/**", access: "public" },
   { pattern: "/api/health", access: "public" },
   { pattern: "/api/webhooks/**", access: "public" },
   { pattern: "/api/cron/**", access: "public" },

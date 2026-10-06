@@ -20,10 +20,13 @@ import {
 // here, since Vercel Cron's request carries no session cookie and would
 // otherwise be redirected to /login before the route's own auth even runs.
 // /welcome is the public product landing page. robots.txt, the sitemap,
-// llms.txt and the Open Graph image are discovery files for crawlers and agents.
+// llms.txt and the Open Graph image are discovery files for crawlers and agents;
+// /mcp serves the same public docs to MCP clients.
 const ALWAYS_PUBLIC = [
   "/_next", "/favicon.ico", "/docs", "/welcome", "/api/webhooks", "/api/health", "/api/cron",
   "/robots.txt", "/sitemap.xml", "/llms.txt", "/llms-full.txt", "/opengraph-image",
+  // Public MCP endpoint (docs tools). It never reads the session cookie.
+  "/mcp",
 ];
 
 // Mode-specific public paths
