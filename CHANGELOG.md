@@ -8,6 +8,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Public MCP server at `/mcp`** (Streamable HTTP, MCP 2026-07-28, stateless). AI assistants such as Claude,
+  Claude Code and Cursor can add it as a remote server and use four read-only docs tools: `list_docs`,
+  `search_docs`, `get_doc` and `explain_metric`. No sign-in; 300 requests a minute per IP. Documented at
+  `/docs/mcp`.
+
+### Added
 - **Every docs page has its own URL** (`/docs/<page>`). Pages are server-rendered, have their own title,
   description and social card, and work with links, back/forward and search engines. `/docs` is the
   introduction.

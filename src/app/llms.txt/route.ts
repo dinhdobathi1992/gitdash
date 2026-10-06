@@ -26,6 +26,7 @@ export function GET() {
     "",
     `- [Product overview](${absoluteUrl("/welcome.md")}): what GitDash shows and how it is deployed.`,
     `- [Full documentation in one file](${absoluteUrl("/llms-full.txt")})`,
+    `- MCP server: ${absoluteUrl("/mcp")} (Streamable HTTP, read-only docs tools; see [MCP server](${absoluteUrl("/docs/mcp.md")}))`,
     "",
     ...sections.flatMap((s) => [s, ""]),
     "## Optional",

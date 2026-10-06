@@ -47,6 +47,7 @@ export const SEARCH_INDEX: SearchResult[] = [
   { id: "metrics-reliability",  title: "Reliability Tab",         section: "Reference", excerpt: "MTTR, Failure Streak, Flaky Branches, Re-run Rate, Pass/Fail Timeline, Anomaly Detection (stddev outliers)." },
   { id: "metrics-team",         title: "Team & People",           section: "Reference", excerpt: "PRs Merged, Reviews Given, Avg Lead Time, First-Pass Approval Rate, Self-Merges, After-Hours %, Reviewer Load Matrix, Bus Factor HHI." },
   { id: "metrics-ci-alerts",    title: "CI & Alert Metrics",      section: "Reference", excerpt: "CI-based DORA vs repo-level DORA differences. Alert rules: Failure Rate, Duration P95, PR Throughput Drop, Review Response P90." },
+  { id: "mcp",                  title: "MCP server",              section: "Reference", excerpt: "Connect Claude, Cursor or any MCP client to /mcp: search_docs, get_doc, explain_metric; read-only, no sign-in." },
   { id: "api-reference",        title: "API Reference",           section: "Reference", excerpt: "REST endpoints: repo-dora, repo-contributors, contributor-profile, bus-factor, security-scan, audit-log, runs, job-stats, db/sync." },
   { id: "faq", title: "FAQ & troubleshooting", section: "Support", excerpt: "Sign-in refused, pending page, state mismatch, blank screen, cost 404, fine-grained PAT, updating, org switcher." },
   { id: "contributing", title: "Contributing", section: "Support", excerpt: "Local setup, checks, where things live, registering API routes, pull request guidelines." },

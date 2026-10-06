@@ -7,6 +7,7 @@ import { MetricsReference, MetricsDora, MetricsPrCycle, MetricsPrHealth, Metrics
 import { APIReference } from "./api-reference";
 import { FAQ, Contributing, Privacy } from "./help";
 import { ReleaseNotes } from "./release-notes";
+import { McpServer } from "./mcp";
 
 export const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   "getting-started": GettingStarted,
@@ -46,6 +47,7 @@ export const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   "metrics-team": MetricsTeam,
   "metrics-ci-alerts": MetricsCiAlerts,
   "api-reference": APIReference,
+  "mcp": McpServer,
   "faq": FAQ,
   "contributing": Contributing,
   "release-notes": ReleaseNotes,
