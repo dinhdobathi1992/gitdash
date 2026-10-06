@@ -147,7 +147,7 @@ export function useOnboardingChecklist(opts: {
         : "Set DATABASE_URL to unlock historical analytics and alerts.",
       status: opts.hasDatabase ? "ok" : "warning",
       actionLabel: "Docs",
-      actionHref: "/docs#database",
+      actionHref: "/docs/configuration",
     },
     {
       id: "alerts",

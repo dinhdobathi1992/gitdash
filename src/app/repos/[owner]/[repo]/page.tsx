@@ -74,7 +74,7 @@ export default function RepoDetailPage() {
                 {dora.releases_analysed > 0
                   ? `Deploys counted from ${dora.releases_analysed} GitHub releases.`
                   : "Estimated from merged pull requests — this repo doesn't publish GitHub releases."}{" "}
-                <Link href="/docs#metrics-dora" className="font-medium text-link hover:text-violet-200">How it&apos;s measured</Link>
+                <Link href="/docs/metrics-dora" className="font-medium text-link hover:text-violet-200">How it&apos;s measured</Link>
               </p>
             )}
           </div>

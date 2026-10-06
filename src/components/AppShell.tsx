@@ -15,7 +15,8 @@ import CommandPalette from "@/components/CommandPalette";
 import TopBar from "@/components/shell/TopBar";
 import MobileTabBar from "@/components/shell/MobileTabBar";
 
-const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo", "/pending", "/welcome"];
+// Docs render in their own frame (DocsTopBar + DocsFrame) for every reader.
+const FULL_PAGE_ROUTES = ["/login", "/setup", "/demo", "/pending", "/welcome", "/docs"];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();

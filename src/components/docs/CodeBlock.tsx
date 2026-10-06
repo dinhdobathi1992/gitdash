@@ -36,8 +36,8 @@ export function CodeBlock({
 
   return (
     <div className="rounded-xl border border-slate-700/50 overflow-hidden">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700/50">
+      {/* Header bar (left out of the markdown twin; the fence carries the language) */}
+      <div data-md-skip className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700/50">
         <div className="flex items-center gap-2">
           {filename && (
             <span className="text-xs text-slate-400 font-mono">{filename}</span>
@@ -71,7 +71,7 @@ export function CodeBlock({
         )}
       </div>
       {/* Code */}
-      <pre className="font-mono text-sm bg-slate-950 p-4 overflow-x-auto text-slate-300 leading-relaxed">
+      <pre data-language={language} className="font-mono text-sm bg-slate-950 p-4 overflow-x-auto text-slate-300 leading-relaxed">
         {children}
       </pre>
     </div>

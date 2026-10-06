@@ -18,11 +18,17 @@ import {
 } from "@/components/landing/ProductMocks";
 import { VideoShowcase } from "@/components/landing/VideoShowcase";
 import { DeployTabs } from "@/components/landing/DeployTabs";
+import { absoluteUrl } from "@/lib/site";
+
+const TITLE = "GitDash — Everything metrics, measured.";
+const DESCRIPTION =
+  "DORA, reliability, cost and team health from your GitHub Actions runs and pull requests — self-hosted, open source, on infrastructure you run yourself.";
 
 export const metadata: Metadata = {
-  title: "GitDash — Everything metrics, measured.",
-  description:
-    "DORA, reliability, cost and team health from your GitHub Actions runs and pull requests — self-hosted, open source, on infrastructure you run yourself.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: "/welcome", types: { "text/markdown": "/welcome.md" } },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/welcome" },
 };
 
 const REPO_URL = "https://github.com/dinhdobathi1992/gitdash";
@@ -41,6 +47,9 @@ const PRIMARY_CTA =
   "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-[12px] bg-primary text-white text-[15px] font-semibold hover:brightness-110 transition-[filter] duration-100";
 const SECONDARY_CTA =
   "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-[12px] border border-control bg-surface/80 text-fg text-[15px] font-semibold hover:bg-raised transition-colors duration-100";
+
+/** Footer links keep a 24 px hit area (WCAG 2.5.8). */
+const FOOTER_LINK = "inline-flex min-h-6 items-center hover:text-fg";
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-link">{children}</p>;
@@ -205,9 +214,45 @@ const FAQ = [
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
+/**
+ * Structured data for the landing page: what GitDash is, that it is free and
+ * MIT-licensed, and where the code lives. Values match the visible page. No
+ * FAQPage markup — Google no longer shows FAQ rich results.
+ */
+function StructuredData() {
+  const graph = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        name: "GitDash",
+        description: DESCRIPTION,
+        url: absoluteUrl("/welcome"),
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "Linux, Docker, Kubernetes, Vercel",
+        softwareVersion: APP_VERSION,
+        license: "https://opensource.org/licenses/MIT",
+        isAccessibleForFree: true,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        sameAs: [REPO_URL],
+        author: { "@type": "Person", name: "dinhdobathi1992", url: "https://github.com/dinhdobathi1992" },
+      },
+      { "@type": "WebSite", name: "GitDash", url: absoluteUrl("/") },
+    ],
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // JSON.stringify output with "<" escaped cannot break out of the script element.
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph).replace(/</g, "\\u003c") }}
+    />
+  );
+}
+
 export default function WelcomePage() {
   return (
     <div className="min-h-screen bg-ground text-fg [scroll-behavior:smooth]">
+      <StructuredData />
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-line/80 bg-ground/75 backdrop-blur-md">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-8 h-16 flex items-center gap-6">
@@ -215,7 +260,7 @@ export default function WelcomePage() {
             <LogoMark size={28} />
             <span className="text-[15px] font-semibold">GitDash</span>
           </Link>
-          <nav aria-label="Sections" className="hidden md:flex items-center gap-1">
+          <nav aria-label="Sections" className="hidden lg:flex items-center gap-1">
             {NAV.map((n) => (
               <a key={n.href} href={n.href} className="h-9 px-3 inline-flex items-center rounded-control text-[13px] text-muted hover:text-fg hover:bg-surface transition-colors duration-100">
                 {n.label}
@@ -226,11 +271,11 @@ export default function WelcomePage() {
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex h-9 px-3 items-center gap-2 rounded-control text-[13px] text-muted hover:text-fg">
               <GitHubMark /> GitHub
             </a>
-            <Link href="/login" className="hidden sm:inline-flex h-9 px-3 items-center rounded-control text-[13px] text-muted hover:text-fg">
+            <Link href="/login" className="hidden sm:inline-flex h-9 px-3 items-center whitespace-nowrap rounded-control text-[13px] text-muted hover:text-fg">
               Sign in
             </Link>
-            <a href="#deploy" className="h-9 px-3.5 inline-flex items-center gap-1.5 rounded-control bg-primary text-white text-[13px] font-semibold hover:brightness-110">
-              Get started <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            <a href="#deploy" className="h-9 px-3.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-control bg-primary text-white text-[13px] font-semibold hover:brightness-110">
+              Deploy it free <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
             </a>
           </div>
         </div>
@@ -243,8 +288,8 @@ export default function WelcomePage() {
           <div className="relative mx-auto max-w-[1200px] px-5 sm:px-8 pt-16 sm:pt-24 pb-20">
             <div className="text-center max-w-[900px] mx-auto">
               <a href="#features" className="inline-flex items-center gap-2 h-8 pl-1.5 pr-3.5 rounded-full border border-control bg-surface/80 text-[13px] text-muted hover:text-fg">
-                <span className="h-5 px-2 inline-flex items-center rounded-full bg-brand-soft font-mono text-xs text-link">v{APP_VERSION}</span>
-                Team insights v2 — what stands out, worst first
+                <span className="h-5 px-2 inline-flex items-center rounded-full bg-brand-soft font-mono text-xs text-link">v{APP_VERSION}</span>{" "}
+                New: team insights that flag problems first
                 <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
               </a>
               <h1 className="mt-8 text-[48px] sm:text-[72px] lg:text-[88px] leading-[0.98] font-semibold tracking-[-0.05em]">
@@ -293,7 +338,7 @@ export default function WelcomePage() {
               { v: "3", l: "ways to deploy: Docker, Helm, Vercel" },
             ].map((s) => (
               <div key={s.l}>
-                <dt className="sr-only">{s.l}</dt>
+                <dt className="sr-only" data-md-skip>{s.l}</dt>
                 <dd>
                   <span className="block font-mono text-[34px] font-semibold text-fg tracking-tight">{s.v}</span>
                   <span className="block mt-1 text-[13px] text-muted">{s.l}</span>
@@ -437,7 +482,7 @@ export default function WelcomePage() {
                 { t: "See what needs attention", d: "Every repository you can access, measured — no configuration per repo." },
               ].map((s, i) => (
                 <li key={s.t} className="flex gap-4">
-                  <span className="w-8 h-8 rounded-full border border-control bg-surface inline-flex items-center justify-center font-mono text-[13px] text-link shrink-0">{i + 1}</span>
+                  <span aria-hidden="true" className="w-8 h-8 rounded-full border border-control bg-surface inline-flex items-center justify-center font-mono text-[13px] text-link shrink-0">{i + 1}</span>
                   <span>
                     <span className="block text-[15px] font-semibold text-fg">{s.t}</span>
                     <span className="block mt-1 text-sm leading-6 text-muted">{s.d}</span>
@@ -557,13 +602,17 @@ export default function WelcomePage() {
             <span className="font-semibold text-fg">GitDash</span>
             <span className="font-mono text-xs text-faint">v{APP_VERSION}</span>
           </div>
-          <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            <Link href="/docs" className="hover:text-fg">Docs</Link>
-            <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="hover:text-fg">GitHub</a>
-            <a href={`${REPO_URL}/releases`} target="_blank" rel="noopener noreferrer" className="hover:text-fg">Releases</a>
-            <Link href="/login" className="hover:text-fg">Sign in</Link>
+          <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
+            <Link href="/docs" className={FOOTER_LINK}>Docs</Link>
+            <Link href="/docs/privacy" className={FOOTER_LINK}>Privacy</Link>
+            <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={FOOTER_LINK}>GitHub</a>
+            <a href={`${REPO_URL}/releases`} target="_blank" rel="noopener noreferrer" className={FOOTER_LINK}>Releases</a>
+            <Link href="/login" className={FOOTER_LINK}>Sign in</Link>
           </nav>
-          <span className="text-faint">Open source · MIT · Self-hosted</span>
+          <span className="text-faint">
+            Open source · MIT · Maintained by{" "}
+            <a href="https://github.com/dinhdobathi1992" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-6 items-center hover:text-fg">@dinhdobathi1992</a>
+          </span>
         </div>
       </footer>
     </div>

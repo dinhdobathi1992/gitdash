@@ -16,7 +16,7 @@ const P50 = [4.1, 4.3, 4.0, 4.6, 4.5, 4.9, 4.7, 5.2, 5.0, 5.5, 5.3, 5.6, 5.4, 5.
 
 function ProductPreview() {
   return (
-    <figure aria-label="Example of the delivery performance view" className="relative mt-10 hidden md:block">
+    <figure aria-label="Example of the delivery performance view" className="relative mt-10 hidden md:flow-root">
       <div className="absolute -top-6 -left-4 z-10 flex items-center gap-3 px-4 py-3 float-card w-[300px]">
         <span className="flex items-center justify-center w-8 h-8 rounded-control bg-status-pass-tint text-status-pass-text"><CircleCheck className="w-4 h-4" aria-hidden="true" /></span>
         <span className="min-w-0">
@@ -24,7 +24,7 @@ function ProductPreview() {
           <span className="block font-mono text-xs text-muted">example-service · 2 min ago</span>
         </span>
       </div>
-      <div className="ml-14 card !rounded-[16px] p-6 pt-8 w-[680px] max-w-full" aria-hidden="true">
+      <div className="ml-14 mt-6 card !rounded-[16px] p-6 pt-8 w-[680px] max-w-full" aria-hidden="true">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-muted">Delivery performance</span>
           <span className="text-xs text-faint">Example · 30 days</span>

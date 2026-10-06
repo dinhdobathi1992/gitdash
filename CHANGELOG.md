@@ -7,6 +7,33 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+### Added
+- **Every docs page has its own URL** (`/docs/<page>`). Pages are server-rendered, have their own title,
+  description and social card, and work with links, back/forward and search engines. `/docs` is the
+  introduction.
+- **New docs page `/docs/privacy` (Data & privacy):** what an instance stores, where, for how long, and
+  what leaves it.
+- **Discovery files for search engines and AI agents:** `robots.txt` and `sitemap.xml` (indexing only
+  when `GITDASH_LANDING_PAGE=true`; self-hosted instances answer `Disallow: /`), `llms.txt`,
+  `llms-full.txt`, and a markdown twin of every public page at `/<page>.md` (`noindex`).
+- **Open Graph and X cards** (branded 1200×630 images, one per docs page), canonical links, and JSON-LD
+  (SoftwareApplication on the landing page; TechArticle and breadcrumbs on docs pages).
+
+### Changed
+- Docs render in their own frame (product header + docs sidebar) instead of inside the app shell, for
+  every reader.
+- Landing page header: section links show from 1024 px up, so the header fits on tablets. The header CTA
+  now reads "Deploy it free", the same label as the hero. The release pill and footer links are clearer,
+  and the footer adds a Privacy link and the maintainer.
+- `/login`, `/setup`, `/pending` and `/demo` send `X-Robots-Tag: noindex`.
+
+### Fixed
+- Signed-out visitors to `/docs/playground` (or any page under `/docs`) were redirected to the landing
+  page after a background 401.
+- The landing header overflowed by up to 61 px between 768 and 830 px wide, clipping "Get started".
+- Docs search: Enter now opens the top result, as the hint says.
+- The sign-in preview's floating "deploy recovered" chip no longer covers the card title.
+
 ## [4.7.1] - 2026-10-01
 
 Product landing page. Notes:

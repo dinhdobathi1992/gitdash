@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Playground from "./_parts/playground";
 
 export const metadata: Metadata = {
-  title: "GitHub API playground — GitDash Docs",
+  title: "GitHub API playground",
   description: "See the raw GitHub REST responses GitDash fetches, how each metric is computed, and the result GitDash shows.",
 };
 

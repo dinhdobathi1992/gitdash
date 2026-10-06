@@ -2,6 +2,7 @@
 
 import { SWRConfig, useSWRConfig, mutate as globalMutate } from "swr";
 import { useCallback, useSyncExternalStore } from "react";
+import { SIGNED_OUT_PAGES, under } from "@/lib/paths";
 
 /**
  * Fetcher that relies on the HTTP-only session cookie set by OAuth callback.
@@ -102,6 +103,11 @@ export async function fetcher<T>(url: string): Promise<T> {
   return data;
 }
 
+/** A 401 sends the visitor to sign-in, except on pages meant for signed-out visitors. */
+export function redirectsOn401(pathname: string): boolean {
+  return !under(pathname, SIGNED_OUT_PAGES);
+}
+
 export function SWRProvider({ children }: { children: React.ReactNode }) {
   return (
     <SWRConfig
@@ -118,12 +124,12 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
           //
           // Guard: skip if already on the auth pages to prevent infinite reload loops
           // (AuthProvider calls /api/auth/me on /login and /setup, which returns 401
-          // for unauthenticated users).
+          // for unauthenticated users). Sub-pages count too: /docs/playground is public.
           if (
             err instanceof FetchError &&
             err.status === 401 &&
             typeof window !== "undefined" &&
-            !["/login", "/setup", "/docs", "/welcome"].includes(window.location.pathname)
+            redirectsOn401(window.location.pathname)
           ) {
             // The session expired. A hard reload drops the stale cache rather than
             // carrying it into the re-authenticated session.
