@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const handleMeRequest = vi.hoisted(() => vi.fn(async (_req: Request, _origin: string) => new Response("{}", { status: 200 })));
+const handleMeRequest = vi.hoisted(() => vi.fn<(req: Request, origin: string) => Promise<Response>>(async () => new Response("{}", { status: 200 })));
 vi.mock("@/lib/mcp/server", () => ({ handleMeRequest }));
 vi.mock("@/lib/mcp/auth", () => ({
   bearerToken: () => "token",
