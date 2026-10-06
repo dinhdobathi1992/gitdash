@@ -18,10 +18,23 @@ function routeFiles(dir = GITHUB_API): string[] {
 // Not cached on purpose: a write, and the live rate-limit readout.
 const UNCACHED_ALLOWLIST = ["create-issue", "rate-limit"];
 
+const USES_CACHE = /withCache(<[^>]*>)?\(/;
+const LOADERS = join(__dirname, "..", "src", "lib", "loaders");
+
+// A route is cached when it calls withCache itself or delegates to a loader
+// (src/lib/loaders/*) that does.
+function routeIsCached(file: string): boolean {
+  const src = readFileSync(file, "utf8");
+  if (USES_CACHE.test(src)) return true;
+  return [...src.matchAll(/from "@\/lib\/loaders\/([\w-]+)"/g)].some(([, name]) =>
+    USES_CACHE.test(readFileSync(join(LOADERS, `${name}.ts`), "utf8")),
+  );
+}
+
 describe("withCache coverage", () => {
   it("only the allowlisted /api/github routes skip withCache", () => {
     const uncached = routeFiles()
-      .filter((f) => !/withCache(<[^>]*>)?\(/.test(readFileSync(f, "utf8")))
+      .filter((f) => !routeIsCached(f))
       .map((f) => relative(GITHUB_API, dirname(f)))
       .sort();
     expect(uncached).toEqual(UNCACHED_ALLOWLIST);

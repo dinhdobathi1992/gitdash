@@ -6,8 +6,10 @@
  * sorted worst-first so a leader sees what needs attention without opening
  * repos one at a time.
  *
- * Computation lives in src/lib/org-health-scorecard.ts (also reused by the
- * Weekly Leadership Digest, v4.0.3) — this route is a thin cached wrapper.
+ * Validation, caching and the computation live in
+ * src/lib/loaders/org-health.ts and src/lib/org-health-scorecard.ts (also
+ * reused by the Weekly Leadership Digest, v4.0.3) — this route is a thin
+ * HTTP wrapper.
  *
  * Deliberately avoids any new DB table (v4.0.0's rollback-safety goal —
  * see CHANGELOG): the trend signal is derived from the DORA throughput data
@@ -21,17 +23,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
-import { getOctokit } from "@/lib/github";
-import { computeScorecard, type OrgHealthScorecardResponse } from "@/lib/org-health-scorecard";
-import { validateOrg, validatePerPage, safeError } from "@/lib/validation";
-import { withCache, hashKey, PARTIAL_TTL_SECONDS } from "@/lib/cache";
-
+import { safeError } from "@/lib/validation";
 import { gatedCacheHeaders } from "@/lib/http-cache";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
+import { loadOrgHealth } from "@/lib/loaders/org-health";
 
 export type { RepoScorecardEntry, OrgHealthScorecardResponse } from "@/lib/org-health-scorecard";
-
-const CACHE_TTL = 900; // 15 min — this fans out DORA + bus-factor per repo
 
 export async function GET(req: NextRequest) {
   labelGitHubRoute("github/org-health-scorecard");
@@ -40,27 +37,10 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
 
-  const orgResult = validateOrg(searchParams.get("org"));
-  if (!orgResult.ok) return orgResult.response;
-  const org = orgResult.data;
-
-  const limitResult = validatePerPage(searchParams.get("limit"), 10);
-  if (!limitResult.ok) return limitResult.response;
-  const limit = Math.min(limitResult.data, 20); // expensive fan-out — keep this modest
-
   try {
-    const response = await withCache<OrgHealthScorecardResponse>(
-      `github/org-health-scorecard:${hashKey(token)}:${org}:${limit}`,
-      CACHE_TTL,
-      () => computeScorecard(token, getOctokit(token), org, limit),
-      {
-        shared: true,
-        ttlFor: (r) =>
-          r.repos_analysed < r.repos_attempted || r.repos.some((x) => x.partial) ? PARTIAL_TTL_SECONDS : CACHE_TTL,
-      },
-    );
-
-    return NextResponse.json(response, {
+    const result = await loadOrgHealth(token, searchParams.get("org"), searchParams.get("limit"));
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(result.data, {
       headers: gatedCacheHeaders(),
     });
   } catch (e) {
