@@ -18,7 +18,7 @@ import { createGrant } from "./grants";
 import { auditMcp, TOKEN_LIKE } from "./audit";
 import { seal, TOKEN_TTL_SEC } from "./tokens";
 import { issuer, mcpGate } from "./config";
-import { ACCESS_DENIED_DESCRIPTION, clearTxCookie, clientRedirect, isNonce, readTx, stripClaims, txClient, type Tx } from "./authorize";
+import { ACCESS_DENIED_DESCRIPTION, CLIENT_BUSY, clearTxCookie, clientRedirect, isNonce, readTx, stripClaims, txClient, type Tx } from "./authorize";
 import type { ResolvedClient, ValidRedirect } from "./clients";
 import { errorPage, escapeHtml, htmlPage, pageHeaders, readBodyCapped } from "./headers";
 
@@ -78,6 +78,12 @@ function consentHtml(tx: Tx & { login: string }, client: ResolvedClient, redirec
   );
 }
 
+function busyHeaders(): Headers {
+  const h = pageHeaders();
+  h.set("Retry-After", "5");
+  return h;
+}
+
 const signedIn = (tx: Tx): tx is Tx & { gh: string; id: number; login: string } =>
   typeof tx.gh === "string" && typeof tx.id === "number" && typeof tx.login === "string";
 
@@ -87,6 +93,7 @@ export async function handleConsentPage(req: NextRequest): Promise<Response> {
   const tx = await readTx(req, req.nextUrl.searchParams.get("tx"));
   if (!tx || !signedIn(tx)) return errorPage(400, EXPIRED);
   const target = await txClient(tx);
+  if (target === "busy") return errorPage(503, CLIENT_BUSY, busyHeaders());
   if (!target) return errorPage(400, "This app can no longer be verified.");
   return htmlPage("Connect an app", consentHtml(tx, target.client, target.redirect));
 }
@@ -126,6 +133,8 @@ export async function handleConsentSubmit(req: NextRequest): Promise<Response> {
   if (decision !== "allow" && decision !== "deny") return errorPage(400, "Choose Allow or Deny.", spent());
 
   const target = await txClient(tx);
+  // Transient: keep the transaction so pressing Allow again works.
+  if (target === "busy") return errorPage(503, CLIENT_BUSY, busyHeaders());
   if (!target) return errorPage(400, "This app can no longer be verified.", spent());
   const { client, redirect } = target;
 

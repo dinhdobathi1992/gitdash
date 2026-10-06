@@ -67,6 +67,15 @@ function trustedProxyHops(): number {
   return Number.isInteger(n) && n >= 1 ? n : 1;
 }
 
+/** "1.2.3.4:5678" -> "1.2.3.4"; "[2001:db8::1]:443" -> "2001:db8::1"; bare IPv6 is left as is. */
+function stripPort(entry: string): string {
+  const v = entry.trim();
+  const bracketed = v.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) return bracketed[1];
+  const v4 = v.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
+  return v4 ? v4[1] : v;
+}
+
 /**
  * The client IP, from headers a trusted proxy controls. The leftmost
  * X-Forwarded-For entry is whatever the client sent, so it is trusted only on
@@ -77,10 +86,10 @@ function trustedProxyHops(): number {
  * GitDash that append to X-Forwarded-For.
  */
 export function clientIp(headers: Headers): string {
-  const realIp = headers.get("x-real-ip")?.trim() || null;
+  const realIp = stripPort(headers.get("x-real-ip") ?? "") || null;
   const chain = (headers.get("x-forwarded-for") ?? "")
     .split(",")
-    .map((s) => s.trim())
+    .map(stripPort)
     .filter(Boolean);
   if (process.env.VERCEL) return realIp ?? chain[0] ?? "unknown";
   if (chain.length > 0) return chain[Math.max(0, chain.length - trustedProxyHops())];

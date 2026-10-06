@@ -27,7 +27,7 @@ vi.mock("@/lib/identity", async (orig) => ({
 import { __setDbClientForTests, ensureSchema, type DbClient } from "@/lib/db";
 import { sessionOptions } from "@/lib/session";
 import { __clearGrantCacheForTests } from "@/lib/mcp/oauth/grants";
-import { __setClientFetchDepsForTests } from "@/lib/mcp/oauth/clients";
+import { __clearClientCacheForTests, __setClientFetchDepsForTests, resolveClient } from "@/lib/mcp/oauth/clients";
 import { __resetConfigWarningForTests } from "@/lib/mcp/oauth/config";
 import { GET as authorizeGET } from "@/app/oauth/authorize/route";
 import { GET as callbackGET } from "@/app/api/auth/callback/mcp/route";
@@ -896,6 +896,31 @@ describe("transaction cookie lifecycle", () => {
     jar.absorb(bad);
     expect((await allow(jar, nonce)).status).toBe(400);
     expect(await grants()).toEqual([]);
+  });
+
+  it("a busy client check at consent is a 503 that keeps the transaction, so Allow works once a slot frees", async () => {
+    const { jar, nonce } = await toConsent(pkce().challenge);
+    __clearClientCacheForTests();
+    const hanging = (() =>
+      Object.assign(new EventEmitter(), { destroy: () => undefined, end: () => undefined })) as unknown as typeof import("node:https").request;
+    __setClientFetchDepsForTests({ resolver: async () => [{ address: "93.184.216.34", family: 4 }], request: hanging });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // Occupy every fetch slot with other, never-answering clients.
+      const fill = Array.from({ length: 8 }, (_, i) => resolveClient(`https://filler${i}.example.com/c.json`));
+      const busy = await allow(jar, nonce);
+      expect(busy.status).toBe(503);
+      expect(busy.headers.get("retry-after")).toBe("5");
+      expect(deletes(busy, nonce)).toBe(false);
+      await vi.advanceTimersByTimeAsync(5_001);
+      await Promise.all(fill);
+    } finally {
+      vi.useRealTimers();
+    }
+    __setClientFetchDepsForTests({ resolver: async () => [{ address: "93.184.216.34", family: 4 }], request: fakeRequest });
+    const ok = await allow(jar, nonce);
+    expect(ok.status).toBe(302);
+    expect(loc(ok).searchParams.get("code")).toBeTruthy();
   });
 
   it("the consent POST deletes the transaction cookie on a database outage, deny, allow and an expired transaction", async () => {

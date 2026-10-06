@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, resetSession } from "@/lib/session";
 import { isStandaloneMode } from "@/lib/mode";
-import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
+import { rateLimit, getRateLimitKey, clientIp } from "@/lib/ratelimit";
 import { publicUrl, isSameOrigin } from "@/lib/url";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
 import { assertOrgModeConfig, lookupWhoAmI } from "@/lib/identity";
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     // LOW-002: Log invalid PAT attempt server-side
     console.warn("[security] Invalid PAT submitted to /api/auth/setup", {
       event: "invalid_pat",
-      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
+      ip: clientIp(req.headers),
       ts: new Date().toISOString(),
     });
     // MED-002: Don't expose the raw GitHub error to the client

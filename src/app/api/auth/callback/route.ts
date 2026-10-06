@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/ratelimit";
 import { getSession, resetSession } from "@/lib/session";
 import { assertOrgModeConfig, lookupWhoAmI } from "@/lib/identity";
 import { upsertUser } from "@/lib/db";
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       event: "oauth_state_mismatch",
       hasState: Boolean(state),
       hasSessionState: Boolean(session.oauthState),
-      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
+      ip: clientIp(req.headers),
       ts: new Date().toISOString(),
     });
     return NextResponse.redirect(publicUrl("/login?error=state_mismatch", req));
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
     // LOW-002: Log expired state security event
     console.warn("[security] OAuth state token expired", {
       event: "oauth_state_expired",
-      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
+      ip: clientIp(req.headers),
       ts: new Date().toISOString(),
     });
     session.oauthState = undefined;

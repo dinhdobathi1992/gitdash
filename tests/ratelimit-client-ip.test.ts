@@ -44,6 +44,14 @@ describe("getRateLimitKey client IP", () => {
     expect(getRateLimitKey(req({}), "p")).toBe("p:unknown");
   });
 
+  it("strips ports so one client keeps one key across connections", () => {
+    vi.stubEnv("VERCEL", "");
+    expect(clientIp(new Headers({ "x-forwarded-for": "203.0.113.5, 198.51.100.7:51234" }))).toBe("198.51.100.7");
+    expect(clientIp(new Headers({ "x-forwarded-for": "[2001:db8::1]:443" }))).toBe("2001:db8::1");
+    expect(clientIp(new Headers({ "x-forwarded-for": "2001:db8::1" }))).toBe("2001:db8::1");
+    expect(clientIp(new Headers({ "x-real-ip": "198.51.100.9:8080" }))).toBe("198.51.100.9");
+  });
+
   it("on Vercel: x-real-ip, falling back to the leftmost X-Forwarded-For entry", () => {
     vi.stubEnv("VERCEL", "1");
     expect(clientIp(new Headers({ "x-real-ip": "198.51.100.1", "x-forwarded-for": "198.51.100.2, 10.0.0.1" }))).toBe("198.51.100.1");

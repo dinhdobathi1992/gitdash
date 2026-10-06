@@ -267,10 +267,25 @@ async function exchangeGithubCode(code: string): Promise<string | null> {
   return typeof data.access_token === "string" && data.access_token ? data.access_token : null;
 }
 
-/** Re-validate the client and redirect a transaction was created for. */
-export async function txClient(tx: Tx): Promise<{ client: ResolvedClient; redirect: ValidRedirect } | null> {
+function retryHeaders(): Headers {
+  const h = pageHeaders();
+  h.set("Retry-After", "5");
+  return h;
+}
+
+export type TxTarget = { client: ResolvedClient; redirect: ValidRedirect };
+
+/** Shown when every client-metadata fetch slot is in use: transient, so the transaction survives. */
+export const CLIENT_BUSY = "GitDash is busy verifying apps right now. Wait a few seconds, then try again.";
+
+/**
+ * Re-validate the client and redirect a transaction was created for. "busy"
+ * means the client could not be checked right now (all fetch slots in use) —
+ * a transient condition, not a verdict, so callers must not spend the transaction.
+ */
+export async function txClient(tx: Tx): Promise<TxTarget | "busy" | null> {
   const resolved = await resolveClient(tx.client_id);
-  if (!resolved.ok) return null;
+  if (!resolved.ok) return resolved.busy ? "busy" : null;
   const redirect = matchRedirect(resolved.client, tx.redirect_uri);
   return redirect ? { client: resolved.client, redirect } : null;
 }
@@ -286,6 +301,7 @@ export async function handleGithubCallback(req: NextRequest): Promise<Response> 
   if (!tx || !nonce) return errorPage(400, "This sign-in expired or was started in another browser.");
 
   const target = await txClient(tx);
+  if (target === "busy") return errorPage(503, CLIENT_BUSY, retryHeaders());
   if (!target) return errorPage(400, "This app can no longer be verified.");
   const headers = pageHeaders();
   clearTxCookie(headers, nonce);
