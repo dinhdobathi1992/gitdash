@@ -36,7 +36,7 @@ function aliasesFor(metric: string): string[] {
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 const fail = (t: string) => ({ content: [{ type: "text" as const, text: t }], isError: true });
 
-export function registerDocsTools(server: McpServer, origin: string): void {
+export function registerDocsTools(server: McpServer, originOf: () => string): void {
   server.registerTool(
     "list_docs",
     {
@@ -56,7 +56,7 @@ export function registerDocsTools(server: McpServer, origin: string): void {
       annotations: READ_ONLY,
     },
     async ({ query }) => {
-      const ranked = (await indexedEntries(origin))
+      const ranked = (await indexedEntries(originOf()))
         .map((e) => ({ e, s: score(e, query) }))
         .filter((r) => r.s > 0)
         .sort((a, b) => b.s - a.s)
@@ -75,7 +75,7 @@ export function registerDocsTools(server: McpServer, origin: string): void {
       annotations: READ_ONLY,
     },
     async ({ page }) => {
-      const md = await docMarkdown(page, origin);
+      const md = await docMarkdown(page, originOf());
       return md ? text(md) : fail(`The page "${page}" is unavailable right now. Try again shortly.`);
     },
   );
@@ -92,7 +92,7 @@ export function registerDocsTools(server: McpServer, origin: string): void {
     },
     async ({ metric }) => {
       const aliases = aliasesFor(metric);
-      const pages = await Promise.all(METRIC_PAGES.map(async (id) => ({ id, md: await docMarkdown(id, origin) })));
+      const pages = await Promise.all(METRIC_PAGES.map(async (id) => ({ id, md: await docMarkdown(id, originOf()) })));
 
       // 1. Definition rows: every table row whose first cell names the metric.
       const rows = pages.flatMap(({ id, md }) => (md ? tableRowsNaming(md, aliases).map((m) => ({ ...m, id })) : []));

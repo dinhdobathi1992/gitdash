@@ -151,13 +151,16 @@ describe("/mcp — robustness", () => {
     expect(metricFetches).toBeLessThanOrEqual(8);
   });
 
-  it("keeps one handler however many Host headers a client sends", async () => {
+  it("gives each request its own origin for page fetches", async () => {
+    const fetchMock = mockPages();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("VERCEL", "1");
     const { POST } = await route();
-    for (let i = 0; i < 30; i++) {
-      await POST(new NextRequest(`http://evil${i}.example/mcp`, { method: "POST", body: "{}", headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${i}` } }));
-    }
-    const server = await import("@/lib/mcp/server");
-    expect(server.__handlerCountForTests()).toBe(1);
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_doc", arguments: { page: "modes" }, _meta: META } });
+    const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2026-07-28", "mcp-method": "tools/call", "mcp-name": "get_doc" };
+    await POST(new NextRequest("https://preview-a.example/mcp", { method: "POST", body, headers: { ...headers, "x-forwarded-for": "192.0.2.10" } }));
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe("https://preview-a.example/docs/modes");
+    vi.unstubAllEnvs();
   });
 
   it("answers DELETE with a CORS-readable 405", async () => {

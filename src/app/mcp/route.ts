@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { docsHandler } from "@/lib/mcp/server";
+import { handleDocsRequest } from "@/lib/mcp/server";
 import { preflight, tooManyRequests, withCors } from "@/lib/mcp/http";
 import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 
@@ -13,7 +13,7 @@ const RATE_LIMIT = { limit: 300, windowMs: 60_000 };
 async function handle(req: NextRequest): Promise<Response> {
   const rl = rateLimit(getRateLimitKey(req, "mcp"), RATE_LIMIT.limit, RATE_LIMIT.windowMs);
   if (!rl.allowed) return tooManyRequests(rl.retryAfterMs);
-  return withCors(await docsHandler(req.nextUrl.origin)(req));
+  return withCors(await handleDocsRequest(req, req.nextUrl.origin));
 }
 
 // DELETE (legacy session teardown) also goes to the handler, which answers 405 —
