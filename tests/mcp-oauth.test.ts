@@ -37,6 +37,7 @@ import { POST as revokePOST } from "@/app/oauth/revoke/route";
 import { POST as registerPOST } from "@/app/oauth/register/route";
 import { GET as asMetadataGET } from "@/app/.well-known/oauth-authorization-server/route";
 import { GET as prmGET } from "@/app/.well-known/oauth-protected-resource/[...path]/route";
+import { POST as mcpMePOST } from "@/app/mcp/me/route";
 
 const ORIGIN = "https://gitdash.test";
 const RESOURCE = `${ORIGIN}/mcp/me`;
@@ -261,6 +262,7 @@ describe("route registry and proxy", () => {
     ["/.well-known/oauth-authorization-server", "GET"],
     ["/.well-known/oauth-protected-resource/mcp/me", "GET"],
     ["/api/auth/callback/mcp", "GET"],
+    ["/mcp/me", "POST"],
   ];
 
   it("classifies every MCP OAuth path as public (they authenticate on their own)", async () => {
@@ -331,6 +333,8 @@ describe("sign-in flows", () => {
     expect(html).toContain("<strong>octo</strong>");
     expect(html).toContain("Settings → Connected apps");
     expect(page.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    // "no-referrer" would make the browser send Origin: null on the form POST.
+    expect(page.headers.get("referrer-policy")).toBe("same-origin");
     expect(html).not.toContain(GH);
 
     const res = await allow(jar, nonce);
@@ -686,6 +690,7 @@ describe("feature gate", () => {
       await registerPOST(req("/oauth/register", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })),
       asMetadataGET(req("/.well-known/oauth-authorization-server")),
       await prmGET(req("/.well-known/oauth-protected-resource/mcp/me"), ctx),
+      await mcpMePOST(req("/mcp/me", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })),
     ];
   };
 

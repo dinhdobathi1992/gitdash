@@ -236,6 +236,15 @@ export function __resetAccessForTests(): void {
 
 // ── Decision ─────────────────────────────────────────────────────────────────
 
+/**
+ * Whether a decision needs the user's groups and grants. Only admin routes, or
+ * everything once enforcement is on, so during rollout a database outage
+ * cannot take the app down.
+ */
+export function needsAccess(cls: AccessClass | "unregistered", enforce: boolean): boolean {
+  return cls === "admin" || (enforce && cls !== "public" && cls !== "auth");
+}
+
 export type Decision =
   | { ok: true }
   | { ok: false; code: "no_groups" | "forbidden" | "unregistered"; flag?: FlagKey };

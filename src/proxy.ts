@@ -8,11 +8,13 @@ import { assertOrgModeConfig } from "@/lib/identity";
 import {
   classify,
   decide,
+  needsAccess,
   rbacEnforced,
   resolveAccess,
   resolveIdentity,
   AuthzUnavailableError,
 } from "@/lib/permissions";
+import { recordSeen } from "@/lib/record-seen";
 
 // Paths that never require auth
 // /api/cron is protected by its own CRON_SECRET bearer-token check (see
@@ -52,23 +54,6 @@ async function readSession(req: NextRequest): Promise<SessionData | null> {
   } catch {
     return null;
   }
-}
-
-/** In-process throttle for recording users: at most one DB write per user per 10 minutes. */
-const SEEN_EVERY_MS = 10 * 60_000;
-const lastRecorded = new Map<number, number>();
-
-function recordSeen(identity: { id: number; login: string; avatar_url: string }, event?: NextFetchEvent): void {
-  const now = Date.now();
-  if (now - (lastRecorded.get(identity.id) ?? 0) < SEEN_EVERY_MS) return;
-  lastRecorded.set(identity.id, now);
-  if (lastRecorded.size > 10_000) lastRecorded.clear();
-  // Upsert (not update): sessions created before users were recorded still get
-  // a row, so an admin can assign them a group. Never blocks the request.
-  const write = import("@/lib/db")
-    .then((db) => db.upsertUser({ id: identity.id, login: identity.login, avatar_url: identity.avatar_url }))
-    .catch(() => lastRecorded.delete(identity.id));
-  event?.waitUntil(write);
 }
 
 export async function proxy(req: NextRequest, event?: NextFetchEvent) {
@@ -157,13 +142,10 @@ export async function proxy(req: NextRequest, event?: NextFetchEvent) {
 
     const cls = classify(pathname, req.method);
     const enforce = rbacEnforced();
-    // Groups/grants are only needed for admin routes, or for everything once
-    // enforcement is on — so during rollout a DB outage cannot take the app down.
-    const needAccess = cls === "admin" || (enforce && cls !== "public" && cls !== "auth");
-    const access = needAccess ? await resolveAccess(identity.id) : null;
+    const access = needsAccess(cls, enforce) ? await resolveAccess(identity.id) : null;
     const d = decide(cls, access, enforce);
 
-    recordSeen(identity, event);
+    recordSeen(identity, event ? (p) => event.waitUntil(p) : undefined);
 
     if (d.ok) return NextResponse.next();
     if (d.code === "no_groups") return deny(403, "no_groups", "/pending");
