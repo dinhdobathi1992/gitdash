@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTokenFromSession } from "@/lib/session";
-import { listRepos } from "@/lib/github";
 import { safeError } from "@/lib/validation";
 import { privateCacheHeaders, wantsFresh } from "@/lib/http-cache";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
-import { withCache, hashKey } from "@/lib/cache";
-
-const CACHE_TTL = 60;
+import { loadRepos } from "@/lib/loaders/repos";
 
 export async function GET(req: NextRequest) {
   labelGitHubRoute("github/repos");
@@ -14,13 +11,9 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const repos = await withCache(
-      `github/repos:${hashKey(token)}`,
-      CACHE_TTL,
-      () => listRepos(token),
-      { shared: true, refresh: wantsFresh(req) },
-    );
-    return NextResponse.json(repos, {
+    const result = await loadRepos(token, { refresh: wantsFresh(req) });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(result.data, {
       headers: privateCacheHeaders(0),
     });
   } catch (e) {

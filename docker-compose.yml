@@ -7,6 +7,9 @@ services:
     container_name: gitdash
     ports:
       - "3000:3000"
+    # Settings come from .env.local. To let AI apps sign in at /mcp/me, set
+    # GITDASH_MCP=true there (organization mode, a database and
+    # NEXT_PUBLIC_APP_URL required); see Docs > Configuration.
     env_file:
       - .env.local
     restart: unless-stopped

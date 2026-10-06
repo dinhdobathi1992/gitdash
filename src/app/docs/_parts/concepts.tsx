@@ -248,7 +248,7 @@ export function Security() {
         <DocTable
           headers={["Layer", "Mechanism"]}
           rows={[
-            ["Session", <>iron-session (AES-256-GCM); cookie is <Code key="h">HttpOnly</Code>, <Code key="s">SameSite=Lax</Code>, <Code key="sc">Secure</Code> in production, 7-day lifetime. <Code key="ss">SESSION_SECRET</Code> must be at least 32 characters.</>],
+            ["Session", <>iron-session (AES-256-CBC + HMAC-SHA256); cookie is <Code key="h">HttpOnly</Code>, <Code key="s">SameSite=Lax</Code>, <Code key="sc">Secure</Code> in production, 7-day lifetime. <Code key="ss">SESSION_SECRET</Code> must be at least 32 characters.</>],
             ["Sign-in", "The session is replaced on every sign-in, so an old session cannot carry over to a new account."],
             ["Cross-site requests", "State-changing API requests from another origin are rejected; token sign-in only accepts JSON from GitDash's own pages."],
             ["Rate limits", <><Code key="a">/api/auth/setup</Code> 5 per minute per IP · <Code key="b">/api/auth/login</Code> 10 per minute · issue creation 5 per hour</>],

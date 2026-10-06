@@ -80,6 +80,41 @@
             false
           ],
           "description": "Organization mode: enforce group permissions (false during rollout)."
+        },
+        "landingPage": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Show the /welcome product page to signed-out visitors. Public product site only."
+        },
+        "mcp": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Let AI apps read GitDash at /mcp/me (GITDASH_MCP). Needs a database and appUrl. Organization mode adds GitHub sign-in (needs a second OAuth callback URL); standalone mode accepts personal MCP keys only."
+        },
+        "trustedProxyHops": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "minimum": 1,
+          "pattern": "^[1-9][0-9]*$",
+          "description": "GITDASH_TRUSTED_PROXY_HOPS: how many proxies in front of GitDash append to X-Forwarded-For (default 1). Rate limits use the client IP this many entries from the right. Ignored on Vercel."
         }
       }
     },

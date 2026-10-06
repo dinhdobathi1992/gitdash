@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/ratelimit";
 import { getSession, resetSession } from "@/lib/session";
 import { assertOrgModeConfig, lookupWhoAmI } from "@/lib/identity";
 import { upsertUser } from "@/lib/db";
 import { publicUrl } from "@/lib/url";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
+
+/**
+ * GitHub's redirect_uri: from NEXT_PUBLIC_APP_URL when it is set, so forwarded
+ * headers cannot choose it; otherwise from publicUrl. The login route
+ * (api/auth/login/route.ts) builds the identical string with the same
+ * expression, as GitHub requires.
+ */
+function githubCallbackUrl(req: NextRequest): string {
+  return new URL("/api/auth/callback", process.env.NEXT_PUBLIC_APP_URL || publicUrl("/", req)).toString();
+}
 
 export async function GET(req: NextRequest) {
   labelGitHubRoute("auth/callback");
@@ -25,7 +36,7 @@ export async function GET(req: NextRequest) {
       event: "oauth_state_mismatch",
       hasState: Boolean(state),
       hasSessionState: Boolean(session.oauthState),
-      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
+      ip: clientIp(req.headers),
       ts: new Date().toISOString(),
     });
     return NextResponse.redirect(publicUrl("/login?error=state_mismatch", req));
@@ -36,7 +47,7 @@ export async function GET(req: NextRequest) {
     // LOW-002: Log expired state security event
     console.warn("[security] OAuth state token expired", {
       event: "oauth_state_expired",
-      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
+      ip: clientIp(req.headers),
       ts: new Date().toISOString(),
     });
     session.oauthState = undefined;
@@ -60,7 +71,14 @@ export async function GET(req: NextRequest) {
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+      // The same redirect_uri the login sent (required once the OAuth App has
+      // more than one callback URL).
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: githubCallbackUrl(req),
+      }),
     });
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
 

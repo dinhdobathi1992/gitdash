@@ -201,7 +201,8 @@ describe("shared-layer usage (static scan)", () => {
         const code = readFileSync(f, "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l));
         return code.some((l) => /shared:\s*true/.test(l));
       })
-      .filter((f) => !f.includes(join("src", "app", "api", "github")));
+      // The loaders hold the cache calls of the /api/github routes.
+      .filter((f) => !f.includes(join("src", "app", "api", "github")) && !f.includes(join("src", "lib", "loaders")));
     expect(offenders).toEqual([]);
   });
 });

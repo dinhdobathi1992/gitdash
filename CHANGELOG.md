@@ -8,10 +8,49 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Personal MCP keys.** Create a key in Settings → Connected apps (Create MCP key) and connect Claude Code,
+  Cursor or Claude Desktop to `/mcp/me` with one `Authorization: Bearer <key>` header, no OAuth sign-in. Works
+  when you signed in with a personal access token, and in standalone mode (`GITDASH_MCP=true` plus
+  `DATABASE_URL` and `NEXT_PUBLIC_APP_URL`; the OAuth endpoints stay organization-only). A key holds an
+  encrypted copy of the token you signed in with, is shown once, expires after 30 days, is limited to 5 an
+  hour per user, and is listed and revoked with your connected apps. New endpoint `POST /api/mcp/keys`.
+- **`GITDASH_TRUSTED_PROXY_HOPS`** (Helm `config.trustedProxyHops`, default 1) is documented: how many
+  proxies append to `X-Forwarded-For`, so rate limits use the real client IP. Ignored on Vercel.
+- **Signed-in MCP data tools at `/mcp/me`.** AI apps such as Claude and Cursor can sign in through GitDash
+  (OAuth 2.1 with PKCE, GitHub as the identity provider) and read your repositories, CI, DORA metrics, pull
+  request health, organization scorecards and Actions cost through seven read-only tools, with the same
+  group and feature checks as the screens. People see and revoke their apps in Settings → Connected apps;
+  admins see every user's apps under Admin → Connected apps. Everything is off by default: set
+  `GITDASH_MCP=true` (Helm `config.mcp`) in organization mode, and add the second GitHub callback URL
+  `<origin>/api/auth/callback/mcp`. Optional: `MCP_ALLOW_DCR`, `MCP_NATIVE_SCHEMES`,
+  `MCP_PREVIOUS_SESSION_SECRET`. Documented under Docs → MCP server, Configuration and Data & privacy.
 - **Public MCP server at `/mcp`** (Streamable HTTP, MCP 2026-07-28, stateless). AI assistants such as Claude,
   Claude Code and Cursor can add it as a remote server and use four read-only docs tools: `list_docs`,
   `search_docs`, `get_doc` and `explain_metric`. No sign-in; 300 requests a minute per IP. Documented at
   `/docs/mcp`.
+
+### Security
+- **MCP authorization codes no longer open with `SESSION_SECRET` alone.** A code is now `<grant_id>.<sealed>`,
+  and the seal also needs a random per-grant key stored with the grant and erased when the code is redeemed,
+  so a code left in browser history or a client log cannot be opened afterwards. Presenting a redeemed code
+  again still revokes the connection.
+- The MCP GitHub sign-in asks only for `repo read:org read:user` (no `workflow`, no `user:email`). The web
+  sign-in is unchanged; an MCP sign-in that reuses an existing web sign-in keeps that sign-in's scopes.
+- Client metadata fetches: failures are cached apart from verified documents and can no longer evict them,
+  and at most 2 fetches run at once per hostname (8 in total).
+- Rate limits key IPv6 clients on their /64, and hourly limits now last the full hour (the 10-minute sweep
+  used to reset them).
+- A user who leaves the allowed organizations now loses every connected app and personal key at once, not
+  only the one that noticed. `/oauth/revoke` also accepts personal keys. Revoking a connected app in Settings
+  refuses cross-site requests. `/oauth` and `/.well-known` always send `nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: same-origin` and HSTS, also when MCP is off.
+- Known and accepted: the 10-live-keys cap is checked before the key is created, so parallel requests can
+  pass it by a few; the 5-keys-an-hour limit bounds that.
+
+### Upgrade notes
+- Behind more than one proxy that appends to `X-Forwarded-For`, set `GITDASH_TRUSTED_PROXY_HOPS` to their
+  number. GitDash now logs one warning when the address it uses for rate limits is private, loopback or
+  link-local, which usually means every client shares one limit.
 
 ### Added
 - **Every docs page has its own URL** (`/docs/<page>`). Pages are server-rendered, have their own title,
@@ -34,6 +73,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `/login`, `/setup`, `/pending` and `/demo` send `X-Robots-Tag: noindex`.
 
 ### Fixed
+- The security docs said the session cookie uses AES-256-GCM. iron-session uses AES-256-CBC with an
+  HMAC-SHA256 signature; the page now says so.
+- The Helm chart failed `helm lint` because `config.landingPage` was missing from the values schema.
 - Signed-out visitors to `/docs/playground` (or any page under `/docs`) were redirected to the landing
   page after a background 401.
 - The landing header overflowed by up to 61 px between 768 and 830 px wide, clipping "Get started".

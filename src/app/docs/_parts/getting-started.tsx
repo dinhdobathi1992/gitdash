@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Rocket, Server, Settings2, Terminal } from "lucide-react";
 import { Callout } from "@/components/docs/Callout";
 import { CodeBlock, Code } from "@/components/docs/CodeBlock";
@@ -249,6 +250,7 @@ export function Configuration() {
             [<Code key="1">SESSION_SECRET</Code>, REQ, "At least 32 characters; encrypts the session cookie. The app refuses to start in production without it."],
             [<Code key="2">MODE</Code>, OPT, <><Code key="s">standalone</Code> (default) or <Code key="o">organization</Code>.</>],
             [<Code key="3">NEXT_PUBLIC_APP_URL</Code>, OPT, "Public URL; used for OAuth redirects, same-origin checks, and the canonical and social-card URLs of public pages. Static pages read it at build time, so pass it to the image build as well when those URLs matter."],
+            [<Code key="4">GITDASH_TRUSTED_PROXY_HOPS</Code>, OPT, <>How many proxies in front of GitDash append to <Code key="x">X-Forwarded-For</Code>: a positive integer, default <Code key="d">1</Code>. Rate limits key on the client IP, taken as the <Code key="x2">X-Forwarded-For</Code> entry this many hops from the right, because the left end is whatever the client sent. Set it when more than one proxy appends (for example a CDN in front of an ingress); with too low a value every user shares a proxy&apos;s IP, with too high a value clients can choose their own. Ignored on Vercel, which overwrites the header. Helm: <Code key="h">config.trustedProxyHops</Code>.</>],
           ]}
         />
       </DocCard>
@@ -310,6 +312,43 @@ export function Configuration() {
             [<><Code key="9">AI_TIMEOUT_MS</Code>, <Code key="10">AI_TOTAL_BUDGET_MS</Code>, <Code key="11">AI_DAILY_TOKEN_BUDGET</Code></>, "Per-attempt timeout, per-request time budget and a per-instance daily token cap."],
           ]}
         />
+      </DocCard>
+
+      <DocCard>
+        <SubHeading>Signed-in MCP (AI apps)</SubHeading>
+        <ProseP>
+          Off by default. It lets an AI app such as Claude or Cursor read your repositories at <Code>/mcp/me</Code>,
+          read-only, after signing in through GitHub or with a personal MCP key. It needs a database and{" "}
+          <Code>NEXT_PUBLIC_APP_URL</Code>, which must match the address people use; with it unset or different, the
+          endpoints answer 503 instead of issuing tokens. See <Link href="/docs/mcp" className="text-link hover:text-violet-200">MCP server</Link> for how
+          people connect.
+        </ProseP>
+        <DocTable
+          headers={["Variable", "", "Purpose"]}
+          rows={[
+            [<Code key="1">GITDASH_MCP</Code>, OPT, <><Code key="t">true</Code> turns on <Code key="m">/mcp/me</Code>, personal MCP keys and the Connected apps screens, plus, in organization mode, the OAuth endpoints under <Code key="o">/oauth</Code>. Helm: <Code key="h">config.mcp</Code>.</>],
+            [<Code key="2">MCP_ALLOW_DCR</Code>, OPT, <><Code key="t">true</Code> also accepts Dynamic Client Registration for apps that cannot publish a client metadata document. Default off.</>],
+            [<Code key="3">MCP_NATIVE_SCHEMES</Code>, OPT, <>Comma-separated custom redirect schemes allowed for desktop apps, for example <Code key="c">cursor,vscode</Code>. Default none; <Code key="h">http</Code>, <Code key="s">https</Code>, <Code key="j">javascript</Code> and similar are always refused.</>],
+            [<Code key="4">MCP_PREVIOUS_SESSION_SECRET</Code>, OPT, <>When you rotate <Code key="s">SESSION_SECRET</Code>, put the old value here for 30 days, the longest an app token or personal key lives, so connected apps and keys keep working; then remove it.</>],
+          ]}
+        />
+        <ProseP>
+          Add a second callback URL to the same GitHub OAuth App: <Code>&lt;origin&gt;/api/auth/callback/mcp</Code>,
+          next to the existing <Code>&lt;origin&gt;/api/auth/callback</Code>. The web sign-in now names its callback
+          explicitly, so both keep working.
+        </ProseP>
+        <ProseP>
+          Standalone mode: set <Code>GITDASH_MCP=true</Code>, <Code>DATABASE_URL</Code> and{" "}
+          <Code>NEXT_PUBLIC_APP_URL</Code>. There is no OAuth App, so <Code>/mcp/me</Code> accepts personal MCP keys
+          only and the <Code>/oauth</Code> endpoints stay off; no callback URL is needed. Without{" "}
+          <Code>DATABASE_URL</Code>, <Code>/mcp/me</Code> stays off and creating a key answers 409, because a key is only
+          issued when it can be revoked.
+        </ProseP>
+        <ProseP>
+          Expired and revoked grants are deleted by the retention job. <Code>/api/cron/sync</Code> runs it, so
+          self-hosted installs that already schedule that cron need nothing more; without the cron, old rows stay until
+          you run it.
+        </ProseP>
       </DocCard>
 
       <DocCard>

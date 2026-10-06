@@ -22,6 +22,9 @@ export interface SessionData {
   };
 }
 
+/** Publicly known development-only secret; never acceptable for anything that must be unforgeable. */
+export const DEV_FALLBACK_SECRET = "fallback-dev-secret-change-in-production!!";
+
 // CRIT-002: Fail loudly in production if SESSION_SECRET is missing or too short.
 const SESSION_SECRET = (() => {
   const secret = process.env.SESSION_SECRET;
@@ -39,7 +42,7 @@ const SESSION_SECRET = (() => {
       "Using dev fallback — NEVER deploy this to production."
     );
   }
-  return secret ?? "fallback-dev-secret-change-in-production!!";
+  return secret ?? DEV_FALLBACK_SECRET;
 })();
 
 export const sessionOptions: SessionOptions = {
