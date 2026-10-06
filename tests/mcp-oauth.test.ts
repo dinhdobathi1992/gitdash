@@ -309,7 +309,7 @@ describe("metadata", () => {
     const res = await prmGET(req("/.well-known/oauth-protected-resource/mcp/me", { headers: { "x-forwarded-host": "evil.example" } }), ctx);
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
-    expect(await res.json()).toEqual({ resource: RESOURCE, authorization_servers: [ORIGIN] });
+    expect(await res.json()).toEqual({ resource: RESOURCE, authorization_servers: [ORIGIN], scopes_supported: ["gitdash:read"], bearer_methods_supported: ["header"] });
     const other = await prmGET(req("/.well-known/oauth-protected-resource/mcp"), { params: Promise.resolve({ path: ["mcp"] }) });
     expect(other.status).toBe(404);
   });
@@ -400,7 +400,7 @@ describe("sign-in flows", () => {
     const first = await toConsent(a.challenge, jar, { state: "first" });
     const second = await toConsent(b.challenge, jar, { state: "second" });
     expect(first.nonce).not.toBe(second.nonce);
-    expect(jar.names().filter((n) => n.startsWith("mcp_tx_"))).toHaveLength(2);
+    expect(jar.names().filter((n) => n.startsWith("__Host-mcp_tx_"))).toHaveLength(2);
     const r2 = await allow(jar, second.nonce);
     jar.absorb(r2);
     const r1 = await allow(jar, first.nonce);
@@ -518,12 +518,14 @@ describe("consent", () => {
     expect((await allow(jar, nonce)).status).toBe(400);
   });
 
-  it("the transaction cookie is per nonce, HttpOnly, SameSite=Lax, Secure, 10 minutes", async () => {
+  it("the transaction cookie is per nonce, __Host- prefixed, HttpOnly, SameSite=Lax, Secure, Path=/, 10 minutes", async () => {
     const { challenge } = pkce();
     const a = await authorizeGET(req(authorizeQuery(challenge)));
     const nonce = loc(a).searchParams.get("state")!;
     const [cookie] = a.headers.getSetCookie();
-    expect(cookie.startsWith(`mcp_tx_${nonce}=`)).toBe(true);
+    expect(cookie.startsWith(`__Host-mcp_tx_${nonce}=`)).toBe(true);
+    expect(cookie).toMatch(/Path=\/;/);
+    expect(cookie).not.toMatch(/Domain=/i);
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Lax/);
     expect(cookie).toMatch(/Secure/);
@@ -618,10 +620,10 @@ describe("refresh_token grant", () => {
     expect((await grants())[0].revoked_reason).toBeNull();
   });
 
-  it("a refresh token reused after the 30 s grace window revokes the grant", async () => {
+  it("a refresh token reused after the 10 s grace window revokes the grant", async () => {
     const t = await tokens();
     expect((await refresh(t.refresh_token)).status).toBe(200);
-    await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '31 seconds'`);
+    await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '11 seconds'`);
     const reuse = await refresh(t.refresh_token);
     expect((await reuse.json()).error).toBe("invalid_grant");
     expect((await grants())[0].revoked_reason).toBe("refresh_reuse");
@@ -794,5 +796,195 @@ describe("native redirect schemes (MCP_NATIVE_SCHEMES)", () => {
     const page = await res.text();
     expect(page).toContain("location.replace(");
     expect(page).toContain("cursor://anysphere.cursor-retrieval/oauth/callback?code=");
+  });
+});
+
+// ── Request bodies, rate limits and transaction hygiene ──────────────────────
+
+/** A POST whose body is a stream: `size` bytes, then (unless `end`) it never finishes. */
+function streamPost(path: string, headers: Record<string, string>, size: number, end = false) {
+  const chunk = new TextEncoder().encode("a=".padEnd(Math.max(size, 2), "x"));
+  let sent = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (!sent) {
+        sent = true;
+        if (size > 0) controller.enqueue(chunk);
+        if (end) controller.close();
+        return;
+      }
+      return new Promise<void>(() => {}); // stalls: reading to the end would hang
+    },
+  });
+  return new NextRequest(`${ORIGIN}${path}`, {
+    method: "POST",
+    headers: { "x-forwarded-for": nextIp(), ...headers },
+    body,
+    duplex: "half",
+  } as ConstructorParameters<typeof NextRequest>[1] & { duplex: "half" });
+}
+
+const JSON_TYPE = { "content-type": "application/json" };
+const BODY_ENDPOINTS: [string, (r: NextRequest) => Promise<Response>, Record<string, string>, number][] = [
+  ["/oauth/token", tokenPOST, FORM, 32 * 1024],
+  ["/oauth/revoke", revokePOST, FORM, 32 * 1024],
+  ["/oauth/register", registerPOST, JSON_TYPE, 16 * 1024],
+  ["/oauth/consent", consentPOST, { ...FORM, origin: ORIGIN }, 4 * 1024],
+];
+
+describe("request body limits", () => {
+  it.each(BODY_ENDPOINTS)("%s refuses a declared Content-Length over the cap with 413 before reading", async (path, handler, headers, cap) => {
+    vi.stubEnv("MCP_ALLOW_DCR", "true");
+    const res = await handler(streamPost(path, { ...headers, "content-length": String(cap + 1) }, 0));
+    expect(res.status).toBe(413);
+  });
+
+  it.each(BODY_ENDPOINTS)("%s cuts off a body without Content-Length at the cap (413)", async (path, handler, headers, cap) => {
+    vi.stubEnv("MCP_ALLOW_DCR", "true");
+    const r = streamPost(path, headers, cap + 1);
+    expect(r.headers.get("content-length")).toBeNull();
+    expect((await handler(r)).status).toBe(413);
+  });
+
+  it("a body under the cap without Content-Length is still read", async () => {
+    const res = await tokenPOST(streamPost("/oauth/token", FORM, 10, true));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("unsupported_grant_type");
+  });
+
+  it("the consent POST accepts form encoding only", async () => {
+    const { challenge } = pkce();
+    const { jar, nonce } = await toConsent(challenge);
+    for (const type of ["multipart/form-data; boundary=x", "application/json", "text/plain"]) {
+      const res = await consentPOST(
+        req("/oauth/consent", { method: "POST", jar, headers: { "content-type": type, origin: ORIGIN }, body: form({ tx: nonce, decision: "allow" }) }),
+      );
+      expect(res.status, type).toBe(415);
+    }
+    expect(await grants()).toEqual([]);
+  });
+
+  it("the consent POST is limited to 30 a minute per client IP", async () => {
+    const post = () =>
+      consentPOST(req("/oauth/consent", { method: "POST", headers: { ...FORM, origin: ORIGIN, "x-forwarded-for": "192.0.2.77" }, body: form({ decision: "allow" }) }));
+    for (let i = 0; i < 30; i++) expect((await post()).status).toBe(400);
+    const limited = await post();
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
+});
+
+describe("transaction cookie lifecycle", () => {
+  const deletes = (res: Response, nonce: string) =>
+    res.headers.getSetCookie().some((c) => c.startsWith(`__Host-mcp_tx_${nonce}=;`) && /Max-Age=0/.test(c));
+
+  it("on a plain-http site the cookie falls back to the unprefixed name, without Secure", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://gitdash.test");
+    const path = authorizeQuery(pkce().challenge, { resource: "http://gitdash.test/mcp/me" });
+    const a = await authorizeGET(new NextRequest(`http://gitdash.test${path}`, { headers: { "x-forwarded-for": nextIp() } }));
+    const nonce = loc(a).searchParams.get("state")!;
+    const [cookie] = a.headers.getSetCookie();
+    expect(cookie.startsWith(`mcp_tx_${nonce}=`)).toBe(true);
+    expect(cookie).not.toMatch(/Secure/);
+  });
+
+  it("the consent POST is single-use: a rejected decision deletes the transaction cookie", async () => {
+    const { jar, nonce } = await toConsent(pkce().challenge);
+    const bad = await allow(jar, nonce, "maybe");
+    expect(bad.status).toBe(400);
+    expect(deletes(bad, nonce)).toBe(true);
+    jar.absorb(bad);
+    expect((await allow(jar, nonce)).status).toBe(400);
+    expect(await grants()).toEqual([]);
+  });
+
+  it("the consent POST deletes the transaction cookie on a database outage, deny, allow and an expired transaction", async () => {
+    const outage = await toConsent(pkce().challenge);
+    databaseDown();
+    const down = await allow(outage.jar, outage.nonce);
+    expect(down.status).toBe(503);
+    expect(deletes(down, outage.nonce)).toBe(true);
+    databaseUp();
+
+    const denied = await toConsent(pkce().challenge);
+    expect(deletes(await allow(denied.jar, denied.nonce, "deny"), denied.nonce)).toBe(true);
+
+    const allowed = await toConsent(pkce().challenge);
+    expect(deletes(await allow(allowed.jar, allowed.nonce), allowed.nonce)).toBe(true);
+
+    const stale = await toConsent(pkce().challenge);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 11 * 60_000);
+    const expired = await allow(stale.jar, stale.nonce);
+    expect(expired.status).toBe(400);
+    expect(deletes(expired, stale.nonce)).toBe(true);
+  });
+
+  it("a fifth parallel sign-in evicts only the oldest transaction", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const jar = new Jar();
+    const nonces: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const a = await authorizeGET(req(authorizeQuery(pkce().challenge, { state: `s${i}` }), { jar }));
+      jar.absorb(a);
+      nonces.push(loc(a).searchParams.get("state")!);
+      vi.setSystemTime(Date.now() + 1_000);
+    }
+    const left = jar.names().filter((n) => n.startsWith("__Host-mcp_tx_"));
+    expect(left).toHaveLength(4);
+    expect(left).not.toContain(`__Host-mcp_tx_${nonces[0]}`);
+    for (const n of nonces.slice(1)) expect(left).toContain(`__Host-mcp_tx_${n}`);
+    // A survivor still completes.
+    const cb = await callbackGET(req(`/api/auth/callback/mcp?code=x&state=${nonces[1]}`, { jar }));
+    expect(loc(cb).pathname).toBe("/oauth/consent");
+  });
+});
+
+describe("authorization request hardening", () => {
+  it.each([
+    ["44 characters", "a".repeat(44)],
+    ["128 characters", "a".repeat(128)],
+    ["42 characters", "a".repeat(42)],
+    ["43 characters with '~'", "a".repeat(42) + "~"],
+    ["43 characters with '.'", "a".repeat(42) + "."],
+  ])("a code_challenge of %s is refused: S256 is exactly 43 base64url characters", async (_name, challenge) => {
+    const res = await authorizeGET(req(authorizeQuery(challenge)));
+    expect(loc(res).searchParams.get("error")).toBe("invalid_request");
+    expect(loc(res).searchParams.get("error_description")).toMatch(/code_challenge/);
+  });
+
+  it("a user outside the allowed organizations gets the same access_denied description as one who pressed Deny", async () => {
+    const pressed = await toConsent(pkce().challenge);
+    const generic = loc(await allow(pressed.jar, pressed.nonce, "deny")).searchParams.get("error_description");
+
+    lookupWhoAmI.mockResolvedValue({ identity: USER, allowed: false });
+    const jar = new Jar();
+    const a = await authorizeGET(req(authorizeQuery(pkce().challenge), { jar }));
+    jar.absorb(a);
+    const cb = loc(await callbackGET(req(`/api/auth/callback/mcp?code=x&state=${loc(a).searchParams.get("state")}`, { jar })));
+    expect(cb.searchParams.get("error")).toBe("access_denied");
+    expect(cb.searchParams.get("error_description")).toBe(generic);
+
+    // The signed-in shortcut answers the same way.
+    const session = await sealData({ accessToken: GH }, { password: sessionOptions.password as string });
+    const short = loc(await authorizeGET(req(authorizeQuery(pkce().challenge), { jar: new Jar().set(sessionOptions.cookieName, session) })));
+    expect(short.searchParams.get("error")).toBe("access_denied");
+    expect(short.searchParams.get("error_description")).toBe(generic);
+    expect(generic).not.toMatch(/allow|organi[sz]ation|member/i);
+  });
+
+  it("a client_id URL carrying token-like text still produces an audit row, with the client id hashed", async () => {
+    const tokenish = "https://client.example.com/gho_abcdef123/metadata.json";
+    clientDoc = { ...clientDoc, client_id: tokenish };
+    const { jar, nonce } = await toConsent(pkce().challenge, new Jar(), { client_id: tokenish });
+    expect((await allow(jar, nonce)).status).toBe(302);
+    const rows = await q(`SELECT action, details FROM permission_audit WHERE action = 'mcp.grant_created'`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].details).toEqual({
+      client_sha256: createHash("sha256").update(tokenish).digest("hex").slice(0, 16),
+      redirect_host: "app.example.com",
+      kind: "cimd",
+    });
+    expect(JSON.stringify(rows)).not.toMatch(/gh[opsur]_/);
   });
 });

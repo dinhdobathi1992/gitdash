@@ -61,11 +61,35 @@ export function aiRateLimit(
   return rateLimit(`ai:${surface}:${tokenHash}`, limit, 60_000);
 }
 
-/** Derive a rate-limit key from the request — prefer real IP, fallback to "unknown". */
+/** GITDASH_TRUSTED_PROXY_HOPS as a positive integer; anything else means 1. */
+function trustedProxyHops(): number {
+  const n = Number(process.env.GITDASH_TRUSTED_PROXY_HOPS);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+/**
+ * The client IP, from headers a trusted proxy controls. The leftmost
+ * X-Forwarded-For entry is whatever the client sent, so it is trusted only on
+ * Vercel, which overwrites the header (and sets x-real-ip). Elsewhere each
+ * proxy appends the address it saw, so the trustworthy entry is the one
+ * GITDASH_TRUSTED_PROXY_HOPS from the right (default 1: the rightmost, the
+ * address the nearest proxy saw). Set it to the number of proxies in front of
+ * GitDash that append to X-Forwarded-For.
+ */
+export function clientIp(headers: Headers): string {
+  const realIp = headers.get("x-real-ip")?.trim() || null;
+  const chain = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (process.env.VERCEL) return realIp ?? chain[0] ?? "unknown";
+  if (chain.length > 0) return chain[Math.max(0, chain.length - trustedProxyHops())];
+  return realIp ?? "unknown";
+}
+
+/** Derive a rate-limit key from the request: `<prefix>:<client IP>` (see clientIp). */
 export function getRateLimitKey(req: Request, prefix: string): string {
-  const forwarded = (req.headers as Headers).get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
-  return `${prefix}:${ip}`;
+  return `${prefix}:${clientIp(req.headers as Headers)}`;
 }
 
 // Periodically evict fully-expired entries to prevent memory growth.

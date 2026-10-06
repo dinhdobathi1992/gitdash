@@ -36,11 +36,11 @@ interface Served {
 }
 
 /** A stand-in for https.request: runs the caller's `lookup`, records the dialled address, then serves `serve()`. */
-function fakeHttps(serve: () => Served) {
+function fakeHttps(serve: (path: string) => Served) {
   const dialled: string[] = [];
   const calls: { hostname: string; servername: string; port: number }[] = [];
   const request = (
-    options: { hostname: string; servername: string; port: number; lookup: LookupFunction },
+    options: { hostname: string; servername: string; port: number; path: string; lookup: LookupFunction },
     cb: (res: PassThrough & { statusCode: number; headers: Record<string, string> }) => void,
   ) => {
     calls.push({ hostname: options.hostname, servername: options.servername, port: options.port });
@@ -50,7 +50,7 @@ function fakeHttps(serve: () => Served) {
         options.lookup(options.hostname, {}, (err, address) => {
           if (err) return req.emit("error", err);
           dialled.push(String(address));
-          const s = serve();
+          const s = serve(options.path);
           if (s.hang) return;
           const res = Object.assign(new PassThrough(), { statusCode: s.status ?? 200, headers: s.headers ?? {} });
           cb(res);
@@ -66,7 +66,7 @@ function fakeHttps(serve: () => Served) {
 const doc = (over: Record<string, unknown> = {}) =>
   JSON.stringify({ client_id: CLIENT, client_name: "Example", redirect_uris: ["https://app.example.com/cb"], ...over });
 
-function useFake(serve: () => Served, resolver: Resolver = async () => [PUBLIC_V4]) {
+function useFake(serve: (path: string) => Served, resolver: Resolver = async () => [PUBLIC_V4]) {
   const fake = fakeHttps(serve);
   const resolverSpy = vi.fn(resolver);
   __setClientFetchDepsForTests({ resolver: resolverSpy, request: fake.request });
@@ -113,11 +113,16 @@ describe("IP blocklist", () => {
     "192.0.0.8", "192.168.1.1", "198.18.0.1", "198.19.255.255", "224.0.0.1", "239.1.1.1", "240.0.0.1", "255.255.255.255",
     "::1", "::", "::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:10.0.0.1", "::ffff:169.254.169.254", "fc00::1", "fd12:3456::1",
     "fe80::1", "febf::1", "ff02::1", "64:ff9b::a00:1", "2002:a00:1::", "::10.0.0.1", "not-an-ip",
+    "192.0.2.1", "198.51.100.7", "203.0.113.255", "192.88.99.1", "::ffff:203.0.113.5", "2001::1", "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+    "2001:db8::1", "2001:0db8:ffff::1", "64:ff9b:1::a00:1", "64:ff9b:1:ffff::1", "fec0::1", "feff::1",
   ])("blocks %s", (addr) => {
     expect(isBlockedAddress(addr)).toBe(true);
   });
 
-  it.each(["93.184.216.34", "8.8.8.8", "100.128.0.1", "172.32.0.1", "198.20.0.1", "2606:4700::1111", "::ffff:93.184.216.34", "2002:5db8:d822::"])(
+  it.each([
+    "93.184.216.34", "8.8.8.8", "100.128.0.1", "172.32.0.1", "198.20.0.1", "192.0.3.1", "198.51.101.1", "203.0.114.1", "192.88.100.1",
+    "2606:4700::1111", "::ffff:93.184.216.34", "2002:5db8:d822::", "2001:4860:4860::8888", "2001:1::1", "64:ff9b:2::1", "fe00::1",
+  ])(
     "allows public %s",
     (addr) => {
       expect(isBlockedAddress(addr)).toBe(false);
@@ -289,5 +294,39 @@ describe("redirect URI forms", () => {
     expect(matchRedirect(client, "https://app.example.com/cb")).not.toBeNull();
     expect(matchRedirect(client, "https://app.example.com/cb/")).toBeNull();
     expect(matchRedirect(client, "https://app.example.com/cb?x=1")).toBeNull();
+  });
+});
+
+describe("outbound fetch bounds", () => {
+  const urlFor = (i: number) => `https://client.example.com/c${i}.json`;
+
+  it("concurrent lookups of one client share a single fetch; a case variant shares it but must still match exactly", async () => {
+    const fake = useFake(() => ({ body: doc() }));
+    const variant = "https://CLIENT.Example.COM/oauth/metadata.json";
+    const [a, b, c] = await Promise.all([resolveClient(CLIENT), resolveClient(CLIENT), resolveClient(variant)]);
+    expect(fake.dialled).toHaveLength(1);
+    expect(a.ok && b.ok).toBe(true);
+    expect(c).toEqual({ ok: false, error: expect.stringMatching(/different client_id/) });
+    // The variant also hits the shared cache entry afterwards.
+    await resolveClient(variant);
+    expect(fake.dialled).toHaveLength(1);
+  });
+
+  it("at most 8 fetches run at once; beyond that a new client fails fast, uncached, until a slot frees", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let hang = true;
+    const fake = useFake((path) => (hang ? { hang: true } : { body: doc({ client_id: `https://client.example.com${path}` }) }));
+    const pending = Array.from({ length: 8 }, (_, i) => resolveClient(urlFor(i)));
+    // A ninth distinct client is refused at once, without any network access.
+    const ninth = await resolveClient(urlFor(8));
+    expect(ninth).toEqual({ ok: false, error: expect.stringMatching(/busy/), busy: true });
+    // Joining a fetch already in flight needs no slot.
+    const joined = resolveClient(urlFor(0));
+    await vi.advanceTimersByTimeAsync(5_001);
+    for (const r of await Promise.all([...pending, joined])) expect(r).toEqual({ ok: false, error: expect.stringMatching(/timed out/) });
+    expect(fake.dialled).toHaveLength(8);
+    // Slots are released, and the busy refusal was not cached.
+    hang = false;
+    expect((await resolveClient(urlFor(8))).ok).toBe(true);
   });
 });

@@ -8,6 +8,16 @@ import { rateLimit, getRateLimitKey } from "@/lib/ratelimit";
 // HIGH-002: 10 OAuth initiations per minute per IP
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
+/**
+ * GitHub's redirect_uri: from NEXT_PUBLIC_APP_URL when it is set, so forwarded
+ * headers cannot choose it; otherwise from publicUrl. The callback route
+ * (api/auth/callback/route.ts) builds the identical string with the same
+ * expression, as GitHub requires.
+ */
+function githubCallbackUrl(req: NextRequest): string {
+  return new URL("/api/auth/callback", process.env.NEXT_PUBLIC_APP_URL || publicUrl("/", req)).toString();
+}
+
 export async function GET(req: NextRequest) {
   // Standalone mode has no OAuth login — redirect to setup
   if (isStandaloneMode()) {
@@ -45,7 +55,7 @@ export async function GET(req: NextRequest) {
     // callback repeats this exact value in its code exchange.
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: publicUrl("/api/auth/callback", req).toString(),
+      redirect_uri: githubCallbackUrl(req),
       scope: "read:user user:email repo workflow read:org",
       allow_signup: "true",
       state,

@@ -9,7 +9,8 @@
  *    the connection the exact address it checked (DNS rebinding cannot swap it).
  *    SNI and certificate validation still use the hostname. No redirects, 5 s
  *    total, 8 KB cap. Failures are cached for 60 s and never fall back to
- *    trusting the client.
+ *    trusting the client. At most 8 fetches run at once process-wide (more
+ *    fail fast), and concurrent lookups of one URL share a single fetch.
  *  - DCR (only with MCP_ALLOW_DCR=true): stateless registration; the client_id
  *    is a sealed `mcp.client` token carrying the registered metadata.
  *
@@ -40,8 +41,12 @@ const BLOCKED_V4: Range4[] = [
   [ip4(169, 254, 0, 0), 16], // link-local (cloud metadata)
   [ip4(172, 16, 0, 0), 12], // private
   [ip4(192, 0, 0, 0), 24], // IETF protocol assignments
+  [ip4(192, 0, 2, 0), 24], // TEST-NET-1 (documentation)
+  [ip4(192, 88, 99, 0), 24], // deprecated 6to4 relay anycast
   [ip4(192, 168, 0, 0), 16], // private
   [ip4(198, 18, 0, 0), 15], // benchmarking
+  [ip4(198, 51, 100, 0), 24], // TEST-NET-2 (documentation)
+  [ip4(203, 0, 113, 0), 24], // TEST-NET-3 (documentation)
   [ip4(224, 0, 0, 0), 4], // multicast
   [ip4(240, 0, 0, 0), 4], // reserved, broadcast
 ];
@@ -103,9 +108,13 @@ function blockedV6(g: number[]): boolean {
   if (zeros(0, 5) && g[5] === 0xffff) return blockedV4(v4At(6)); // ::ffff:0:0/96 mapped: check as IPv4
   if (zeros(0, 6)) return true; // ::/96 IPv4-compatible (deprecated)
   if (g[0] === 0x64 && g[1] === 0xff9b && zeros(2, 6)) return blockedV4(v4At(6)); // NAT64 64:ff9b::/96
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return true; // local-use NAT64 64:ff9b:1::/48
+  if (g[0] === 0x2001 && g[1] === 0) return true; // Teredo 2001::/32
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return true; // documentation 2001:db8::/32
   if (g[0] === 0x2002) return blockedV4(v4At(1)); // 6to4 2002::/16 embeds an IPv4
   if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
   if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 deprecated site-local
   if ((g[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   return false;
 }
@@ -139,7 +148,8 @@ let deps: { resolver: Resolver; request: RequestFn } = { resolver: defaultResolv
 /** Test hook: swap the resolver and/or the https.request implementation. Pass nothing to restore. */
 export function __setClientFetchDepsForTests(next?: Partial<{ resolver: Resolver; request: RequestFn }>): void {
   deps = { resolver: next?.resolver ?? defaultResolver, request: next?.request ?? httpsRequest };
-  clientCache.clear();
+  docCache.clear();
+  inFlight.clear();
 }
 
 export class BlockedAddressError extends Error {
@@ -261,7 +271,9 @@ export interface ResolvedClient {
   id_host: string | null;
 }
 
-export type ClientResult = { ok: true; client: ResolvedClient } | { ok: false; error: string };
+export type ClientResult =
+  | { ok: true; client: ResolvedClient }
+  | { ok: false; error: string; /** Transient: too many metadata fetches in progress. */ busy?: true };
 
 /** The grant-row client id for a presented client_id. */
 export function grantClientId(clientId: string): string {
@@ -273,20 +285,39 @@ const CIMD_DOC = z.object({
   client_name: z.string().max(2000).optional(),
   redirect_uris: z.array(z.string().min(1).max(1024)).min(1).max(10),
 });
+type CimdDoc = z.infer<typeof CIMD_DOC>;
 
 const POSITIVE_MIN_SEC = 300;
 const POSITIVE_MAX_SEC = 3600;
 const NEGATIVE_SEC = 60;
 const CACHE_MAX = 1_000;
-const clientCache = new Map<string, { result: ClientResult; until: number }>();
+/** Process-wide cap on concurrent metadata fetches: client_id is attacker-chosen, so this bounds outbound load. */
+const MAX_CONCURRENT_FETCHES = 8;
 
-function cachePut(key: string, result: ClientResult, ttlSec: number): ClientResult {
-  if (clientCache.size >= CACHE_MAX) {
-    const oldest = clientCache.keys().next().value;
-    if (oldest !== undefined) clientCache.delete(oldest);
+type DocResult = { ok: true; doc: CimdDoc } | { ok: false; error: string };
+
+/** Fetched documents (or failures) by normalised URL. */
+const docCache = new Map<string, { result: DocResult; until: number }>();
+/** Fetches in progress by normalised URL: concurrent lookups of one client share a request. */
+const inFlight = new Map<string, Promise<DocResult>>();
+let activeFetches = 0;
+
+function cachePut(key: string, result: DocResult, ttlSec: number): DocResult {
+  if (docCache.size >= CACHE_MAX) {
+    const oldest = docCache.keys().next().value;
+    if (oldest !== undefined) docCache.delete(oldest);
   }
-  clientCache.set(key, { result, until: Date.now() + ttlSec * 1000 });
+  docCache.set(key, { result, until: Date.now() + ttlSec * 1000 });
   return result;
+}
+
+/**
+ * The cache and in-flight key: scheme and host lowercased (the URL parser does
+ * this), so case variants of one URL cannot multiply fetches. It never
+ * replaces the exact client_id comparison against the document.
+ */
+function cimdKey(u: URL): string {
+  return `${u.protocol}//${u.host}${u.pathname}${u.search}`;
 }
 
 const IPV4_LITERAL = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -309,39 +340,77 @@ export function cimdUrlProblem(clientId: string): string | null {
   return null;
 }
 
+/** Fetch and validate the document at `url`, caching the outcome. Holds one fetch slot while running. */
+async function fetchDoc(key: string, url: URL): Promise<DocResult> {
+  activeFetches++;
+  try {
+    let fetched: FetchedDoc;
+    try {
+      fetched = await guardedGet(url);
+    } catch (err) {
+      const reason = err instanceof FetchError ? err.message : "fetch failed";
+      console.warn(`[mcp] client metadata fetch refused for host ${url.hostname}: ${reason}`);
+      return cachePut(key, { ok: false, error: `Could not load the app's metadata (${reason}).` }, NEGATIVE_SEC);
+    }
+    const doc = CIMD_DOC.safeParse(fetched.body);
+    if (!doc.success) {
+      return cachePut(key, { ok: false, error: "The app's metadata document is invalid." }, NEGATIVE_SEC);
+    }
+    let named: URL | null = null;
+    try {
+      named = new URL(doc.data.client_id);
+    } catch {
+      // handled below
+    }
+    if (!named || cimdKey(named) !== key) {
+      return cachePut(key, { ok: false, error: "The app's metadata names a different client_id." }, NEGATIVE_SEC);
+    }
+    const ttl = Math.min(POSITIVE_MAX_SEC, Math.max(POSITIVE_MIN_SEC, fetched.maxAgeSec ?? POSITIVE_MIN_SEC));
+    return cachePut(key, { ok: true, doc: doc.data }, ttl);
+  } finally {
+    activeFetches--;
+  }
+}
+
 async function resolveCimd(clientId: string): Promise<ClientResult> {
   const problem = cimdUrlProblem(clientId);
   if (problem) return { ok: false, error: problem };
 
-  const hit = clientCache.get(clientId);
-  if (hit && hit.until > Date.now()) return hit.result;
-
   const url = new URL(clientId);
-  let fetched: FetchedDoc;
-  try {
-    fetched = await guardedGet(url);
-  } catch (err) {
-    const reason = err instanceof FetchError ? err.message : "fetch failed";
-    console.warn(`[mcp] client metadata fetch refused for host ${url.hostname}: ${reason}`);
-    return cachePut(clientId, { ok: false, error: `Could not load the app's metadata (${reason}).` }, NEGATIVE_SEC);
+  const key = cimdKey(url);
+  let result: DocResult;
+  const hit = docCache.get(key);
+  if (hit && hit.until > Date.now()) {
+    result = hit.result;
+  } else {
+    let pending = inFlight.get(key);
+    if (!pending) {
+      if (activeFetches >= MAX_CONCURRENT_FETCHES) {
+        console.warn("[mcp] client metadata fetch refused: too many fetches in progress");
+        return { ok: false, error: "GitDash is busy verifying other apps. Try again in a moment.", busy: true };
+      }
+      const started: Promise<DocResult> = fetchDoc(key, url).finally(() => {
+        if (inFlight.get(key) === started) inFlight.delete(key);
+      });
+      inFlight.set(key, started);
+      pending = started;
+    }
+    result = await pending;
   }
-  const doc = CIMD_DOC.safeParse(fetched.body);
-  if (!doc.success) {
-    return cachePut(clientId, { ok: false, error: "The app's metadata document is invalid." }, NEGATIVE_SEC);
-  }
-  if (doc.data.client_id !== clientId) {
-    return cachePut(clientId, { ok: false, error: "The app's metadata names a different client_id." }, NEGATIVE_SEC);
-  }
-  const client: ResolvedClient = {
-    client_id: clientId,
-    grant_client_id: clientId,
-    client_name: sanitizeClientName(doc.data.client_name ?? "") || url.hostname,
-    redirect_uris: doc.data.redirect_uris,
-    kind: "cimd",
-    id_host: url.hostname,
+  if (!result.ok) return result;
+  // Exact match, as presented: a case variant of the URL shares the fetch but not the identity.
+  if (result.doc.client_id !== clientId) return { ok: false, error: "The app's metadata names a different client_id." };
+  return {
+    ok: true,
+    client: {
+      client_id: clientId,
+      grant_client_id: clientId,
+      client_name: sanitizeClientName(result.doc.client_name ?? "") || url.hostname,
+      redirect_uris: result.doc.redirect_uris,
+      kind: "cimd",
+      id_host: url.hostname,
+    },
   };
-  const ttl = Math.min(POSITIVE_MAX_SEC, Math.max(POSITIVE_MIN_SEC, fetched.maxAgeSec ?? POSITIVE_MIN_SEC));
-  return cachePut(clientId, { ok: true, client }, ttl);
 }
 
 async function resolveDcr(clientId: string): Promise<ClientResult> {
@@ -373,7 +442,8 @@ export async function resolveClient(clientId: unknown): Promise<ClientResult> {
 
 /** Test hook. */
 export function __clearClientCacheForTests(): void {
-  clientCache.clear();
+  docCache.clear();
+  inFlight.clear();
 }
 
 // ── Redirect URIs ────────────────────────────────────────────────────────────

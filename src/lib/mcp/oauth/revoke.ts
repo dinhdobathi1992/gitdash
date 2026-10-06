@@ -11,7 +11,7 @@ import { revokeGrant } from "./grants";
 import { auditMcp } from "./audit";
 import { open } from "./tokens";
 import { mcpGate } from "./config";
-import { addCors, corsJson, oauthError } from "./headers";
+import { addCors, corsJson, oauthError, readBodyCapped } from "./headers";
 
 const IP_LIMIT = { limit: 120, windowMs: 60_000 };
 const MAX_BODY = 32 * 1024;
@@ -31,14 +31,13 @@ export async function handleRevoke(req: NextRequest): Promise<Response> {
   if (!type.toLowerCase().startsWith("application/x-www-form-urlencoded")) {
     return oauthError("invalid_request", "Send application/x-www-form-urlencoded parameters.");
   }
-  let form: URLSearchParams;
-  try {
-    const text = await req.text();
-    if (text.length > MAX_BODY) return oauthError("invalid_request", "Request too large.");
-    form = new URLSearchParams(text);
-  } catch {
-    return oauthError("invalid_request", "Unreadable request body.");
+  const body = await readBodyCapped(req, MAX_BODY);
+  if (!body.ok) {
+    return body.status === 413
+      ? oauthError("invalid_request", "Request too large.", 413)
+      : oauthError("invalid_request", "Unreadable request body.");
   }
+  const form = new URLSearchParams(body.text);
   const token = form.get("token");
   if (!token) return oauthError("invalid_request", "token is required");
   const clientId = form.get("client_id");

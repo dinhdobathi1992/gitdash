@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { registerClient } from "@/lib/mcp/oauth/clients";
 import { dcrEnabled, mcpGate } from "@/lib/mcp/oauth/config";
-import { addCors, corsJson, corsPreflight, oauthError } from "@/lib/mcp/oauth/headers";
+import { addCors, corsJson, corsPreflight, oauthError, readBodyCapped } from "@/lib/mcp/oauth/headers";
 import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 
 /**
@@ -31,11 +31,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
     return oauthError("invalid_client_metadata", "Send the client metadata as application/json.");
   }
+  const read = await readBodyCapped(req, MAX_BODY);
+  if (!read.ok) {
+    return read.status === 413
+      ? oauthError("invalid_client_metadata", "Request too large.", 413)
+      : oauthError("invalid_client_metadata", "Unreadable request body.");
+  }
   let body: unknown;
   try {
-    const text = await req.text();
-    if (text.length > MAX_BODY) return oauthError("invalid_client_metadata", "Request too large.");
-    body = JSON.parse(text);
+    body = JSON.parse(read.text);
   } catch {
     return oauthError("invalid_client_metadata", "The body is not valid JSON.");
   }

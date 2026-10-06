@@ -19,7 +19,7 @@ import { consumeJti, redeemGrant, revokeGrant, rotateRefresh, type RevokeReason 
 import { auditMcp, type McpAuditAction } from "./audit";
 import { CLOCK_TOLERANCE_SEC, open, seal, TOKEN_TTL_SEC } from "./tokens";
 import { MCP_SCOPE, isOurResource, mcpGate, normalizeUrl } from "./config";
-import { addCors, corsJson, oauthError } from "./headers";
+import { addCors, corsJson, oauthError, readBodyCapped } from "./headers";
 
 const IP_LIMIT = { limit: 120, windowMs: 60_000 };
 const GRANT_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -52,13 +52,6 @@ function pkceMatches(verifier: string, challenge: string): boolean {
   return computed.length === expected.length && timingSafeEqual(computed, expected);
 }
 
-async function readForm(req: NextRequest): Promise<URLSearchParams | null> {
-  const type = req.headers.get("content-type") ?? "";
-  if (!type.toLowerCase().startsWith("application/x-www-form-urlencoded")) return null;
-  const text = await req.text();
-  if (text.length > MAX_BODY) return null;
-  return new URLSearchParams(text);
-}
 
 /** One value per parameter (RFC 6749 §3.2: parameters must not repeat). */
 function single(form: URLSearchParams, name: string): string | null | undefined {
@@ -180,13 +173,17 @@ export async function handleToken(req: NextRequest): Promise<Response> {
     return oauthError("temporarily_unavailable", "Too many token requests.", 429, { "Retry-After": String(Math.ceil((ipLimit.retryAfterMs ?? 60_000) / 1000)) });
   }
 
-  let form: URLSearchParams | null;
-  try {
-    form = await readForm(req);
-  } catch {
-    form = null;
+  const type = req.headers.get("content-type") ?? "";
+  if (!type.toLowerCase().startsWith("application/x-www-form-urlencoded")) {
+    return oauthError("invalid_request", "Send application/x-www-form-urlencoded parameters.");
   }
-  if (!form) return oauthError("invalid_request", "Send application/x-www-form-urlencoded parameters.");
+  const body = await readBodyCapped(req, MAX_BODY);
+  if (!body.ok) {
+    return body.status === 413
+      ? oauthError("invalid_request", "Request too large.", 413)
+      : oauthError("invalid_request", "Unreadable request body.");
+  }
+  const form = new URLSearchParams(body.text);
 
   const grantType = single(form, "grant_type");
   if (grantType === "authorization_code") return authorizationCode(form);

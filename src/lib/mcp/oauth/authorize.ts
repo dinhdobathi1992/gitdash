@@ -7,8 +7,9 @@
  *
  * The transaction (client, redirect, PKCE challenge, state, resource, and
  * after sign-in the GitHub token and identity) is sealed as `mcp.tx` into a
- * per-nonce cookie `mcp_tx_<nonce>`, so parallel sign-ins never collide. The
- * nonce doubles as GitHub's `state`. The web session cookie is only read, for
+ * per-nonce cookie `__Host-mcp_tx_<nonce>` (`mcp_tx_<nonce>` on a plain-http
+ * site, where the prefix's required Secure flag cannot be set), so parallel
+ * sign-ins never collide. The nonce doubles as GitHub's `state`. The web session cookie is only read, for
  * the signed-in shortcut, and never written.
  */
 
@@ -28,15 +29,23 @@ import { errorPage, escapeHtml, htmlPage, pageHeaders } from "./headers";
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 const MAX_STATE = 512;
 const MAX_REDIRECT = 1024;
-const CHALLENGE_RE = /^[A-Za-z0-9\-._~]{43,128}$/;
+/** S256 challenge: base64url of a SHA-256 digest, unpadded, so exactly 43 characters. */
+const CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
 const NONCE_RE = /^[0-9a-f]{32}$/;
-/** Parallel sign-ins allowed per browser; older transaction cookies are dropped beyond this. */
+/** Parallel sign-ins allowed per browser; the oldest transaction cookies are dropped beyond this. */
 const MAX_TX_COOKIES = 4;
+/**
+ * The one description for every access_denied sent back to a client, whether
+ * the user pressed Deny, cancelled at GitHub, or is outside the allowed
+ * organizations: the client must not learn organization membership.
+ */
+export const ACCESS_DENIED_DESCRIPTION = "access was denied";
 
 // ── Transaction cookie ───────────────────────────────────────────────────────
 
-export const TX_COOKIE_PREFIX = "mcp_tx_";
-export const txCookieName = (nonce: string) => `${TX_COOKIE_PREFIX}${nonce}`;
+/** `__Host-` binds the cookie to this exact origin (Secure, Path=/, no Domain); plain http cannot use it. */
+export const txCookiePrefix = () => (secureCookies() ? "__Host-mcp_tx_" : "mcp_tx_");
+export const txCookieName = (nonce: string) => `${txCookiePrefix()}${nonce}`;
 export const isNonce = (v: unknown): v is string => typeof v === "string" && NONCE_RE.test(v);
 
 /*
@@ -143,7 +152,12 @@ export async function handleAuthorize(req: NextRequest): Promise<Response> {
   if (!redirectUri || redirectUri.length > MAX_REDIRECT) return errorPage(400, "The request has no valid redirect_uri.");
 
   const resolved = await resolveClient(clientId);
-  if (!resolved.ok) return errorPage(400, resolved.error);
+  if (!resolved.ok) {
+    if (!resolved.busy) return errorPage(400, resolved.error);
+    const res = errorPage(503, resolved.error);
+    res.headers.set("Retry-After", "5");
+    return res;
+  }
   const client = resolved.client;
   const redirect = matchRedirect(client, redirectUri);
   if (!redirect) return errorPage(400, "The redirect_uri is not one this app registered, or its form is not allowed.");
@@ -181,7 +195,7 @@ export async function handleAuthorize(req: NextRequest): Promise<Response> {
   if (webToken) {
     try {
       const who = await lookupWhoAmI(webToken);
-      if (!who.allowed) return fail("access_denied", "this GitHub account is not allowed on this GitDash");
+      if (!who.allowed) return fail("access_denied", ACCESS_DENIED_DESCRIPTION);
       identity = { gh: webToken, id: who.identity.id, login: who.identity.login };
     } catch (err) {
       // A revoked web token just means "sign in with GitHub"; anything else is an outage.
@@ -192,7 +206,7 @@ export async function handleAuthorize(req: NextRequest): Promise<Response> {
   const ttl = TOKEN_TTL_SEC["mcp.tx"];
   const sealed = await seal("mcp.tx", identity ? { ...txBase, ...identity } : txBase, ttl);
   const headers = pageHeaders();
-  dropExcessTxCookies(req, headers);
+  await dropExcessTxCookies(req, headers);
   setTxCookie(headers, nonce, sealed, ttl);
 
   if (identity) return redirectTo(`/oauth/consent?tx=${nonce}`, headers);
@@ -209,14 +223,26 @@ export async function handleAuthorize(req: NextRequest): Promise<Response> {
   return redirectTo(`https://github.com/login/oauth/authorize?${gh.toString()}`, headers);
 }
 
-/** Keep at most MAX_TX_COOKIES - 1 older transactions, so cookies cannot pile up. */
-function dropExcessTxCookies(req: NextRequest, headers: Headers): void {
-  const existing = req.cookies
-    .getAll()
-    .map((c) => c.name)
-    .filter((n) => n.startsWith(TX_COOKIE_PREFIX));
-  if (existing.length < MAX_TX_COOKIES) return;
-  for (const name of existing) clearTxCookie(headers, name.slice(TX_COOKIE_PREFIX.length));
+/**
+ * Keep the newest MAX_TX_COOKIES - 1 transactions (the new one makes
+ * MAX_TX_COOKIES), clearing only the oldest, so cookies cannot pile up and a
+ * new sign-in never cancels the other recent ones. Age is the sealed `iat`;
+ * cookies that no longer open go first; ties keep the order the browser sent
+ * them in (creation order).
+ */
+async function dropExcessTxCookies(req: NextRequest, headers: Headers): Promise<void> {
+  const prefix = txCookiePrefix();
+  const existing = req.cookies.getAll().filter((c) => c.name.startsWith(prefix) && isNonce(c.name.slice(prefix.length)));
+  const excess = existing.length - (MAX_TX_COOKIES - 1);
+  if (excess <= 0) return;
+  const aged = await Promise.all(
+    existing.map(async (c, order) => {
+      const tx = await open("mcp.tx", c.value);
+      return { nonce: c.name.slice(prefix.length), iat: tx ? tx.iat : -Infinity, order };
+    }),
+  );
+  aged.sort((a, b) => a.iat - b.iat || a.order - b.order);
+  for (const { nonce } of aged.slice(0, excess)) clearTxCookie(headers, nonce);
 }
 
 // ── /api/auth/callback/mcp ───────────────────────────────────────────────────
@@ -266,7 +292,7 @@ export async function handleGithubCallback(req: NextRequest): Promise<Response> 
   const deny = (description: string) =>
     clientRedirect(target.redirect, { error: "access_denied", error_description: description, state: tx.state }, headers);
 
-  if (q.get("error")) return deny("GitHub sign-in was cancelled");
+  if (q.get("error")) return deny(ACCESS_DENIED_DESCRIPTION);
   const code = q.get("code");
   if (!code || code.length > 256) return errorPage(400, "GitHub did not return a sign-in code.");
 
@@ -286,7 +312,7 @@ export async function handleGithubCallback(req: NextRequest): Promise<Response> 
       ? errorPage(502, "GitHub rejected the new sign-in. Start again from your app.")
       : errorPage(503, "GitHub is not reachable right now. Try again in a moment.");
   }
-  if (!who.allowed) return deny("this GitHub account is not allowed on this GitDash");
+  if (!who.allowed) return deny(ACCESS_DENIED_DESCRIPTION);
 
   try {
     await upsertUser({ id: who.identity.id, login: who.identity.login, avatar_url: who.identity.avatar_url });
