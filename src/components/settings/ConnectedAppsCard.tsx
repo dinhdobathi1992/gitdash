@@ -114,7 +114,7 @@ function CopyBlock({ id, label, text, onCopied }: { id: string; label: string; t
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <span id={id} className="text-xs text-muted">{label}</span>
-        <Button size="sm" aria-label={`Copy ${label}`} onClick={async () => onCopied(await copyText(text), label)}>
+        <Button id={`${id}-copy`} size="sm" aria-label={`Copy ${label}`} onClick={async () => onCopied(await copyText(text), label)}>
           Copy
         </Button>
       </div>
@@ -162,6 +162,11 @@ export function ConnectedAppsCard({ scope = "own" }: { scope?: "own" | "all" }) 
     const d = createDialog.current;
     if (creating && d && !d.open) d.showModal();
   }, [creating]);
+
+  // The form that had focus is gone once the key shows: move focus to its Copy button.
+  useEffect(() => {
+    if (created) document.getElementById("new-key-copy")?.focus();
+  }, [created]);
 
   if (!enabled) return null;
   // 404: MCP is not enabled on this deployment, so there is nothing to show.
@@ -393,8 +398,12 @@ export function ConnectedAppsCard({ scope = "own" }: { scope?: "own" | "all" }) 
         <dialog
           ref={createDialog}
           onClose={resetCreate}
-          onClick={(e) => { if (e.target === e.currentTarget && !createBusy) closeCreate(); }}
+          // Once the key shows, only Done or Close dismiss it: Escape or a stray
+          // backdrop click must not throw away a key that is never shown again.
+          onCancel={(e) => { if (created) e.preventDefault(); }}
+          onClick={(e) => { if (e.target === e.currentTarget && !createBusy && !created) closeCreate(); }}
           aria-labelledby="create-key-title"
+          aria-describedby={created ? "new-key-warning" : undefined}
           className="m-auto w-[min(560px,calc(100vw-32px))] max-w-none p-0 bg-transparent backdrop:bg-black/60"
         >
           {creating && (
@@ -434,7 +443,7 @@ export function ConnectedAppsCard({ scope = "own" }: { scope?: "own" | "all" }) 
                 </form>
               ) : (
                 <div className="mt-3 flex flex-col gap-3">
-                  <p className="text-[13px] text-status-warn-text">
+                  <p id="new-key-warning" className="text-[13px] text-status-warn-text">
                     Copy it now: it is shown only once. Treat it like a password; it contains your GitHub access.
                   </p>
                   <CopyBlock id="new-key" label="key" text={created.key} onCopied={onCopied} />

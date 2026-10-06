@@ -12,7 +12,7 @@
  *   201 { key, grant_id, expires_at }  Cache-Control: private, no-store
  *   400 bad body or label
  *   401 no session, or GitHub rejects the session's token
- *   403 cross-origin request, or (organization mode) the user is not allowed
+ *   403 cross-origin request, or the user is outside GITDASH_ALLOWED_ORGS
  *   404 GITDASH_MCP is off
  *   409 no DATABASE_URL: a key that cannot be revoked is never issued
  *   429 more than 5 keys an hour for this GitHub user (per instance)
@@ -96,6 +96,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!token) return json({ error: "Unauthorized" }, 401);
   const source = !isStandaloneMode() && session.accessToken ? "oauth" : "pat";
 
+  // Before any GitHub call, so a bad request costs no API quota.
+  const label = parseLabel(await req.text().catch(() => ""));
+  if (!label.ok) return json({ error: label.error }, 400);
+
   // Fresh, uncached lookup: the key is bound to the identity GitHub reports
   // for this token, never to the display copy in the session.
   let who: WhoAmI;
@@ -106,10 +110,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     console.error(`[mcp] key: GitHub identity lookup failed: ${errName(err)} ${statusOf(err) ?? ""}`.trim());
     return json({ error: "GitHub is unavailable. Try again shortly." }, 503, { "Retry-After": "30" });
   }
-  if (!isStandaloneMode() && !who.allowed) return json({ error: "Forbidden", code: "org_not_allowed" }, 403);
-
-  const label = parseLabel(await req.text().catch(() => ""));
-  if (!label.ok) return json({ error: label.error }, 400);
+  // `allowed` is always true without GITDASH_ALLOWED_ORGS. When it is set (in
+  // either mode) the tools would revoke the key on first use, so refuse it now.
+  if (!who.allowed) return json({ error: "Forbidden", code: "org_not_allowed" }, 403);
 
   const rl = rateLimit(`mcp:keys:${who.identity.id}`, KEY_RATE_LIMIT.limit, KEY_RATE_LIMIT.windowMs);
   if (!rl.allowed) {

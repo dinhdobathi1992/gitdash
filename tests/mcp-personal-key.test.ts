@@ -339,6 +339,33 @@ describe("POST /api/mcp/keys", () => {
     whoami.mockRejectedValueOnce(new Error("ECONNRESET"));
     expect((await mintKey()).res.status).toBe(503);
   });
+
+  it("a bad label is refused before any GitHub call", async () => {
+    expect((await mintKey("")).res.status).toBe(400);
+    expect(whoami).not.toHaveBeenCalled();
+  });
+
+  it("when the audit row cannot be written: 503, no key, and the grant is withdrawn", async () => {
+    await q(`ALTER TABLE permission_audit RENAME TO permission_audit_off`);
+    try {
+      const { res, body } = await mintKey();
+      expect(res.status).toBe(503);
+      expect(body.key).toBeUndefined();
+      const rows = await q(`SELECT revoked_at, revoked_reason FROM mcp_grants`);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].revoked_at).not.toBeNull();
+    } finally {
+      await q(`ALTER TABLE permission_audit_off RENAME TO permission_audit`);
+    }
+  });
+
+  it("standalone mode with GITDASH_ALLOWED_ORGS: a user outside them gets 403", async () => {
+    standalone();
+    vi.stubEnv("GITDASH_ALLOWED_ORGS", "acme");
+    gh.allowed = false;
+    expect((await mintKey()).res.status).toBe(403);
+    expect(await q(`SELECT 1 FROM mcp_grants`)).toHaveLength(0);
+  });
 });
 
 // ── Revocation and expiry ────────────────────────────────────────────────────
