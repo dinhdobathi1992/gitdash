@@ -7,6 +7,11 @@ import { addCors, corsJson } from "@/lib/mcp/oauth/headers";
  * RFC 9728 metadata for /mcp/me, at the path-inserted URL
  * /.well-known/oauth-protected-resource/mcp/me. The resource URL is explicit
  * (from NEXT_PUBLIC_APP_URL), never derived from forwarded headers.
+ *
+ * Organization mode only (the OAuth gate): this document names an
+ * authorization server, and standalone mode has none. There /mcp/me takes
+ * personal keys, this route answers 404, and the /mcp/me 401 omits
+ * resource_metadata.
  */
 type Ctx = { params: Promise<{ path: string[] }> };
 

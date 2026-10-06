@@ -21,7 +21,7 @@
 import { hkdfSync } from "node:crypto";
 import { DEV_FALLBACK_SECRET, sessionOptions } from "@/lib/session";
 
-export const TOKEN_TYPES = ["mcp.tx", "mcp.code", "mcp.access", "mcp.refresh", "mcp.client"] as const;
+export const TOKEN_TYPES = ["mcp.tx", "mcp.code", "mcp.access", "mcp.refresh", "mcp.client", "mcp.key"] as const;
 export type TokenType = (typeof TOKEN_TYPES)[number];
 
 export type PasswordMap = Record<string, string>;

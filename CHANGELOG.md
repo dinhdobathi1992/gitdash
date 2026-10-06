@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Personal MCP keys.** Create a key in Settings → Connected apps (Create MCP key) and connect Claude Code,
+  Cursor or Claude Desktop to `/mcp/me` with one `Authorization: Bearer <key>` header, no OAuth sign-in. Works
+  when you signed in with a personal access token, and in standalone mode (`GITDASH_MCP=true` plus
+  `DATABASE_URL` and `NEXT_PUBLIC_APP_URL`; the OAuth endpoints stay organization-only). A key holds an
+  encrypted copy of the token you signed in with, is shown once, expires after 30 days, is limited to 5 an
+  hour per user, and is listed and revoked with your connected apps. New endpoint `POST /api/mcp/keys`.
+- **`GITDASH_TRUSTED_PROXY_HOPS`** (Helm `config.trustedProxyHops`, default 1) is documented: how many
+  proxies append to `X-Forwarded-For`, so rate limits use the real client IP. Ignored on Vercel.
 - **Signed-in MCP data tools at `/mcp/me`.** AI apps such as Claude and Cursor can sign in through GitDash
   (OAuth 2.1 with PKCE, GitHub as the identity provider) and read your repositories, CI, DORA metrics, pull
   request health, organization scorecards and Actions cost through seven read-only tools, with the same

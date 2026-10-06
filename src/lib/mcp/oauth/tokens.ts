@@ -28,6 +28,8 @@ export const TOKEN_TTL_SEC: Record<TokenType, number> = {
   "mcp.access": 60 * 60,
   "mcp.refresh": 14 * 24 * 3600,
   "mcp.client": 90 * 24 * 3600,
+  // Personal MCP key: no refresh, so its whole life is one token.
+  "mcp.key": 30 * 24 * 3600,
 };
 
 // Upper bound on a token we are willing to try to unseal.
@@ -91,6 +93,15 @@ const payloadShapes = {
     redirect_uris: z.array(redirectUri).min(1).max(10),
     client_name: str(80),
     application_type: z.enum(["web", "native"]),
+  }),
+  // Personal MCP key minted in Settings. `gh` is the token the web session
+  // signed in with; `source` records which kind it was.
+  "mcp.key": z.object({
+    grant_id: z.uuid(),
+    aud: resource,
+    scope: str(200),
+    source: z.enum(["pat", "oauth"]),
+    ...identity,
   }),
 } satisfies Record<TokenType, z.ZodType>;
 

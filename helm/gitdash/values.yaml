@@ -42,11 +42,18 @@ config:
   # "true" shows the /welcome product page to signed-out visitors at "/".
   # For the public product site only; self-hosted instances leave it off.
   landingPage: "false"
-  # "true" lets AI apps (Claude, Cursor) sign in at /mcp/me and read GitDash data
-  # as the signed-in user, read-only. Off by default. Needs mode: organization,
-  # secret.databaseUrl, and a second callback URL on the GitHub OAuth App:
-  # <appUrl>/api/auth/callback/mcp (see Docs > Configuration).
+  # "true" lets AI apps (Claude, Cursor) read GitDash data at /mcp/me as the
+  # signed-in user, read-only. Off by default. Needs secret.databaseUrl and
+  # appUrl. Organization mode: apps sign in through GitHub, which needs a second
+  # callback URL on the GitHub OAuth App: <appUrl>/api/auth/callback/mcp.
+  # Standalone mode: personal MCP keys only (Settings > Connected apps), no
+  # OAuth endpoints. See Docs > Configuration.
   mcp: "false"
+  # How many proxies in front of GitDash append to X-Forwarded-For (positive
+  # integer, default 1). Rate limits use the client IP this many entries from
+  # the right. Set it to 2 or more when, for example, a CDN or cloud load
+  # balancer sits in front of the ingress controller. Ignored on Vercel.
+  trustedProxyHops: 1
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 secret:

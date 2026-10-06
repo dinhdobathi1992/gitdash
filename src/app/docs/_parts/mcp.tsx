@@ -21,7 +21,7 @@ export function McpServer() {
           headers={["Endpoint", "Sign-in", "What it gives the assistant"]}
           rows={[
             [<Code key="1">/mcp</Code>, "None", "The public documentation: setup, configuration, access control and what every metric means."],
-            [<Code key="2">/mcp/me</Code>, "GitHub, through GitDash", "The same documentation tools, plus seven data tools that read your repositories, pull requests and costs as you. Only on instances that turn it on (see below)."],
+            [<Code key="2">/mcp/me</Code>, "GitHub, through GitDash, or a personal MCP key", "The same documentation tools, plus seven data tools that read your repositories, pull requests and costs as you. Only on instances that turn it on (see below)."],
           ]}
         />
       </DocCard>
@@ -87,6 +87,40 @@ export function McpServer() {
       </DocCard>
 
       <DocCard>
+        <SubHeading>Connect with a personal key</SubHeading>
+        <ProseP>
+          Signed in to GitDash with a personal access token, running GitDash in standalone mode, or using a client
+          without the sign-in flow? Create a personal MCP key and send it as a header instead. Claude Code, Cursor and
+          Claude Desktop&apos;s config file accept it; the claude.ai connector screen supports only the sign-in above.
+        </ProseP>
+        <ol className="list-decimal pl-5 space-y-1.5 text-sm text-slate-300">
+          <li>Open Settings → My features → Connected apps and choose Create MCP key.</li>
+          <li>Give it a label, such as &ldquo;Claude Code on my laptop&rdquo;, and choose Create key.</li>
+          <li>Copy the key, or one of the ready-made snippets, straight away. GitDash shows it only once.</li>
+        </ol>
+        <CodeBlock language="bash">
+          {`claude mcp add --transport http gitdash https://<your GitDash host>/mcp/me --header "Authorization: Bearer <key>"`}
+        </CodeBlock>
+        <CodeBlock language="json" filename=".cursor/mcp.json">
+          {`{
+  "mcpServers": {
+    "gitdash": {
+      "url": "https://<your GitDash host>/mcp/me",
+      "headers": { "Authorization": "Bearer <key>" }
+    }
+  }
+}`}
+        </CodeBlock>
+        <Callout type="warning">
+          Treat a key like a password: it contains your GitHub access. It holds an encrypted copy of the token you
+          signed in to GitDash with (your personal access token or your GitHub sign-in), so it can read what that token
+          can, through the same read-only tools and the same group checks. A key expires after 30 days; you can create
+          up to 5 an hour. For keys, sign in with a fine-grained, read-only personal access token limited to the
+          repositories you need.
+        </Callout>
+      </DocCard>
+
+      <DocCard>
         <SubHeading>Data tools</SubHeading>
         <ProseP>
           Every tool is read-only and runs with your own GitHub access. Each one is checked against the same groups and
@@ -111,11 +145,12 @@ export function McpServer() {
       </DocCard>
 
       <DocCard>
-        <SubHeading>Revoke an app</SubHeading>
+        <SubHeading>Revoke an app or a key</SubHeading>
         <ProseP>
-          Open Settings → My features → Connected apps. Each row shows the host the app returns to, the name it gives
-          itself, when it connected and when it was last used. Choose Revoke and confirm. GitDash stops accepting that
-          app&apos;s token within a minute. Admins see every user&apos;s apps under Admin → Connected apps and can revoke
+          Open Settings → My features → Connected apps. Each app row shows the host the app returns to, the name it
+          gives itself, when it connected and when it was last used; each key row shows &ldquo;Personal key&rdquo;, its
+          label, when it was created, last used and when it expires. Choose Revoke and confirm. GitDash stops accepting
+          that app&apos;s token or that key within a minute. Admins see every user&apos;s apps under Admin → Connected apps and can revoke
           any of them.
         </ProseP>
         <ProseP>
@@ -123,7 +158,8 @@ export function McpServer() {
           <a href="https://github.com/settings/applications" target="_blank" rel="noopener noreferrer" className="text-link hover:text-violet-200">
             GitHub → Settings → Applications
           </a>
-          ; GitDash then drops the grant the next time the app calls it.
+          ; GitDash then drops the grant the next time the app calls it. If a key leaks and you created it while signed
+          in with a personal access token, revoke the key and also rotate that token on GitHub.
         </ProseP>
       </DocCard>
 
@@ -136,13 +172,19 @@ export function McpServer() {
           <Code>&lt;origin&gt;/api/auth/callback/mcp</Code> to your OAuth App. The Configuration page lists every
           variable. The public <Code>/mcp</Code> endpoint needs none of this.
         </ProseP>
+        <ProseP>
+          Standalone mode has no GitHub OAuth App, so it has no sign-in flow: with <Code>GITDASH_MCP=true</Code>,{" "}
+          <Code>DATABASE_URL</Code> and <Code>NEXT_PUBLIC_APP_URL</Code> set, <Code>/mcp/me</Code> accepts personal keys
+          only and the <Code>/oauth</Code> endpoints stay off. Without a database, creating a key answers 409: a key is
+          only issued when it can be revoked.
+        </ProseP>
       </DocCard>
 
       <DocCard>
         <SubHeading>Limits</SubHeading>
         <ProseP>
           <Code>/mcp</Code> allows 300 requests a minute per IP address on each server instance. <Code>/mcp/me</Code>{" "}
-          allows 60 a minute per connected app. The docs tools only read public documentation; your dashboards and
+          allows 60 a minute per connected app or key. The docs tools only read public documentation; your dashboards and
           GitHub data are reachable only through <Code>/mcp/me</Code>, after you sign in.
         </ProseP>
       </DocCard>
