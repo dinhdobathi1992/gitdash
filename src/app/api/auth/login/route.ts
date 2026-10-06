@@ -40,8 +40,12 @@ export async function GET(req: NextRequest) {
     session.oauthStateExpiry = stateExpiry;
     await session.save();
 
+    // Explicit: once the OAuth App has a second callback URL (the MCP sign-in),
+    // GitHub stops matching sub-paths and needs redirect_uri to name one. The
+    // callback repeats this exact value in its code exchange.
     const params = new URLSearchParams({
       client_id: clientId,
+      redirect_uri: publicUrl("/api/auth/callback", req).toString(),
       scope: "read:user user:email repo workflow read:org",
       allow_signup: "true",
       state,

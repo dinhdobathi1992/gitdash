@@ -73,7 +73,12 @@ export const REGISTRY: Rule[] = [
   { pattern: "/_next/**", access: "public" },
   { pattern: "/favicon.ico", access: "public" },
   { pattern: "/docs/**", access: "public" },
+  // MCP: endpoints, OAuth server, metadata and the MCP GitHub callback. Each
+  // authenticates on its own (bearer token, PKCE, transaction cookie).
   { pattern: "/mcp/**", access: "public" },
+  { pattern: "/oauth/**", access: "public" },
+  { pattern: "/.well-known/**", access: "public" },
+  { pattern: "/api/auth/callback/mcp", access: "public" },
   { pattern: "/api/health", access: "public" },
   { pattern: "/api/webhooks/**", access: "public" },
   { pattern: "/api/cron/**", access: "public" },
@@ -230,6 +235,15 @@ export function __resetAccessForTests(): void {
 }
 
 // ── Decision ─────────────────────────────────────────────────────────────────
+
+/**
+ * Whether a decision needs the user's groups and grants. Only admin routes, or
+ * everything once enforcement is on, so during rollout a database outage
+ * cannot take the app down.
+ */
+export function needsAccess(cls: AccessClass | "unregistered", enforce: boolean): boolean {
+  return cls === "admin" || (enforce && cls !== "public" && cls !== "auth");
+}
 
 export type Decision =
   | { ok: true }

@@ -60,7 +60,14 @@ export async function GET(req: NextRequest) {
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+      // The same redirect_uri the login sent (required once the OAuth App has
+      // more than one callback URL).
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: publicUrl("/api/auth/callback", req).toString(),
+      }),
     });
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
 
