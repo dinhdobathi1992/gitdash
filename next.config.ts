@@ -32,9 +32,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Everything except the MCP endpoints, which set their own CORS headers
-        // (MCP clients may run in a browser on another origin).
-        source: "/((?!mcp(?:/|$)).*)",
+        // Everything except the MCP endpoints, the MCP OAuth server and its
+        // metadata. Those set their own headers per response: CORS for any
+        // origin (MCP clients may run in a browser), and on the sign-in pages a
+        // CSP whose form-action names the validated redirect (src/lib/mcp/oauth/headers.ts).
+        source: "/((?!mcp(?:/|$)|oauth(?:/|$)|\\.well-known(?:/|$)).*)",
         headers: [
           // ── HIGH-001: Security headers ────────────────────────────────
           // Clickjacking protection

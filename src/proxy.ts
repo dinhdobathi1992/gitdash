@@ -25,8 +25,10 @@ import {
 const ALWAYS_PUBLIC = [
   "/_next", "/favicon.ico", "/docs", "/welcome", "/api/webhooks", "/api/health", "/api/cron",
   "/robots.txt", "/sitemap.xml", "/llms.txt", "/llms-full.txt", "/opengraph-image",
-  // Public MCP endpoint (docs tools). It never reads the session cookie.
-  "/mcp",
+  // MCP: /mcp (public docs tools) and /mcp/me (its own bearer-token check),
+  // the MCP OAuth server and its metadata, and its GitHub callback. All of them
+  // authenticate on their own and are 404 unless GITDASH_MCP=true.
+  "/mcp", "/oauth", "/.well-known", "/api/auth/callback/mcp",
 ];
 
 // Mode-specific public paths
