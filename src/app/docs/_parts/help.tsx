@@ -191,7 +191,7 @@ export function Privacy() {
             ["Your GitHub id, login and avatar URL", <>The <Code key="u">users</Code> table (organization mode), so an admin can place you in a group.</>, "Until an admin removes you"],
             ["Groups, grants and their changes", <><Code key="g">user_groups</Code>, <Code key="f">group_flags</Code> and the <Code key="p">permission_audit</Code> log.</>, "Until deleted by an admin"],
             ["Workflow-run and pull-request history", <><Code key="w">workflow_runs</Code>, <Code key="pr">pr_facts</Code> and related tables, filled by the nightly sync (which uses the operator&apos;s own service token) for Reports and alerts. Admin-made links between GitHub logins live in <Code key="il">identity_links</Code>.</>, "Until deleted by the operator"],
-            ["Connected AI apps (only when MCP sign-in is on)", <><Code key="mg">mcp_grants</Code> and <Code key="mj">mcp_used_jti</Code> hold ids, the app&apos;s name and redirect host, and timestamps. No tokens.</>, "Until you revoke the app or it expires (30 days at most); revoked and expired rows are deleted after 90 days"],
+            ["Connected AI apps and personal MCP keys (only when MCP is on)", <><Code key="mg">mcp_grants</Code> and <Code key="mj">mcp_used_jti</Code> hold ids, the app&apos;s name and redirect host or the key&apos;s label, and timestamps. No tokens and no keys.</>, "Until you revoke the app or it expires (30 days at most); revoked and expired rows are deleted after 90 days"],
             ["Alert rules, deliveries and settings", "Alert, email, AI and team settings tables. Webhook URLs and keys are visible to admins only.", "Until changed or deleted"],
           ]}
         />
@@ -211,6 +211,13 @@ export function Privacy() {
               <a href="https://github.com/settings/applications" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300">
                 GitHub → Settings → Applications
               </a>.
+            </>,
+            <>
+              When you create a personal MCP key, GitDash shows it to you once and keeps no copy. The key contains an
+              encrypted copy of the token you signed in to GitDash with (your personal access token or your GitHub
+              sign-in), so whoever holds the key can use the read-only MCP tools as you for up to 30 days. Revoke it in
+              Settings → Connected apps. If a key leaks and you signed in with a personal access token, also rotate that
+              token on GitHub. For keys, sign in with a fine-grained, read-only personal access token.
             </>,
           ].map((item, i) => (
             <li key={i} className="flex items-start gap-2">

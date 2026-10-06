@@ -1,14 +1,20 @@
 /**
  * Configuration and the feature gate for the MCP OAuth server and /mcp/me.
  *
- * Everything here is off unless MODE=organization and GITDASH_MCP=true. When
- * it is on, NEXT_PUBLIC_APP_URL is the single source of the issuer and the
- * resource URL; it is never derived from forwarded headers. A request whose
+ * Two gates, both off unless GITDASH_MCP=true:
+ *  - the OAuth server (/oauth/**, the .well-known metadata, the MCP GitHub
+ *    callback) also needs MODE=organization: standalone has no OAuth App;
+ *  - the protected resource /mcp/me, personal MCP keys and the Connected apps
+ *    API need organization mode, or standalone mode with DATABASE_URL (a key
+ *    must be revocable, so it needs the grant store).
+ * When a gate is on, NEXT_PUBLIC_APP_URL is the single source of the issuer
+ * and the resource URL; it is never derived from forwarded headers. A request whose
  * origin does not match it gets 503 `misconfigured` (fail closed), so a
  * preview URL or a spoofed host can never mint tokens for another origin.
  *
  * Environment:
- *   GITDASH_MCP=true          enable the signed-in MCP endpoint and OAuth server
+ *   GITDASH_MCP=true          enable the signed-in MCP endpoint, personal keys and (organization mode) the OAuth server
+ *   DATABASE_URL              required for /mcp/me and keys in standalone mode
  *   MCP_ALLOW_DCR=true        also accept Dynamic Client Registration (default off)
  *   MCP_NATIVE_SCHEMES=a,b    custom redirect schemes allowed for desktop apps (default none)
  */
@@ -23,10 +29,36 @@ export const RESOURCE_PATH = "/mcp/me";
 export const GITHUB_CALLBACK_PATH = "/api/auth/callback/mcp";
 /** GitHub scopes requested; the same as the web sign-in, so tools see what the web app sees. */
 export const GITHUB_SCOPES = "read:user user:email repo workflow read:org";
+/**
+ * Grant client_id of a personal MCP key. OAuth grants store a CIMD https URL
+ * or a sha256 hex id, so this value can never collide with one.
+ */
+export const PERSONAL_KEY_CLIENT_ID = "gitdash:personal-key";
+/** redirect_host stored on a personal key's grant (a key has no redirect). */
+export const PERSONAL_KEY_HOST = "personal key";
 
-export function mcpEnabled(): boolean {
-  return getAppMode() === "organization" && process.env.GITDASH_MCP === "true";
+/** GITDASH_MCP=true: the switch for everything signed-in MCP, whatever the mode. */
+export function mcpFlagOn(): boolean {
+  return process.env.GITDASH_MCP === "true";
 }
+
+/** True when a database is configured: grants, keys and their revocation live there. */
+export function hasDatabase(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+/** The OAuth authorization server: organization mode only (standalone has no OAuth App). */
+export function mcpEnabled(): boolean {
+  return getAppMode() === "organization" && mcpFlagOn();
+}
+
+/** /mcp/me, personal keys and the Connected apps API: organization mode, or standalone with a database. */
+export function mcpResourceEnabled(): boolean {
+  return mcpFlagOn() && (getAppMode() === "organization" || hasDatabase());
+}
+
+/** Which gate a route sits behind: the OAuth server, or the protected resource. */
+export type McpGateScope = "oauth" | "resource";
 
 export function dcrEnabled(): boolean {
   return process.env.MCP_ALLOW_DCR === "true";
@@ -139,11 +171,11 @@ function warnOnce(reason: string): void {
 
 /**
  * The gate every MCP OAuth and /mcp/me route runs first. Null means proceed;
- * otherwise the response to send: 404 when the feature is off, 503 when the
- * configured origin is missing or differs from the request's.
+ * otherwise the response to send: 404 when the feature is off for `scope`,
+ * 503 when the configured origin is missing or differs from the request's.
  */
-export function mcpGate(req: Request): Response | null {
-  if (!mcpEnabled()) {
+export function mcpGate(req: Request, scope: McpGateScope = "oauth"): Response | null {
+  if (!(scope === "oauth" ? mcpEnabled() : mcpResourceEnabled())) {
     return new Response(JSON.stringify({ error: "not_found" }), {
       status: 404,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },

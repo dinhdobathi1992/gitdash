@@ -96,6 +96,8 @@ export const REGISTRY: Rule[] = [
   // enforce ownership, and the admin view (?all=1) re-checks admin itself.
   { pattern: "/api/mcp/grants", access: "auth" },
   { pattern: "/api/mcp/grants/*", access: "auth" },
+  // Personal MCP keys: minted for the caller only; the handler re-checks identity with GitHub.
+  { pattern: "/api/mcp/keys", access: "auth" },
 
   // Admin (always enforced)
   { pattern: "/admin/**", access: "admin" },

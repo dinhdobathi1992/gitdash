@@ -16,6 +16,7 @@ export const MCP_AUDIT_ACTIONS = [
   "mcp.code_reuse",
   "mcp.github_revoked",
   "mcp.org_removed",
+  "mcp.key_created",
 ] as const;
 export type McpAuditAction = (typeof MCP_AUDIT_ACTIONS)[number];
 

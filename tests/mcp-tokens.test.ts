@@ -63,6 +63,13 @@ const samples = {
     client_name: "Cursor",
     application_type: "native" as const,
   },
+  "mcp.key": {
+    grant_id: uuid(4),
+    aud: "https://gitdash.example/mcp/me",
+    scope: "gitdash:read",
+    source: "pat" as const,
+    ...ident,
+  },
 };
 
 const TYPES = Object.keys(samples) as (keyof typeof samples)[];
@@ -142,6 +149,27 @@ describe("open rejects", () => {
     }
   });
 
+  it("a personal key as an access token, and an access token as a key", async () => {
+    const { t, k } = await load(SECRET_A);
+    const key = await t.seal("mcp.key", samples["mcp.key"], 60);
+    const access = await t.seal("mcp.access", samples["mcp.access"], 60);
+    expect(await t.open("mcp.access", key)).toBeNull();
+    expect(await t.open("mcp.key", access)).toBeNull();
+    // Neither opens as a refresh token or a code either.
+    for (const typ of ["mcp.refresh", "mcp.code"] as const) {
+      expect(await t.open(typ, key)).toBeNull();
+    }
+    // A key payload relabelled as an access token under the access key still fails the schema (no client_id).
+    const now = Math.floor(Date.now() / 1000);
+    const forged = await sealData({ ...samples["mcp.key"], typ: "mcp.access", iat: now, exp: now + 60 }, { password: k.sealPasswords("mcp.access"), ttl: 60 });
+    expect(await t.open("mcp.access", forged)).toBeNull();
+  });
+
+  it("a key with an unknown source", async () => {
+    const { t } = await load(SECRET_A);
+    await expect(t.seal("mcp.key", { ...samples["mcp.key"], source: "cookie" as never }, 60)).rejects.toThrow(TypeError);
+  });
+
   it("a typ claim that does not match, even under the right key", async () => {
     const { t, k } = await load(SECRET_A);
     const now = Math.floor(Date.now() / 1000);
@@ -214,6 +242,9 @@ describe("seal validation", () => {
     await expect(t.seal("mcp.code", samples["mcp.code"], 61)).rejects.toThrow(RangeError);
     await expect(t.seal("mcp.access", samples["mcp.access"], 0)).rejects.toThrow(RangeError);
     await expect(t.seal("mcp.access", samples["mcp.access"], 1.5)).rejects.toThrow(RangeError);
+    // A key lives 30 days at most.
+    expect(t.TOKEN_TTL_SEC["mcp.key"]).toBe(30 * 24 * 3600);
+    await expect(t.seal("mcp.key", samples["mcp.key"], 30 * 24 * 3600 + 1)).rejects.toThrow(RangeError);
   });
 
   it("does not echo payload values (the GitHub token) in its error", async () => {

@@ -8,8 +8,11 @@ import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 
 /**
  * Signed-in MCP endpoint (Streamable HTTP, stateless): docs tools plus the
- * read-only data tools. This wrapper owns the status codes:
- *  - no bearer token        -> 401 with WWW-Authenticate resource_metadata (starts OAuth)
+ * read-only data tools. It accepts an OAuth access token or a personal MCP
+ * key. Enabled in organization mode, and in standalone mode with a database
+ * (keys only: standalone has no OAuth server). This wrapper owns the status codes:
+ *  - no bearer token        -> 401; in organization mode WWW-Authenticate
+ *                              carries resource_metadata (starts OAuth)
  *  - invalid token          -> 401 error="invalid_token"
  *  - grant store unavailable -> 503 Retry-After (never a fake 401)
  * Limits (per instance, best effort): 60 requests a minute per grant; 120 a
@@ -24,7 +27,7 @@ function unauthenticatedLimited(req: NextRequest): Response | null {
 }
 
 async function handle(req: NextRequest): Promise<Response> {
-  const gated = mcpGate(req);
+  const gated = mcpGate(req, "resource");
   if (gated) return withCors(gated);
 
   const token = bearerToken(req);
@@ -49,6 +52,6 @@ async function handle(req: NextRequest): Promise<Response> {
 export { handle as GET, handle as POST, handle as DELETE };
 
 export function OPTIONS(req: NextRequest): Response {
-  const gated = mcpGate(req);
+  const gated = mcpGate(req, "resource");
   return gated ? withCors(gated) : preflight();
 }

@@ -2,7 +2,8 @@
  * Bearer-token handling for /mcp/me.
  *
  * `verifyToken` never throws. It answers:
- *  - ok:          a live `mcp.access` token for this resource, on a live grant;
+ *  - ok:          a live `mcp.access` token or personal `mcp.key` for this
+ *                 resource, on a live grant;
  *  - invalid:     anything else the client sent (HTTP 401 invalid_token);
  *  - unavailable: the grant store could not be read (HTTP 503). An outage is
  *                 never reported as an invalid token, so clients do not throw
@@ -18,7 +19,7 @@ import { ensureSchema, getDb } from "@/lib/db";
 import { open } from "./oauth/tokens";
 import { getActiveGrant } from "./oauth/grants";
 import { grantClientId } from "./oauth/clients";
-import { MCP_SCOPE, isOurResource, resourceMetadataUrl } from "./oauth/config";
+import { MCP_SCOPE, PERSONAL_KEY_CLIENT_ID, isOurResource, mcpEnabled, resourceMetadataUrl } from "./oauth/config";
 import { MCP_CORS_HEADERS } from "./http";
 
 /** What tools find in `ctx.http.authInfo.extra`. `gh` is the user's GitHub token: never log or return it. */
@@ -41,9 +42,36 @@ export function bearerToken(req: Request): string | null {
   return m ? m[1] : "";
 }
 
+/** The fields both bearer types share, plus the grant client id the token must belong to. */
+interface Bearer {
+  grant_id: string;
+  aud: string;
+  scope: string;
+  gh: string;
+  id: number;
+  login: string;
+  exp: number;
+  clientId: string;
+  grantClientId: string;
+}
+
+/**
+ * Open a bearer credential: an OAuth access token (`mcp.access`) or a
+ * personal MCP key (`mcp.key`). Each type has its own sealing key, so a code,
+ * refresh or any other token type never opens here. A key may only belong to
+ * a personal-key grant and an access token only to its OAuth client's grant.
+ */
+async function openBearer(token: string): Promise<Bearer | null> {
+  const a = await open("mcp.access", token);
+  if (a) return { ...a, clientId: a.client_id, grantClientId: grantClientId(a.client_id) };
+  const k = await open("mcp.key", token);
+  if (k) return { ...k, clientId: PERSONAL_KEY_CLIENT_ID, grantClientId: PERSONAL_KEY_CLIENT_ID };
+  return null;
+}
+
 export async function verifyToken(token: string): Promise<VerifyResult> {
   const invalid = { ok: false, reason: "invalid" } as const;
-  const t = await open("mcp.access", token);
+  const t = await openBearer(token);
   if (!t) return invalid;
   if (!isOurResource(t.aud)) return invalid;
   if (!t.scope.split(" ").includes(MCP_SCOPE)) return invalid;
@@ -54,13 +82,13 @@ export async function verifyToken(token: string): Promise<VerifyResult> {
   } catch {
     return { ok: false, reason: "unavailable" };
   }
-  if (!grant || grant.github_id !== t.id || grant.client_id !== grantClientId(t.client_id)) return invalid;
+  if (!grant || grant.github_id !== t.id || grant.client_id !== t.grantClientId) return invalid;
 
   return {
     ok: true,
     authInfo: {
       token: "<redacted>",
-      clientId: t.client_id,
+      clientId: t.clientId,
       scopes: t.scope.split(" "),
       expiresAt: t.exp,
       resource: new URL(t.aud),
@@ -80,8 +108,13 @@ export function authExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
 
 // ── Responses ────────────────────────────────────────────────────────────────
 
+/**
+ * WWW-Authenticate for a 401. `resource_metadata` (which starts OAuth) only
+ * when this deployment runs the OAuth server: standalone mode has none, and
+ * pointing a client at a missing authorization server would only fail later.
+ */
 function challenge(error?: { code: string; description: string }): string {
-  const parts = [`Bearer resource_metadata="${resourceMetadataUrl()}"`, `scope="${MCP_SCOPE}"`];
+  const parts = mcpEnabled() ? [`Bearer resource_metadata="${resourceMetadataUrl()}"`, `scope="${MCP_SCOPE}"`] : [`Bearer scope="${MCP_SCOPE}"`];
   if (error) parts.push(`error="${error.code}"`, `error_description="${error.description}"`);
   return parts.join(", ");
 }
@@ -97,7 +130,10 @@ function json(body: unknown, status: number, extra: Record<string, string>): Res
 export function unauthorized(invalid: boolean): Response {
   const err = invalid ? { code: "invalid_token", description: "The access token is invalid, expired or revoked" } : undefined;
   return json(
-    { error: invalid ? "invalid_token" : "unauthorized", error_description: invalid ? err!.description : "Sign in to use these tools" },
+    {
+      error: invalid ? "invalid_token" : "unauthorized",
+      error_description: invalid ? err!.description : mcpEnabled() ? "Sign in to use these tools" : "Send a personal MCP key as a Bearer token (Settings → Connected apps)",
+    },
     401,
     { "WWW-Authenticate": challenge(err) },
   );
