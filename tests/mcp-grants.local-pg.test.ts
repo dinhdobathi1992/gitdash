@@ -19,7 +19,7 @@ vi.hoisted(() => {
   delete process.env.MCP_PREVIOUS_SESSION_SECRET;
 });
 
-import { __setDbClientForTests, ensureSchema, MIGRATIONS, pruneMcpRetention, type DbClient } from "@/lib/db";
+import { __setDbClientForTests, ensureSchema, getDb, MIGRATIONS, pruneMcpRetention, type DbClient } from "@/lib/db";
 import {
   __clearGrantCacheForTests,
   consumeJti,
@@ -298,6 +298,16 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       expect(await getActiveGrant(g.grant_id)).toBeNull();
     });
 
+    it("a never-redeemed grant neither rotates nor gets revoked for reuse", async () => {
+      const g = await createGrant(grantInput);
+      expect(await rotateRefresh(g.grant_id, g.current_refresh, randomUUID())).toBe("revoked");
+      expect(await rotateRefresh(g.grant_id, randomUUID(), randomUUID())).toBe("revoked");
+      const [row] = await q(`SELECT revoked_at, redeemed_at FROM mcp_grants WHERE grant_id = $1`, [g.grant_id]);
+      expect(row.revoked_at).toBeNull();
+      // It can still be redeemed with its original refresh id.
+      expect(await redeemGrant(g.grant_id, g.current_refresh)).toBe(true);
+    });
+
     it("unknown grant or malformed ids -> revoked", async () => {
       expect(await rotateRefresh(randomUUID(), randomUUID(), randomUUID())).toBe("revoked");
       expect(await rotateRefresh("nope", randomUUID(), randomUUID())).toBe("revoked");
@@ -323,6 +333,38 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       expect(await getActiveGrant(g.grant_id)).not.toBeNull(); // still cached
       vi.setSystemTime(new Date(Date.now() + 61_000));
       expect(await getActiveGrant(g.grant_id)).toBeNull();
+    });
+
+    it("a lookup that started before a revocation cannot re-cache the grant as live", async () => {
+      const g = await redeemed();
+      const base = getDb();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let held = false;
+      // Hold the result of getActiveGrant's SELECT until the revocation has committed.
+      const slow = new Proxy(base, {
+        apply(target, thisArg, args: unknown[]) {
+          const result = Reflect.apply(target as (...a: unknown[]) => Promise<unknown>, thisArg, args) as Promise<unknown>;
+          const text = Array.isArray(args[0]) ? (args[0] as string[]).join("") : "";
+          if (!held && text.includes("AS redeemed")) {
+            held = true;
+            return result.then((rows) => gate.then(() => rows));
+          }
+          return result;
+        },
+      });
+      __setDbClientForTests(slow as unknown as DbClient);
+      try {
+        await ensureSchema();
+        const lookup = getActiveGrant(g.grant_id);
+        await vi.waitFor(() => expect(held).toBe(true));
+        expect(await revokeGrant(g.grant_id, "user_revoked")).toBe(true);
+        release();
+        expect(await lookup).not.toBeNull(); // it read the row before the revoke
+        expect(await getActiveGrant(g.grant_id)).toBeNull(); // but did not cache it
+      } finally {
+        backend.attach();
+      }
     });
 
     it("propagates database errors (callers map them to unavailable)", async () => {
@@ -359,7 +401,11 @@ describe.each(backends)("MCP grants on $name", (backend) => {
     it("pruneMcpRetention removes expired jti, stale unredeemed and long-revoked grants", async () => {
       const oldJti = randomUUID();
       const liveJti = randomUUID();
-      await consumeJti(oldJti, new Date(Date.now() - 1_000));
+      const graceJti = randomUUID();
+      await consumeJti(oldJti, new Date(Date.now() - 2 * 60_000));
+      // Expired 30 s ago: still inside the one-minute margin past open()'s 5 s
+      // tolerance, so the replay record must survive retention.
+      await consumeJti(graceJti, new Date(Date.now() - 30_000));
       await consumeJti(liveJti, new Date(Date.now() + 60_000));
       const stale = await createGrant(grantInput);
       await q(`UPDATE mcp_grants SET created_at = NOW() - INTERVAL '11 minutes' WHERE grant_id = $1`, [stale.grant_id]);
@@ -378,10 +424,22 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       const jtis = (await q(`SELECT jti::text AS id FROM mcp_used_jti`)).map((x) => x.id);
       expect(jtis).not.toContain(oldJti);
       expect(jtis).toContain(liveJti);
+      expect(jtis).toContain(graceJti);
       const ids = (await q(`SELECT grant_id::text AS id FROM mcp_grants`)).map((x) => x.id);
       expect(ids).not.toContain(stale.grant_id);
       expect(ids).not.toContain(old.grant_id);
       expect(ids).toContain(recent.grant_id);
+    });
+
+    it("pruneMcpRetention removes grants expired more than 90 days ago, even if never revoked", async () => {
+      const expired = await redeemed();
+      const lately = await redeemed();
+      await q(`UPDATE mcp_grants SET absolute_expiry = NOW() - INTERVAL '91 days' WHERE grant_id = $1`, [expired.grant_id]);
+      await q(`UPDATE mcp_grants SET absolute_expiry = NOW() - INTERVAL '10 days' WHERE grant_id = $1`, [lately.grant_id]);
+      await pruneMcpRetention();
+      const ids = (await q(`SELECT grant_id::text AS id FROM mcp_grants`)).map((x) => x.id);
+      expect(ids).not.toContain(expired.grant_id);
+      expect(ids).toContain(lately.grant_id);
     });
   });
 

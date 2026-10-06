@@ -1955,14 +1955,17 @@ export async function pruneMcpRetention(): Promise<{ used_jti: number; unredeeme
   await ensureSchema();
   const [row] = await getDb()`
     WITH j AS (
-      DELETE FROM mcp_used_jti WHERE expires_at < NOW() RETURNING 1
+      -- A minute past expiry: open() still accepts a code up to 5 s late, and its
+      -- used-id row must outlive that so a replay is still recognised.
+      DELETE FROM mcp_used_jti WHERE expires_at < NOW() - INTERVAL '1 minute' RETURNING 1
     ), u AS (
       DELETE FROM mcp_grants
       WHERE redeemed_at IS NULL AND created_at < NOW() - INTERVAL '10 minutes'
       RETURNING 1
     ), r AS (
       DELETE FROM mcp_grants
-      WHERE revoked_at < NOW() - INTERVAL '90 days' AND redeemed_at IS NOT NULL
+      WHERE redeemed_at IS NOT NULL
+        AND (revoked_at < NOW() - INTERVAL '90 days' OR absolute_expiry < NOW() - INTERVAL '90 days')
       RETURNING 1
     )
     SELECT (SELECT count(*) FROM j)::int AS used_jti,

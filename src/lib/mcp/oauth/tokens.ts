@@ -131,11 +131,24 @@ export async function seal<T extends TokenType>(
   return sealData(body, { password: sealPasswords(typ), ttl: ttlSeconds });
 }
 
+let warnedKeys = false;
+
 /** Open a token of type `typ`. Returns null for any invalid, expired or foreign token. Never throws. */
 export async function open<T extends TokenType>(typ: T, token: unknown): Promise<TokenPayload<T> | null> {
   if (typeof token !== "string" || token.length === 0 || token.length > MAX_TOKEN_LENGTH) return null;
+  let password;
   try {
-    const data = await unsealData<unknown>(token, { password: unsealPasswords(typ), ttl: TOKEN_TTL_SEC[typ] });
+    password = unsealPasswords(typ);
+  } catch (err) {
+    // A configuration fault, not a bad token: say so once, loudly, then fail closed.
+    if (!warnedKeys) {
+      warnedKeys = true;
+      console.error(`[mcp] token keys unavailable: ${(err as Error).message}`);
+    }
+    return null;
+  }
+  try {
+    const data = await unsealData<unknown>(token, { password, ttl: TOKEN_TTL_SEC[typ] });
     // iron-session returns {} for a bad MAC, an unknown key id or an expired seal.
     if (data === null || typeof data !== "object" || Object.keys(data).length === 0) return null;
 

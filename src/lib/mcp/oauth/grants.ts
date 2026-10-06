@@ -146,7 +146,7 @@ export async function redeemGrant(grantId: string, refreshJti: string): Promise<
  *    now expects `next`.
  *  - any other id on a live grant -> the grant is revoked (`refresh_reuse`)
  *    and the result is "reuse".
- *  - revoked, expired or unknown grant -> "revoked".
+ *  - revoked, expired, unknown or never-redeemed grant -> "revoked".
  */
 export async function rotateRefresh(grantId: string, presented: string, next: string): Promise<RotateOutcome> {
   if (!isUuid(grantId) || !isUuid(presented) || !isUuid(next)) return "revoked";
@@ -155,13 +155,13 @@ export async function rotateRefresh(grantId: string, presented: string, next: st
     WITH r AS (
       UPDATE mcp_grants
       SET previous_refresh = current_refresh, current_refresh = ${next}::uuid, rotated_at = NOW(), last_used_at = NOW()
-      WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND NOW() < absolute_expiry
+      WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND redeemed_at IS NOT NULL AND NOW() < absolute_expiry
         AND (current_refresh = ${presented}::uuid
              OR (previous_refresh = ${presented}::uuid AND rotated_at > NOW() - INTERVAL '30 seconds'))
       RETURNING 'ok'::text AS outcome
     ), v AS (
       UPDATE mcp_grants SET revoked_at = NOW(), revoked_reason = 'refresh_reuse'
-      WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND NOW() < absolute_expiry
+      WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND redeemed_at IS NOT NULL AND NOW() < absolute_expiry
         AND NOT EXISTS (SELECT 1 FROM r)
       RETURNING 'reuse'::text AS outcome
     )
@@ -169,7 +169,7 @@ export async function rotateRefresh(grantId: string, presented: string, next: st
   `) as { outcome: string }[];
   const outcome = rows[0]?.outcome;
   if (outcome === "ok" || outcome === "reuse") {
-    if (outcome === "reuse") activeCache.delete(grantId.toLowerCase());
+    if (outcome === "reuse") invalidate(grantId.toLowerCase());
     return outcome;
   }
   return "revoked";
@@ -179,6 +179,23 @@ export async function rotateRefresh(grantId: string, presented: string, next: st
 
 const ACTIVE_CACHE_MAX = 5_000;
 const activeCache = new Map<string, { grant: ActiveGrant | null; at: number }>();
+
+/**
+ * Revocation epochs. A lookup that started before a revocation must not put
+ * its (stale, live) answer back into the cache after the revocation evicted
+ * it, so the cache write is skipped when the epoch moved meanwhile.
+ */
+const epochs = new Map<string, number>();
+
+function epoch(id: string): number {
+  return epochs.get(id) ?? 0;
+}
+
+function invalidate(id: string): void {
+  if (epochs.size >= ACTIVE_CACHE_MAX) epochs.clear();
+  epochs.set(id, epoch(id) + 1);
+  activeCache.delete(id);
+}
 
 function cacheSet(id: string, grant: ActiveGrant | null): void {
   if (activeCache.size >= ACTIVE_CACHE_MAX) {
@@ -201,6 +218,7 @@ export async function getActiveGrant(grantId: string): Promise<ActiveGrant | nul
     if (hit.grant && Date.parse(hit.grant.absolute_expiry) <= Date.now()) return null;
     return hit.grant;
   }
+  const startedAt = epoch(id);
   await ensureSchema();
   const [row] = (await getDb()`
     SELECT grant_id::text AS grant_id, github_id::text AS github_id, client_id, absolute_expiry,
@@ -215,7 +233,7 @@ export async function getActiveGrant(grantId: string): Promise<ActiveGrant | nul
     row && row.live
       ? { grant_id: row.grant_id, github_id: Number(row.github_id), client_id: row.client_id, absolute_expiry: iso(row.absolute_expiry) }
       : null;
-  cacheSet(id, grant);
+  if (epoch(id) === startedAt) cacheSet(id, grant);
   return grant;
 }
 
@@ -228,7 +246,7 @@ export async function revokeGrant(grantId: string, reason: RevokeReason): Promis
     WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL
     RETURNING grant_id
   `) as unknown[];
-  activeCache.delete(grantId.toLowerCase());
+  invalidate(grantId.toLowerCase());
   return rows.length === 1;
 }
 

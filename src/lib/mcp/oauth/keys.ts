@@ -19,7 +19,7 @@
  */
 
 import { hkdfSync } from "node:crypto";
-import { sessionOptions } from "@/lib/session";
+import { DEV_FALLBACK_SECRET, sessionOptions } from "@/lib/session";
 
 export const TOKEN_TYPES = ["mcp.tx", "mcp.code", "mcp.access", "mcp.refresh", "mcp.client"] as const;
 export type TokenType = (typeof TOKEN_TYPES)[number];
@@ -53,13 +53,17 @@ function currentSecret(): string {
   if (typeof secret !== "string" || secret.length < MIN_SECRET_LENGTH) {
     throw new Error("[mcp] session secret must be a string of at least 32 characters");
   }
+  // The dev fallback is public: tokens sealed with it could be forged by anyone.
+  if (secret === DEV_FALLBACK_SECRET && process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+    throw new Error("[mcp] SESSION_SECRET is not set; MCP tokens are disabled");
+  }
   return secret;
 }
 
 let warnedPrevious = false;
 
 function previousSecret(current: string): string | null {
-  const prev = process.env.MCP_PREVIOUS_SESSION_SECRET;
+  const prev = process.env.MCP_PREVIOUS_SESSION_SECRET?.trim();
   if (!prev) return null;
   if (prev.length < MIN_SECRET_LENGTH) {
     if (!warnedPrevious) {

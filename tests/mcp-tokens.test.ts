@@ -258,6 +258,31 @@ describe("key derivation and rotation", () => {
     expect(await c.t.open("mcp.refresh", old)).toBeNull();
   });
 
+  it("trims surrounding whitespace from the previous secret", async () => {
+    const a = await load(SECRET_A);
+    const old = await a.t.seal("mcp.refresh", samples["mcp.refresh"], 3600);
+    const b = await load(SECRET_B, `${SECRET_A}\n`);
+    expect(await b.t.open("mcp.refresh", old)).not.toBeNull();
+  });
+
+  it("refuses the public dev fallback secret outside development and test", async () => {
+    vi.resetModules();
+    delete process.env.SESSION_SECRET;
+    delete process.env.MCP_PREVIOUS_SESSION_SECRET;
+    vi.stubEnv("NODE_ENV", "staging");
+    try {
+      const t = await import("@/lib/mcp/oauth/tokens");
+      await expect(t.seal("mcp.access", samples["mcp.access"], 60)).rejects.toThrow(/SESSION_SECRET/);
+      // open() fails closed and reports the configuration fault once.
+      expect(await t.open("mcp.access", "Fe26.2**x")).toBeNull();
+      expect(await t.open("mcp.access", "Fe26.2**y")).toBeNull();
+      const errors = (console.error as unknown as MockInstance).mock.calls.filter((c) => String(c[0]).includes("token keys unavailable"));
+      expect(errors).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("ignores a previous secret shorter than 32 characters", async () => {
     const { k } = await load(SECRET_B, "too-short");
     expect(Object.keys(k.unsealPasswords("mcp.access"))).toHaveLength(1);
