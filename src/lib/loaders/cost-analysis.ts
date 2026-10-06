@@ -184,8 +184,9 @@ export async function loadCostAnalysis(
     const status = result.status;
     const serverMsg = result.message ?? "";
     // apiPath contains the requested org and serverMsg comes from GitHub: strip line breaks so neither can forge log lines.
-    const oneLine = (v: string) => v.replace(/[\r\n]+/g, " ");
-    console.error(`[GitDash] Billing usage summary error: status=${status} path=${oneLine(apiPath)} msg=${oneLine(serverMsg)}`);
+    const safePath = apiPath.replace(/\n|\r/g, "");
+    const safeMsg = serverMsg.replace(/\n|\r/g, "");
+    console.error(`[GitDash] Billing usage summary error: status=${status} path=${safePath} msg=${safeMsg}`);
 
     // Surface specific, actionable errors
     if (status === 403) {
