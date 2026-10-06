@@ -87,6 +87,20 @@ const nextConfig: NextConfig = {
           ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
         ],
       },
+      // MCP OAuth server and its metadata: the baseline hardening even when the
+      // feature is off (the routes then answer 404 with no headers of their
+      // own). When it is on, the routes set CORS and the page CSP per response;
+      // the values here are the same ones the routes use (headers.ts), so a
+      // response never carries two different values for one header.
+      ...["/oauth/:path*", "/.well-known/:path*"].map((source) => ({
+        source,
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
+        ],
+      })),
       // Sign-in, onboarding and demo pages are not content: keep them out of
       // search results. They stay crawlable so crawlers can see this header.
       ...["/login", "/setup", "/pending", "/demo"].map((source) => ({

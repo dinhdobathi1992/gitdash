@@ -1,6 +1,6 @@
 /**
- * /oauth/revoke (RFC 7009). Accepts a refresh or access token and revokes the
- * whole grant. Unknown, invalid or foreign tokens still get 200, as the RFC
+ * /oauth/revoke (RFC 7009). Accepts a refresh token, an access token or a
+ * personal MCP key and revokes the whole grant. Unknown, invalid or foreign tokens still get 200, as the RFC
  * requires; only a database outage answers 503 (RFC 7009 §2.2.1), so a client
  * never believes a revocation happened when it did not.
  */
@@ -44,13 +44,19 @@ export async function handleRevoke(req: NextRequest): Promise<Response> {
 
   const hint = form.get("token_type_hint");
   const order = hint === "access_token" ? (["mcp.access", "mcp.refresh"] as const) : (["mcp.refresh", "mcp.access"] as const);
-  let found: { grant_id: string; client_id: string; id: number } | null = null;
+  let found: { grant_id: string; client_id: string | null; id: number } | null = null;
   for (const typ of order) {
     found = await open(typ, token);
     if (found) break;
   }
+  if (!found) {
+    // A personal key has no OAuth client: whoever holds it may revoke it, so
+    // the client_id check below does not apply to it.
+    const key = await open("mcp.key", token);
+    if (key) found = { grant_id: key.grant_id, client_id: null, id: key.id };
+  }
   // A token issued to another client is not this caller's to revoke.
-  if (!found || (clientId && clientId !== found.client_id)) return ok();
+  if (!found || (clientId && found.client_id !== null && clientId !== found.client_id)) return ok();
 
   try {
     if (await revokeGrant(found.grant_id, "client_revoked")) {

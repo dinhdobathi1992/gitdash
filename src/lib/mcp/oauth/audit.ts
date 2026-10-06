@@ -7,6 +7,7 @@
  */
 
 import { ensureSchema, getDb } from "@/lib/db";
+import { revokeAllForUser, type RevokeReason } from "./grants";
 
 export const MCP_AUDIT_ACTIONS = [
   "mcp.grant_created",
@@ -66,4 +67,22 @@ export async function auditMcp(
     INSERT INTO permission_audit (actor_github_id, action, target, details)
     VALUES (${actorGithubId}, ${action}, ${target}, ${json}::jsonb)
   `;
+}
+
+/**
+ * Revoke every live grant of one user (see revokeAllForUser) and write one
+ * audit row per revoked grant, so each app and key in the log shows why it
+ * stopped. A database error from the revocation propagates; an audit failure
+ * is logged by name only and never undoes the revocation.
+ */
+export async function revokeAllForUserAudited(githubId: number, reason: RevokeReason, action: McpAuditAction): Promise<string[]> {
+  const ids = await revokeAllForUser(githubId, reason);
+  for (const id of ids) {
+    try {
+      await auditMcp(action, githubId, id, { reason });
+    } catch (err) {
+      console.error(`[mcp] audit ${action} failed: ${(err as Error).name}`);
+    }
+  }
+  return ids;
 }

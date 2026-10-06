@@ -73,6 +73,9 @@ const samples = {
 };
 
 const TYPES = Object.keys(samples) as (keyof typeof samples)[];
+/** A grant's code key, as createGrant makes it: 32 random bytes, base64url. */
+const CODE_KEY = Buffer.alloc(32, 7).toString("base64url");
+const OTHER_CODE_KEY = Buffer.alloc(32, 8).toString("base64url");
 
 let spies: MockInstance[] = [];
 
@@ -100,9 +103,10 @@ describe("seal/open round trip", () => {
   it.each(TYPES)("%s opens with its payload and iat/exp claims", async (typ) => {
     const { t } = await load(SECRET_A);
     const ttl = Math.min(60, t.TOKEN_TTL_SEC[typ]);
-    const token = await t.seal(typ, samples[typ] as never, ttl);
+    const opts = typ === "mcp.code" ? { codeKey: CODE_KEY } : undefined;
+    const token = await t.seal(typ, samples[typ] as never, ttl, opts);
     expect(token.startsWith("Fe26.2*")).toBe(true);
-    const p = await t.open(typ, token);
+    const p = await t.open(typ, token, opts);
     expect(p).toMatchObject({ ...samples[typ], typ });
     expect(p!.exp - p!.iat).toBe(ttl);
   });
@@ -233,6 +237,56 @@ describe("open rejects", () => {
     for (const junk of [undefined, null, 42, {}, "", "Fe26.2**", "x".repeat(20_000), "a*b*c*d*e*f*g*h", "Fe26.2*constructor*a*b*c**d*e~2"]) {
       await expect(t.open("mcp.access", junk)).resolves.toBeNull();
     }
+  });
+});
+
+describe("authorization codes need the grant's code key", () => {
+  it("a code does not open with SESSION_SECRET alone: the per-type key without the code key fails", async () => {
+    const { t, k } = await load(SECRET_A);
+    const code = await t.seal("mcp.code", samples["mcp.code"], 60, { codeKey: CODE_KEY });
+    // Everything an attacker holding only SESSION_SECRET can derive: the per-type key map.
+    const leaked = await unsealData<Record<string, unknown>>(code, { password: k.unsealPasswords("mcp.code"), ttl: 60 });
+    expect(leaked).toEqual({});
+    expect(JSON.stringify(leaked)).not.toContain(GH);
+    // open() without a code key, or with another grant's, fails too.
+    expect(await t.open("mcp.code", code)).toBeNull();
+    expect(await t.open("mcp.code", code, { codeKey: OTHER_CODE_KEY })).toBeNull();
+    expect(await t.open("mcp.code", code, { codeKey: CODE_KEY })).toMatchObject({ gh: GH });
+  });
+
+  it("a code sealed with only the per-type key (no code-key layer) does not open", async () => {
+    const { t, k } = await load(SECRET_A);
+    const now = Math.floor(Date.now() / 1000);
+    const forged = await sealData({ ...samples["mcp.code"], typ: "mcp.code", iat: now, exp: now + 60 }, { password: k.sealPasswords("mcp.code"), ttl: 60 });
+    expect(await t.open("mcp.code", forged, { codeKey: CODE_KEY })).toBeNull();
+  });
+
+  it("the code key layer survives secret rotation", async () => {
+    const a = await load(SECRET_A);
+    const code = await a.t.seal("mcp.code", samples["mcp.code"], 60, { codeKey: CODE_KEY });
+    const b = await load(SECRET_B, SECRET_A);
+    expect(await b.t.open("mcp.code", code, { codeKey: CODE_KEY })).toMatchObject({ jti: samples["mcp.code"].jti });
+  });
+
+  it("seal refuses a code without a valid code key, and a code key on any other type", async () => {
+    const { t } = await load(SECRET_A);
+    await expect(t.seal("mcp.code", samples["mcp.code"], 60)).rejects.toThrow(TypeError);
+    await expect(t.seal("mcp.code", samples["mcp.code"], 60, { codeKey: "short" })).rejects.toThrow(TypeError);
+    await expect(t.seal("mcp.access", samples["mcp.access"], 60, { codeKey: CODE_KEY })).rejects.toThrow(TypeError);
+    const access = await t.seal("mcp.access", samples["mcp.access"], 60);
+    expect(await t.open("mcp.access", access, { codeKey: CODE_KEY })).toBeNull();
+  });
+
+  it("the wire format is <grant_id>.<sealed>, and parseCode refuses anything else", async () => {
+    const { t } = await load(SECRET_A);
+    const sealed = await t.seal("mcp.code", samples["mcp.code"], 60, { codeKey: CODE_KEY });
+    const code = t.formatCode(samples["mcp.code"].grant_id, sealed);
+    expect(code).toBe(`${samples["mcp.code"].grant_id}.${sealed}`);
+    expect(t.parseCode(code)).toEqual({ grantId: samples["mcp.code"].grant_id, sealed });
+    for (const bad of [sealed, `not-a-uuid.${sealed}`, `${samples["mcp.code"].grant_id}.`, `${samples["mcp.code"].grant_id}${sealed}`, 42, null]) {
+      expect(t.parseCode(bad)).toBeNull();
+    }
+    expect(() => t.formatCode("nope", sealed)).toThrow(TypeError);
   });
 });
 

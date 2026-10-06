@@ -27,8 +27,15 @@ export const MCP_SCOPE = "gitdash:read";
 export const RESOURCE_PATH = "/mcp/me";
 /** GitHub callback for the MCP sign-in (registered on the OAuth App as a second callback URL). */
 export const GITHUB_CALLBACK_PATH = "/api/auth/callback/mcp";
-/** GitHub scopes requested; the same as the web sign-in, so tools see what the web app sees. */
-export const GITHUB_SCOPES = "read:user user:email repo workflow read:org";
+/**
+ * GitHub scopes the MCP sign-in requests: only what the read-only tools and
+ * the identity check use. `repo` reads repositories, Actions runs and pull
+ * requests; `read:org` answers the organization allow-list and org tools;
+ * `read:user` reads the profile (GET /user). Narrower than the web sign-in:
+ * no `workflow` (only needed to change workflow files) and no `user:email`
+ * (only needed for GET /user/emails, which nothing here calls).
+ */
+export const GITHUB_SCOPES = "repo read:org read:user";
 /**
  * Grant client_id of a personal MCP key. OAuth grants store a CIMD https URL
  * or a sha256 hex id, so this value can never collide with one.

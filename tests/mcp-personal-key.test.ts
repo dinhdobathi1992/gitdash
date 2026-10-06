@@ -53,6 +53,7 @@ import { GET as grantsGET } from "@/app/api/mcp/grants/route";
 import { DELETE as grantDELETE } from "@/app/api/mcp/grants/[id]/route";
 import { POST as mePOST } from "@/app/mcp/me/route";
 import { POST as tokenPOST } from "@/app/oauth/token/route";
+import { POST as revokePOST } from "@/app/oauth/revoke/route";
 import { GET as authorizeGET } from "@/app/oauth/authorize/route";
 import { GET as callbackGET } from "@/app/api/auth/callback/mcp/route";
 import { GET as asMetadataGET } from "@/app/.well-known/oauth-authorization-server/route";
@@ -134,6 +135,17 @@ function oauthRefresh(refreshToken: string, clientId: string) {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": nextIp() },
       body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: clientId }).toString(),
+    }),
+  );
+}
+
+function revokeEndpoint(token: string, clientId: string | null) {
+  const fields: Record<string, string> = { token, ...(clientId ? { client_id: clientId } : {}) };
+  return revokePOST(
+    new NextRequest(`${ORIGIN}/oauth/revoke`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": nextIp() },
+      body: new URLSearchParams(fields).toString(),
     }),
   );
 }
@@ -405,6 +417,69 @@ describe("revocation and expiry", () => {
     const { res } = await rpc("tools/list", {}, body.key);
     expect(res.status).toBe(401);
     expect(res.headers.get("www-authenticate")).toContain('error="invalid_token"');
+  });
+
+  it("revoked through /oauth/revoke: answers 200, revokes the key's grant, and the key gets 401", async () => {
+    const body = await okKey();
+    const other = await okKey("Cursor");
+    // With no client_id, and with any client_id: a personal key has no OAuth client to check against.
+    for (const [key, clientId] of [[body.key, null], [other.key, CLIENT]] as const) {
+      const res = await revokeEndpoint(key, clientId);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({});
+    }
+    for (const id of [body.grant_id, other.grant_id]) {
+      const [row] = await q(`SELECT revoked_reason FROM mcp_grants WHERE grant_id = $1`, [id]);
+      expect(row.revoked_reason).toBe("client_revoked");
+    }
+    expect((await rpc("tools/list", {}, body.key)).res.status).toBe(401);
+    // Again, and garbage: still 200.
+    expect((await revokeEndpoint(body.key, null)).status).toBe(200);
+    expect((await revokeEndpoint("not-a-key", null)).status).toBe(200);
+    const audit = await q(`SELECT action FROM permission_audit WHERE action = 'mcp.grant_revoked'`);
+    expect(audit).toHaveLength(2);
+  });
+
+  it("a user removed from the allowed organizations during a tool call loses every grant, keys and apps alike", async () => {
+    const key = await okKey();
+    const sibling = await okKey("Cursor");
+    const t = await oauthTokens();
+    gh.allowed = false;
+    const result = await listRepos(key.key);
+    expect(result.isError).toBe(true);
+    const rows = await q(`SELECT grant_id::text AS grant_id, revoked_reason FROM mcp_grants WHERE github_id = $1 ORDER BY grant_id`, [gh.id]);
+    expect(rows.map((r) => r.revoked_reason)).toEqual(["org_removed", "org_removed", "org_removed"]);
+    expect(rows.map((r) => r.grant_id).sort()).toEqual([key.grant_id, sibling.grant_id, t.grantId].sort());
+    const audit = await q(`SELECT target FROM permission_audit WHERE action = 'mcp.org_removed' ORDER BY target`);
+    expect(audit.map((r) => r.target).sort()).toEqual([key.grant_id, sibling.grant_id, t.grantId].sort());
+    // Siblings stop working right away on this instance (their cache entries were dropped).
+    expect((await rpc("tools/list", {}, sibling.key)).res.status).toBe(401);
+    expect((await rpc("tools/list", {}, t.access)).res.status).toBe(401);
+  });
+
+  it("a user removed from the allowed organizations during a refresh loses every grant", async () => {
+    const key = await okKey();
+    const t = await oauthTokens();
+    expect((await rpc("tools/list", {}, key.key)).res.status).toBe(200); // cached as active
+    gh.allowed = false;
+    const res = await oauthRefresh(t.refresh, CLIENT);
+    expect(((await res.json()) as { error: string }).error).toBe("invalid_grant");
+    const rows = await q(`SELECT revoked_reason FROM mcp_grants WHERE github_id = $1`, [gh.id]);
+    expect(rows.map((r) => r.revoked_reason)).toEqual(["org_removed", "org_removed"]);
+    expect((await rpc("tools/list", {}, key.key)).res.status).toBe(401);
+  });
+
+  it("a GitHub 401 during a tool call still revokes only that grant", async () => {
+    const key = await okKey();
+    const sibling = await okKey("Cursor");
+    whoami.mockImplementation(async () => {
+      throw Object.assign(new Error("Bad credentials"), { status: 401 });
+    });
+    expect((await listRepos(key.key)).isError).toBe(true);
+    const [a] = await q(`SELECT revoked_reason FROM mcp_grants WHERE grant_id = $1`, [key.grant_id]);
+    const [b] = await q(`SELECT revoked_reason FROM mcp_grants WHERE grant_id = $1`, [sibling.grant_id]);
+    expect(a.revoked_reason).toBe("github_revoked");
+    expect(b.revoked_reason).toBeNull();
   });
 
   it("an expired key: 401", async () => {

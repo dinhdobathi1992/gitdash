@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { LookupFunction } from "node:net";
 import { NextRequest } from "next/server";
-import { sealData } from "iron-session";
+import { sealData, unsealData } from "iron-session";
 import { PGlite } from "@electric-sql/pglite";
 import { createPgliteClient } from "./setup/pglite";
 
@@ -26,9 +26,11 @@ vi.mock("@/lib/identity", async (orig) => ({
 
 import { __setDbClientForTests, ensureSchema, type DbClient } from "@/lib/db";
 import { sessionOptions } from "@/lib/session";
-import { __clearGrantCacheForTests } from "@/lib/mcp/oauth/grants";
+import { __clearGrantCacheForTests, createGrant, redeemGrant } from "@/lib/mcp/oauth/grants";
 import { __clearClientCacheForTests, __setClientFetchDepsForTests, resolveClient } from "@/lib/mcp/oauth/clients";
-import { __resetConfigWarningForTests } from "@/lib/mcp/oauth/config";
+import { GITHUB_SCOPES, PERSONAL_KEY_CLIENT_ID, __resetConfigWarningForTests } from "@/lib/mcp/oauth/config";
+import { unsealPasswords } from "@/lib/mcp/oauth/keys";
+import { open as openToken } from "@/lib/mcp/oauth/tokens";
 import { GET as authorizeGET } from "@/app/oauth/authorize/route";
 import { GET as callbackGET } from "@/app/api/auth/callback/mcp/route";
 import { GET as consentGET, POST as consentPOST } from "@/app/oauth/consent/route";
@@ -410,6 +412,14 @@ describe("sign-in flows", () => {
     expect((await exchange(loc(r2).searchParams.get("code")!, b.verifier)).status).toBe(200);
   });
 
+  it("the MCP GitHub sign-in asks only for repo, read:org and read:user", async () => {
+    expect(GITHUB_SCOPES).toBe("repo read:org read:user");
+    const a = await authorizeGET(req(authorizeQuery(pkce().challenge)));
+    expect(a.status).toBe(302);
+    const scopes = loc(a).searchParams.get("scope")!.split(" ").sort();
+    expect(scopes).toEqual(["read:org", "read:user", "repo"]);
+  });
+
   it("deny redirects with access_denied, state and iss", async () => {
     const { challenge } = pkce();
     const { jar, nonce } = await toConsent(challenge);
@@ -566,6 +576,62 @@ describe("authorization_code grant", () => {
     expect((await grants())[0].revoked_reason).toBe("code_reuse");
     expect(await auditActions()).toContain("mcp.code_reuse");
     expect((await (await refresh(refresh_token)).json()).error).toBe("invalid_grant");
+  });
+
+  it("the code is <grant_id>.<sealed>, opens only with the grant's code key, and redemption clears that key", async () => {
+    const { code, verifier } = await signIn();
+    const [row] = await q(`SELECT grant_id::text AS grant_id, code_key FROM mcp_grants`);
+    const grantId = String(row.grant_id);
+    expect(code.startsWith(`${grantId}.Fe26.2*`)).toBe(true);
+    const sealed = code.slice(grantId.length + 1);
+    expect(String(row.code_key)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    // A leaked SESSION_SECRET yields the per-type key map; without the row's code key the seal stays shut.
+    expect(await unsealData(sealed, { password: unsealPasswords("mcp.code"), ttl: 60 })).toEqual({});
+    expect(await openToken("mcp.code", sealed)).toBeNull();
+    // With the row's code key it opens (this is what the token endpoint does).
+    expect(await openToken("mcp.code", sealed, { codeKey: String(row.code_key) })).toMatchObject({ grant_id: grantId });
+
+    expect((await exchange(code, verifier)).status).toBe(200);
+    const [after] = await q(`SELECT code_key, redeemed_at FROM mcp_grants`);
+    expect(after.code_key).toBeNull();
+    expect(after.redeemed_at).not.toBeNull();
+  });
+
+  it("after redemption the code cannot be checked, so a replay by its client revokes whatever verifier it sends", async () => {
+    const { code, verifier } = await signIn();
+    expect((await exchange(code, verifier)).status).toBe(200);
+    const replay = await exchange(code, pkce().verifier);
+    expect((await replay.json()).error).toBe("invalid_grant");
+    expect((await grants())[0].revoked_reason).toBe("code_reuse");
+  });
+
+  it("a replay that names another client revokes nothing", async () => {
+    const { code, verifier } = await signIn();
+    expect((await exchange(code, verifier)).status).toBe(200);
+    const replay = await exchange(code, verifier, { client_id: "https://other.example.com/meta.json" });
+    expect((await replay.json()).error).toBe("invalid_grant");
+    expect((await grants())[0].revoked_reason).toBeNull();
+  });
+
+  it("a forged seal on a live, unredeemed grant fails without burning the real code", async () => {
+    const { code, verifier } = await signIn();
+    const grantId = code.slice(0, 36);
+    for (const forged of [`${grantId}.garbage`, `${grantId}.${code.slice(37, -4)}AAAA`]) {
+      expect((await (await exchange(forged, verifier)).json()).error).toBe("invalid_grant");
+    }
+    expect((await grants())[0].revoked_reason).toBeNull();
+    expect((await exchange(code, verifier)).status).toBe(200);
+  });
+
+  it("a code naming an unknown grant, a malformed one, or a personal key's grant is invalid_grant and revokes nothing", async () => {
+    const { verifier } = await signIn();
+    const key = await createGrant({ github_id: USER.id, client_id: PERSONAL_KEY_CLIENT_ID, client_name: "Key", redirect_host: "personal key" });
+    expect(await redeemGrant(key.grant_id, key.current_refresh)).toBe(true);
+    for (const bad of [`${key.grant_id}.x`, "11111111-2222-4333-8444-555555555555.x", "not-a-code", "Fe26.2**x"]) {
+      expect((await (await exchange(bad, verifier)).json()).error).toBe("invalid_grant");
+    }
+    expect((await q(`SELECT revoked_at FROM mcp_grants WHERE grant_id = $1`, [key.grant_id]))[0].revoked_at).toBeNull();
   });
 
   it("accepts form encoding only, with no-store and exactly one CORS origin on errors too", async () => {

@@ -1,11 +1,13 @@
 /**
  * /oauth/token: authorization_code (PKCE S256) and refresh_token grants.
  *
- * Codes are validated in full before they are consumed, so a wrong verifier
- * cannot burn the real client's code; a code presented twice revokes its
- * grant. A refresh re-checks the user with GitHub first: a revoked GitHub
- * token or a user who left the allowed organizations revokes the grant, and
- * an outage answers 503 rather than a fake invalid_grant.
+ * A code is `<grant_id>.<sealed>`; the seal opens only with the grant row's
+ * code key, which redemption clears. Codes are validated in full before they
+ * are consumed, so a wrong verifier cannot burn the real client's code; a
+ * code presented twice revokes its grant. A refresh re-checks the user with
+ * GitHub first: a revoked GitHub token revokes the grant, a user who left the
+ * allowed organizations has every grant revoked, and an outage answers 503
+ * rather than a fake invalid_grant.
  *
  * Every response is no-store and carries CORS headers.
  */
@@ -15,9 +17,10 @@ import type { NextRequest } from "next/server";
 import { lookupWhoAmI } from "@/lib/identity";
 import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
-import { consumeJti, redeemGrant, revokeGrant, rotateRefresh, type RevokeReason } from "./grants";
-import { auditMcp, type McpAuditAction } from "./audit";
-import { CLOCK_TOLERANCE_SEC, open, seal, TOKEN_TTL_SEC } from "./tokens";
+import { consumeJti, getCodeGrant, redeemGrant, revokeGrant, revokeReplayedCode, rotateRefresh, type RevokeReason } from "./grants";
+import { auditMcp, revokeAllForUserAudited, type McpAuditAction } from "./audit";
+import { CLOCK_TOLERANCE_SEC, open, parseCode, seal, TOKEN_TTL_SEC } from "./tokens";
+import { grantClientId } from "./clients";
 import { MCP_SCOPE, isOurResource, mcpGate, normalizeUrl } from "./config";
 import { addCors, corsJson, oauthError, readBodyCapped } from "./headers";
 
@@ -88,8 +91,43 @@ async function authorizationCode(form: URLSearchParams): Promise<Response> {
   if (!code || !verifier || !clientId || !redirectUri) {
     return oauthError("invalid_request", "code, code_verifier, client_id and redirect_uri are required");
   }
-  const c = await open("mcp.code", code);
-  if (!c) return invalidGrant("The code is invalid or expired.");
+  const parsed = parseCode(code);
+  if (!parsed) return invalidGrant("The code is invalid or expired.");
+  let state: Awaited<ReturnType<typeof getCodeGrant>>;
+  try {
+    state = await getCodeGrant(parsed.grantId);
+  } catch {
+    return unavailable();
+  }
+  if (!state) return invalidGrant("The code is invalid or expired.");
+
+  if (!state.code_key) {
+    // No code key left: the code was redeemed (or the grant is a personal key,
+    // which never had one), so the seal can no longer be opened and its jti,
+    // verifier and client cannot be checked. A well-formed code naming a
+    // grant that is already redeemed and still live is therefore treated as a
+    // replay (RFC 6749 §4.1.2: revoke what the code issued). revokeReplayedCode
+    // checks all of it in one statement, and only for the client this request
+    // names, so a personal key can never be revoked this way. The grant id is
+    // known only to the owner, admins (who can revoke it anyway) and whoever
+    // holds the code; revoking is the safe direction for a leaked code. A
+    // never-redeemed code still has its key and goes through full validation
+    // below, so a wrong verifier there burns nothing.
+    if (state.redeemed && !state.revoked) {
+      let owner: number | null;
+      try {
+        owner = await revokeReplayedCode(parsed.grantId, grantClientId(clientId));
+        if (owner !== null) await audit("mcp.code_reuse", owner, parsed.grantId, { reason: "code_reuse" });
+      } catch {
+        return unavailable();
+      }
+      if (owner !== null) return invalidGrant("The code was already used; the connection has been revoked.");
+    }
+    return invalidGrant("The code is invalid or expired.");
+  }
+
+  const c = await open("mcp.code", parsed.sealed, { codeKey: state.code_key });
+  if (!c || c.grant_id.toLowerCase() !== parsed.grantId) return invalidGrant("The code is invalid or expired.");
 
   // Validate everything before consuming the code.
   if (c.client_id !== clientId) return invalidGrant("The code was issued to another client.");
@@ -146,7 +184,8 @@ async function refreshToken(form: URLSearchParams): Promise<Response> {
       return invalidGrant("GitHub no longer accepts this sign-in; the connection has been revoked.");
     }
     if (!who.allowed) {
-      await revokeWithAudit(r.grant_id, r.id, "org_removed", "mcp.org_removed");
+      // The user, not just this app, lost access: revoke every grant they hold.
+      await revokeAllForUserAudited(r.id, "org_removed", "mcp.org_removed");
       return invalidGrant("This GitHub account is no longer allowed on this GitDash; the connection has been revoked.");
     }
 

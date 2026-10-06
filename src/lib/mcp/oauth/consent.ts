@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 import { createGrant } from "./grants";
 import { auditMcp, TOKEN_LIKE } from "./audit";
-import { seal, TOKEN_TTL_SEC } from "./tokens";
+import { formatCode, seal, TOKEN_TTL_SEC } from "./tokens";
 import { issuer, mcpGate } from "./config";
 import { ACCESS_DENIED_DESCRIPTION, CLIENT_BUSY, clearTxCookie, clientRedirect, isNonce, readTx, stripClaims, txClient, type Tx } from "./authorize";
 import type { ResolvedClient, ValidRedirect } from "./clients";
@@ -164,7 +164,8 @@ export async function handleConsentSubmit(req: NextRequest): Promise<Response> {
   const p = stripClaims(tx);
   let code: string;
   try {
-    code = await seal(
+    if (!grant.code_key) throw new Error("grant has no code key");
+    const sealed = await seal(
       "mcp.code",
       {
         jti: randomUUID(),
@@ -179,7 +180,9 @@ export async function handleConsentSubmit(req: NextRequest): Promise<Response> {
         login: tx.login,
       },
       TOKEN_TTL_SEC["mcp.code"],
+      { codeKey: grant.code_key },
     );
+    code = formatCode(grant.grant_id, sealed);
   } catch (err) {
     console.error(`[mcp] sealing the authorization code failed: ${(err as Error).name}`);
     return errorPage(500, "GitDash could not finish connecting this app. Start the connection again from your app.", spent());

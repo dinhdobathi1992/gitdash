@@ -5,8 +5,8 @@
  *
  *  1. resolveIdentity(gh): a GitHub 401 revokes the grant (the next request
  *     gets HTTP 401 and the client signs in again); a user outside the allowed
- *     organizations has the grant revoked; an outage is a tool error and never
- *     fails open.
+ *     organizations has every grant they hold revoked; an outage is a tool
+ *     error and never fails open.
  *  2. decide(classify(apiPath), access, rbacEnforced()).
  *  3. recordSeen, after the response.
  *
@@ -26,7 +26,7 @@ import {
 } from "@/lib/permissions";
 import { recordSeen } from "@/lib/record-seen";
 import { revokeGrant, type RevokeReason } from "./oauth/grants";
-import { auditMcp, type McpAuditAction } from "./oauth/audit";
+import { auditMcp, revokeAllForUserAudited, type McpAuditAction } from "./oauth/audit";
 import { authExtra, inBackground, type McpAuthExtra } from "./auth";
 
 export type ToolAuth = McpAuthExtra;
@@ -60,6 +60,15 @@ export async function revokeForTool(auth: ToolAuth, reason: RevokeReason, action
   }
 }
 
+/** Revoke every live grant of the caller's user (`org_removed`), audited per grant. Errors are logged by name and swallowed. */
+async function revokeAllForTool(auth: ToolAuth): Promise<void> {
+  try {
+    await revokeAllForUserAudited(auth.id, "org_removed", "mcp.org_removed");
+  } catch (err) {
+    console.error(`[mcp] revoking the user's grants (org_removed) failed: ${(err as Error).name}`);
+  }
+}
+
 const statusOf = (err: unknown) => (err as { status?: number } | null)?.status;
 
 export async function authorizeTool(authInfo: AuthInfo | undefined, apiPath: string): Promise<ToolGate> {
@@ -81,7 +90,8 @@ export async function authorizeTool(authInfo: AuthInfo | undefined, apiPath: str
     return { ok: false, result: toolError(MSG.githubRevoked) };
   }
   if (!who.allowed) {
-    await revokeForTool(auth, "org_removed", "mcp.org_removed");
+    // The user, not just this connection, lost access: revoke every grant they hold.
+    await revokeAllForTool(auth);
     return { ok: false, result: toolError(MSG.orgRemoved) };
   }
 

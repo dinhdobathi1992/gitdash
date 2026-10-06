@@ -17,11 +17,17 @@ import { getActiveGrantOwner } from "@/lib/mcp/oauth/grants-admin";
 import { auditMcp } from "@/lib/mcp/oauth/audit";
 import { noStoreHeaders } from "@/lib/http-cache";
 import { safeError } from "@/lib/validation";
+import { isSameOrigin } from "@/lib/url";
 
 const notFound = () => NextResponse.json({ error: "Not found" }, { status: 404, headers: noStoreHeaders() });
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!mcpResourceEnabled()) return notFound();
+  // A state-changing call from the Settings screens only: refuse cross-site
+  // requests outright (standalone mode's proxy does not check them).
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden", code: "cross_origin" }, { status: 403, headers: noStoreHeaders() });
+  }
   // requireAccess lets every standalone request through; this API still needs a session.
   if (isStandaloneMode() && !(await getTokenFromSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStoreHeaders() });

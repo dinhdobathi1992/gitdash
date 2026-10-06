@@ -33,8 +33,12 @@ const ORIGIN = "https://gitdash.test";
 const UNKNOWN_ID = "11111111-2222-4333-8444-555555555555";
 
 const list = (query = "") => listGET(new NextRequest(`${ORIGIN}/api/mcp/grants${query}`));
-const revoke = (id: string) =>
-  revokeDELETE(new NextRequest(`${ORIGIN}/api/mcp/grants/${id}`, { method: "DELETE" }), { params: Promise.resolve({ id }) });
+/** DELETE as the Settings screen sends it: same-origin, so the browser adds Origin. `origin: null` omits it. */
+const revoke = (id: string, origin: string | null = ORIGIN) =>
+  revokeDELETE(
+    new NextRequest(`${ORIGIN}/api/mcp/grants/${id}`, { method: "DELETE", headers: origin === null ? {} : { origin } }),
+    { params: Promise.resolve({ id }) },
+  );
 
 async function seed(githubId: number, name: string, host: string, redeem = true): Promise<string> {
   const g = await createGrant({ github_id: githubId, client_id: `https://${host}/client.json`, client_name: name, redirect_host: host });
@@ -140,6 +144,7 @@ describe("DELETE /api/mcp/grants/[id]", () => {
     const id = await seed(2, "Cursor", "cursor.sh");
     const res = await revoke(id);
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Forbidden" });
     __clearGrantCacheForTests();
     expect(await getActiveGrant(id)).not.toBeNull();
     const n = (await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM permission_audit WHERE action = 'mcp.grant_revoked'`)).rows[0].n;
@@ -159,6 +164,19 @@ describe("DELETE /api/mcp/grants/[id]", () => {
     )).rows[0];
     expect(Number(d.actor_github_id)).toBe(1);
     expect(d.details).toMatchObject({ reason: "admin_revoked", owner_github_id: 2 });
+  });
+
+  it("is 403 cross_origin for a cross-site or Origin-less request, even from the owner, and revokes nothing", async () => {
+    const id = await seed(1, "Claude", "claude.ai");
+    for (const origin of ["https://evil.example", null]) {
+      const res = await revoke(id, origin);
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "Forbidden", code: "cross_origin" });
+    }
+    __clearGrantCacheForTests();
+    expect(await getActiveGrant(id)).not.toBeNull();
+    const n = (await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM permission_audit WHERE action = 'mcp.grant_revoked'`)).rows[0].n;
+    expect(n).toBe(0);
   });
 
   it("is 404 for an unknown or malformed id, and for a grant that was never redeemed", async () => {

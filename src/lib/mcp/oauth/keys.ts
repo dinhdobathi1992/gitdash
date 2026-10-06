@@ -16,6 +16,8 @@
  *     MCP_PREVIOUS_SESSION_SECRET is set, the previous secret's key too.
  * Rotating SESSION_SECRET = move the old value to MCP_PREVIOUS_SESSION_SECRET
  * for 30 days (the longest token lifetime), then remove it.
+ *
+ * Authorization codes (`mcp.code`) add one more layer: see `withCodeKey`.
  */
 
 import { hkdfSync } from "node:crypto";
@@ -32,8 +34,8 @@ const KEY_BYTES = 32;
 // the seal password with Math.max(Number(id)), so ids must be numeric.
 const KEY_ID_BYTES = 6;
 
-function hkdf(secret: string, info: string, length: number): Buffer {
-  return Buffer.from(hkdfSync("sha256", secret, Buffer.alloc(0), info, length));
+function hkdf(secret: string, info: string, length: number, salt: string | Buffer = Buffer.alloc(0)): Buffer {
+  return Buffer.from(hkdfSync("sha256", secret, salt, info, length));
 }
 
 /** Numeric, non-reversible id for a secret: stable across processes. */
@@ -99,6 +101,26 @@ function passwordMap(entries: { id: string; key: string }[]): PasswordMap {
 /** Password map for sealing: only the current secret's key for `typ`. */
 export function sealPasswords(typ: TokenType): PasswordMap {
   return passwordMap([entryFor(currentSecret(), typ)]);
+}
+
+/** A per-grant code key: 32 random bytes, base64url (43 characters). */
+export const CODE_KEY_RE = /^[A-Za-z0-9_-]{43}$/;
+
+const CODE_KEY_INFO = "gitdash-mcp-v1:code-key";
+
+/**
+ * Bind a password map to a grant's code key. Each password becomes
+ * HKDF-SHA256(ikm = the per-type key, salt = code_key,
+ * info = "gitdash-mcp-v1:code-key"), base64url, under the same key id, so
+ * secret rotation keeps working. A sealed authorization code then needs both
+ * SESSION_SECRET (for the per-type key) and the grant row's code_key, which
+ * the database drops when the code is redeemed. Throws on a malformed code key.
+ */
+export function withCodeKey(map: PasswordMap, codeKey: string): PasswordMap {
+  if (typeof codeKey !== "string" || !CODE_KEY_RE.test(codeKey)) throw new TypeError("[mcp] invalid code key");
+  const bound: PasswordMap = Object.create(null);
+  for (const id of Object.keys(map)) bound[id] = hkdf(map[id], CODE_KEY_INFO, KEY_BYTES, codeKey).toString("base64url");
+  return bound;
 }
 
 /** Password map for unsealing: current key plus the previous secret's key, if configured. */

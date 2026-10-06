@@ -25,13 +25,17 @@ import {
   consumeJti,
   createGrant,
   getActiveGrant,
+  getCodeGrant,
   listGrants,
   pruneUnredeemed,
   redeemGrant,
+  revokeAllForUser,
   revokeGrant,
+  revokeReplayedCode,
   rotateRefresh,
   sanitizeClientName,
 } from "@/lib/mcp/oauth/grants";
+import { PERSONAL_KEY_CLIENT_ID } from "@/lib/mcp/oauth/config";
 import { auditMcp } from "@/lib/mcp/oauth/audit";
 import { open, seal } from "@/lib/mcp/oauth/tokens";
 
@@ -162,6 +166,10 @@ describe.each(backends)("MCP grants on $name", (backend) => {
         `SELECT table_name FROM information_schema.tables WHERE table_name IN ('mcp_grants','mcp_used_jti') ORDER BY 1`,
       );
       expect(tables.map((r) => r.table_name)).toEqual(["mcp_grants", "mcp_used_jti"]);
+      const cols = await q(
+        `SELECT data_type, is_nullable FROM information_schema.columns WHERE table_name = 'mcp_grants' AND column_name = 'code_key'`,
+      );
+      expect(cols).toEqual([{ data_type: "text", is_nullable: "YES" }]);
     });
 
     it("is idempotent: replaying its DDL and re-running ensureSchema change nothing", async () => {
@@ -241,6 +249,80 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       const list = await listGrants(777);
       expect(list.map((x) => x.grant_id)).toEqual([g.grant_id]);
       expect(Object.keys(list[0])).not.toContain("current_refresh");
+    });
+
+    it("an OAuth grant gets a code key that redemption clears; a personal key never has one", async () => {
+      const g = await createGrant(grantInput);
+      expect(g.code_key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(await getCodeGrant(g.grant_id)).toEqual({ code_key: g.code_key, redeemed: false, revoked: false });
+      expect(await redeemGrant(g.grant_id, g.current_refresh)).toBe(true);
+      const [row] = await q(`SELECT code_key, redeemed_at FROM mcp_grants WHERE grant_id = $1`, [g.grant_id]);
+      expect(row.code_key).toBeNull();
+      expect(row.redeemed_at).not.toBeNull();
+      expect(await getCodeGrant(g.grant_id)).toEqual({ code_key: null, redeemed: true, revoked: false });
+
+      const key = await createGrant({ ...grantInput, client_id: PERSONAL_KEY_CLIENT_ID });
+      expect(key.code_key).toBeNull();
+      expect(await getCodeGrant(key.grant_id)).toMatchObject({ code_key: null });
+      expect(await getCodeGrant(randomUUID())).toBeNull();
+      expect(await getCodeGrant("nope")).toBeNull();
+    });
+
+    it("a failed redemption keeps the code key", async () => {
+      const g = await createGrant(grantInput);
+      expect(await redeemGrant(g.grant_id, randomUUID())).toBe(false);
+      expect((await getCodeGrant(g.grant_id))?.code_key).toBe(g.code_key);
+    });
+  });
+
+  describe("revokeReplayedCode", () => {
+    it("revokes a redeemed, live grant of that client as code_reuse and returns its owner", async () => {
+      const g = await redeemed();
+      expect(await getActiveGrant(g.grant_id)).not.toBeNull(); // now cached
+      expect(await revokeReplayedCode(g.grant_id, grantInput.client_id)).toBe(USER);
+      expect((await grantRow(g.grant_id)).revoked_reason).toBe("code_reuse");
+      expect(await getActiveGrant(g.grant_id)).toBeNull(); // cache evicted
+      // Already revoked: nothing more to do.
+      expect(await revokeReplayedCode(g.grant_id, grantInput.client_id)).toBeNull();
+    });
+
+    it("never touches an unredeemed grant, another client's grant or a personal key", async () => {
+      const fresh = await createGrant(grantInput);
+      expect(await revokeReplayedCode(fresh.grant_id, grantInput.client_id)).toBeNull();
+      const g = await redeemed();
+      expect(await revokeReplayedCode(g.grant_id, "https://other.example/meta.json")).toBeNull();
+      const key = await createGrant({ ...grantInput, client_id: PERSONAL_KEY_CLIENT_ID });
+      expect(await redeemGrant(key.grant_id, key.current_refresh)).toBe(true);
+      expect(await revokeReplayedCode(key.grant_id, "https://client.example/meta.json")).toBeNull();
+      for (const id of [fresh.grant_id, g.grant_id, key.grant_id]) expect((await grantRow(id)).revoked_at).toBeNull();
+    });
+  });
+
+  describe("revokeAllForUser", () => {
+    it("revokes every live grant of the user in one statement, evicts the cache, and leaves other users alone", async () => {
+      const user = 9_100 + Math.floor(Math.random() * 1_000);
+      const mine = await Promise.all([1, 2].map(() => createGrant({ ...grantInput, github_id: user })));
+      for (const g of mine) await redeemGrant(g.grant_id, g.current_refresh);
+      const key = await createGrant({ ...grantInput, github_id: user, client_id: PERSONAL_KEY_CLIENT_ID });
+      await redeemGrant(key.grant_id, key.current_refresh);
+      const done = await createGrant({ ...grantInput, github_id: user });
+      await revokeGrant(done.grant_id, "user_revoked");
+      const theirs = await createGrant({ ...grantInput, github_id: user + 1 });
+      await redeemGrant(theirs.grant_id, theirs.current_refresh);
+      for (const g of [...mine, key]) expect(await getActiveGrant(g.grant_id)).not.toBeNull(); // cached
+
+      const ids = await revokeAllForUser(user, "org_removed");
+      expect(ids.sort()).toEqual([...mine, key].map((g) => g.grant_id).sort());
+      for (const g of [...mine, key]) {
+        expect((await grantRow(g.grant_id)).revoked_reason).toBe("org_removed");
+        expect(await getActiveGrant(g.grant_id)).toBeNull();
+      }
+      // An earlier revocation keeps its reason; another user's grant is untouched.
+      expect((await grantRow(done.grant_id)).revoked_reason).toBe("user_revoked");
+      expect((await grantRow(theirs.grant_id)).revoked_at).toBeNull();
+      expect(await listGrants(user)).toEqual([]);
+      expect(await revokeAllForUser(user, "org_removed")).toEqual([]);
+      expect(await revokeAllForUser(0, "org_removed")).toEqual([]);
     });
   });
 
@@ -519,8 +601,9 @@ describe.each(backends)("MCP grants on $name", (backend) => {
         "mcp.code",
         { jti: randomUUID(), grant_id: g.grant_id, refresh_jti: g.current_refresh, client_id, redirect_uri, code_challenge, resource, ...ident },
         60,
+        { codeKey: g.code_key! },
       );
-      const c = (await open("mcp.code", code))!;
+      const c = (await open("mcp.code", code, { codeKey: g.code_key! }))!;
       expect(await consumeJti(c.jti, new Date(c.exp * 1000))).toBe(true);
       expect(await redeemGrant(c.grant_id, c.refresh_jti)).toBe(true);
       const access = await seal("mcp.access", { grant_id: g.grant_id, client_id, aud: resource, scope: "gitdash:read", ...ident }, 3600);

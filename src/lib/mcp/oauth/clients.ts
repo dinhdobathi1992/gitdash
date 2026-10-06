@@ -8,9 +8,11 @@
  *    once, refuses the request if any address is private or reserved, and hands
  *    the connection the exact address it checked (DNS rebinding cannot swap it).
  *    SNI and certificate validation still use the hostname. No redirects, 5 s
- *    total, 8 KB cap. Failures are cached for 60 s and never fall back to
- *    trusting the client. At most 8 fetches run at once process-wide (more
- *    fail fast), and concurrent lookups of one URL share a single fetch.
+ *    total, 8 KB cap. Failures are cached for 60 s, in a cache of their own
+ *    so they cannot evict verified documents, and never fall back to trusting
+ *    the client. At most 8 fetches run at once process-wide and 2 per
+ *    hostname (more fail fast as "busy"), and concurrent lookups of one URL
+ *    share a single fetch.
  *  - DCR (only with MCP_ALLOW_DCR=true): stateless registration; the client_id
  *    is a sealed `mcp.client` token carrying the registered metadata.
  *
@@ -148,8 +150,7 @@ let deps: { resolver: Resolver; request: RequestFn } = { resolver: defaultResolv
 /** Test hook: swap the resolver and/or the https.request implementation. Pass nothing to restore. */
 export function __setClientFetchDepsForTests(next?: Partial<{ resolver: Resolver; request: RequestFn }>): void {
   deps = { resolver: next?.resolver ?? defaultResolver, request: next?.request ?? httpsRequest };
-  docCache.clear();
-  inFlight.clear();
+  clearCaches();
 }
 
 export class BlockedAddressError extends Error {
@@ -291,24 +292,60 @@ const POSITIVE_MIN_SEC = 300;
 const POSITIVE_MAX_SEC = 3600;
 const NEGATIVE_SEC = 60;
 const CACHE_MAX = 1_000;
+const FAIL_CACHE_MAX = 1_000;
 /** Process-wide cap on concurrent metadata fetches: client_id is attacker-chosen, so this bounds outbound load. */
 const MAX_CONCURRENT_FETCHES = 8;
+/** Per-hostname cap, so one slow host cannot take every process-wide slot. */
+const MAX_CONCURRENT_FETCHES_PER_HOST = 2;
 
 type DocResult = { ok: true; doc: CimdDoc } | { ok: false; error: string };
+type Cached<T> = { result: T; until: number };
 
-/** Fetched documents (or failures) by normalised URL. */
-const docCache = new Map<string, { result: DocResult; until: number }>();
+/**
+ * Two caches by normalised URL, each with its own cap: verified documents,
+ * and failures. Unauthenticated callers can create failures at will, so they
+ * live apart and can never evict a good document.
+ */
+const docCache = new Map<string, Cached<Extract<DocResult, { ok: true }>>>();
+const failCache = new Map<string, Cached<Extract<DocResult, { ok: false }>>>();
 /** Fetches in progress by normalised URL: concurrent lookups of one client share a request. */
 const inFlight = new Map<string, Promise<DocResult>>();
 let activeFetches = 0;
+/** Fetches in progress by hostname. */
+const hostFetches = new Map<string, number>();
+
+function putCapped<T>(cache: Map<string, Cached<T>>, max: number, key: string, result: T, ttlSec: number): T {
+  cache.delete(key);
+  if (cache.size >= max) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, { result, until: Date.now() + ttlSec * 1000 });
+  return result;
+}
 
 function cachePut(key: string, result: DocResult, ttlSec: number): DocResult {
-  if (docCache.size >= CACHE_MAX) {
-    const oldest = docCache.keys().next().value;
-    if (oldest !== undefined) docCache.delete(oldest);
+  if (result.ok) {
+    failCache.delete(key);
+    return putCapped(docCache, CACHE_MAX, key, result, ttlSec);
   }
-  docCache.set(key, { result, until: Date.now() + ttlSec * 1000 });
-  return result;
+  return putCapped(failCache, FAIL_CACHE_MAX, key, result, ttlSec);
+}
+
+/** A live cached outcome for `key`: a good document first, then a recent failure. */
+function cacheGet(key: string): DocResult | null {
+  const now = Date.now();
+  const good = docCache.get(key);
+  if (good && good.until > now) return good.result;
+  const bad = failCache.get(key);
+  if (bad && bad.until > now) return bad.result;
+  return null;
+}
+
+function clearCaches(): void {
+  docCache.clear();
+  failCache.clear();
+  inFlight.clear();
 }
 
 /**
@@ -342,7 +379,9 @@ export function cimdUrlProblem(clientId: string): string | null {
 
 /** Fetch and validate the document at `url`, caching the outcome. Holds one fetch slot while running. */
 async function fetchDoc(key: string, url: URL): Promise<DocResult> {
+  const host = url.hostname;
   activeFetches++;
+  hostFetches.set(host, (hostFetches.get(host) ?? 0) + 1);
   try {
     let fetched: FetchedDoc;
     try {
@@ -369,6 +408,9 @@ async function fetchDoc(key: string, url: URL): Promise<DocResult> {
     return cachePut(key, { ok: true, doc: doc.data }, ttl);
   } finally {
     activeFetches--;
+    const left = (hostFetches.get(host) ?? 1) - 1;
+    if (left > 0) hostFetches.set(host, left);
+    else hostFetches.delete(host);
   }
 }
 
@@ -379,13 +421,13 @@ async function resolveCimd(clientId: string): Promise<ClientResult> {
   const url = new URL(clientId);
   const key = cimdKey(url);
   let result: DocResult;
-  const hit = docCache.get(key);
-  if (hit && hit.until > Date.now()) {
-    result = hit.result;
+  const hit = cacheGet(key);
+  if (hit) {
+    result = hit;
   } else {
     let pending = inFlight.get(key);
     if (!pending) {
-      if (activeFetches >= MAX_CONCURRENT_FETCHES) {
+      if (activeFetches >= MAX_CONCURRENT_FETCHES || (hostFetches.get(url.hostname) ?? 0) >= MAX_CONCURRENT_FETCHES_PER_HOST) {
         console.warn("[mcp] client metadata fetch refused: too many fetches in progress");
         return { ok: false, error: "GitDash is busy verifying other apps. Try again in a moment.", busy: true };
       }
@@ -442,8 +484,7 @@ export async function resolveClient(clientId: unknown): Promise<ClientResult> {
 
 /** Test hook. */
 export function __clearClientCacheForTests(): void {
-  docCache.clear();
-  inFlight.clear();
+  clearCaches();
 }
 
 // ── Redirect URIs ────────────────────────────────────────────────────────────

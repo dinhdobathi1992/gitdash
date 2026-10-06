@@ -36,7 +36,7 @@ interface Served {
 }
 
 /** A stand-in for https.request: runs the caller's `lookup`, records the dialled address, then serves `serve()`. */
-function fakeHttps(serve: (path: string) => Served) {
+function fakeHttps(serve: (path: string, hostname: string) => Served) {
   const dialled: string[] = [];
   const calls: { hostname: string; servername: string; port: number }[] = [];
   const request = (
@@ -50,7 +50,7 @@ function fakeHttps(serve: (path: string) => Served) {
         options.lookup(options.hostname, {}, (err, address) => {
           if (err) return req.emit("error", err);
           dialled.push(String(address));
-          const s = serve(options.path);
+          const s = serve(options.path, options.hostname);
           if (s.hang) return;
           const res = Object.assign(new PassThrough(), { statusCode: s.status ?? 200, headers: s.headers ?? {} });
           cb(res);
@@ -66,7 +66,7 @@ function fakeHttps(serve: (path: string) => Served) {
 const doc = (over: Record<string, unknown> = {}) =>
   JSON.stringify({ client_id: CLIENT, client_name: "Example", redirect_uris: ["https://app.example.com/cb"], ...over });
 
-function useFake(serve: (path: string) => Served, resolver: Resolver = async () => [PUBLIC_V4]) {
+function useFake(serve: (path: string, hostname: string) => Served, resolver: Resolver = async () => [PUBLIC_V4]) {
   const fake = fakeHttps(serve);
   const resolverSpy = vi.fn(resolver);
   __setClientFetchDepsForTests({ resolver: resolverSpy, request: fake.request });
@@ -312,21 +312,57 @@ describe("outbound fetch bounds", () => {
     expect(fake.dialled).toHaveLength(1);
   });
 
+  // One client per host, so only the process-wide limit applies.
+  const hostUrl = (i: number) => `https://c${i}.example.com/meta.json`;
+
   it("at most 8 fetches run at once; beyond that a new client fails fast, uncached, until a slot frees", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     let hang = true;
-    const fake = useFake((path) => (hang ? { hang: true } : { body: doc({ client_id: `https://client.example.com${path}` }) }));
-    const pending = Array.from({ length: 8 }, (_, i) => resolveClient(urlFor(i)));
+    const fake = useFake((path, host) => (hang ? { hang: true } : { body: doc({ client_id: `https://${host}${path}` }) }));
+    const pending = Array.from({ length: 8 }, (_, i) => resolveClient(hostUrl(i)));
     // A ninth distinct client is refused at once, without any network access.
-    const ninth = await resolveClient(urlFor(8));
+    const ninth = await resolveClient(hostUrl(8));
     expect(ninth).toEqual({ ok: false, error: expect.stringMatching(/busy/), busy: true });
     // Joining a fetch already in flight needs no slot.
-    const joined = resolveClient(urlFor(0));
+    const joined = resolveClient(hostUrl(0));
     await vi.advanceTimersByTimeAsync(5_001);
     for (const r of await Promise.all([...pending, joined])) expect(r).toEqual({ ok: false, error: expect.stringMatching(/timed out/) });
     expect(fake.dialled).toHaveLength(8);
     // Slots are released, and the busy refusal was not cached.
     hang = false;
-    expect((await resolveClient(urlFor(8))).ok).toBe(true);
+    expect((await resolveClient(hostUrl(8))).ok).toBe(true);
+  });
+
+  it("at most 2 fetches run at once per hostname; other hosts still get slots", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let hang = true;
+    const fake = useFake((path, host) => (hang ? { hang: true } : { body: doc({ client_id: `https://${host}${path}` }) }));
+    const slow = [resolveClient(urlFor(0)), resolveClient(urlFor(1))];
+    // A third distinct URL on the same (slow) host is refused without network access...
+    expect(await resolveClient(urlFor(2))).toEqual({ ok: false, error: expect.stringMatching(/busy/), busy: true });
+    expect(fake.dialled).toHaveLength(2);
+    // ...while another host is served at once.
+    hang = false;
+    expect((await resolveClient(hostUrl(1))).ok).toBe(true);
+    hang = true;
+    await vi.advanceTimersByTimeAsync(5_001);
+    for (const r of await Promise.all(slow)) expect(r).toEqual({ ok: false, error: expect.stringMatching(/timed out/) });
+    // The host's slots are released and the refusal was not cached.
+    hang = false;
+    expect((await resolveClient(urlFor(2))).ok).toBe(true);
+  });
+
+  it("failures have their own cache: a flood of failing clients never evicts a verified document", async () => {
+    const fake = useFake((path, host) =>
+      host === "client.example.com" && path === "/oauth/metadata.json" ? { body: doc() } : { status: 404 },
+    );
+    expect((await resolveClient(CLIENT)).ok).toBe(true);
+    expect(fake.dialled).toHaveLength(1);
+    // More failing clients than either cache holds, sequentially so no slot limit applies.
+    for (let i = 0; i < 1_100; i++) expect((await resolveClient(hostUrl(i))).ok).toBe(false);
+    const fetchesBefore = fake.dialled.length;
+    expect((await resolveClient(CLIENT)).ok).toBe(true);
+    // Served from the cache: no new fetch.
+    expect(fake.dialled).toHaveLength(fetchesBefore);
   });
 });

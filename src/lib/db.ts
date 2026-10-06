@@ -530,7 +530,11 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
     // tokens, including the GitHub token, live solely inside sealed tokens.
     // current_refresh is generated at consent and carried in the code;
     // redeemed_at stays null until the code is exchanged. mcp_used_jti makes
-    // authorization codes single-use.
+    // authorization codes single-use. code_key (32 random bytes, base64url) is
+    // the second key an OAuth grant's authorization code is sealed with; it is
+    // cleared when the code is redeemed, so a code left in browser history or
+    // a client log cannot be opened afterwards, even with SESSION_SECRET.
+    // Personal keys have no code and keep it null.
     version: 13,
     name: "mcp_grants",
     up: [
@@ -548,7 +552,8 @@ export const MIGRATIONS: Array<{ version: number; name: string; up: string[] }> 
         created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         last_used_at      TIMESTAMPTZ,
         revoked_at        TIMESTAMPTZ,
-        revoked_reason    TEXT
+        revoked_reason    TEXT,
+        code_key          TEXT
       )`,
       `CREATE INDEX IF NOT EXISTS idx_mcp_grants_user ON mcp_grants(github_id) WHERE revoked_at IS NULL`,
       `CREATE TABLE IF NOT EXISTS mcp_used_jti (jti UUID PRIMARY KEY, expires_at TIMESTAMPTZ NOT NULL)`,

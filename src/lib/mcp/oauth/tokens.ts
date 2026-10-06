@@ -10,11 +10,16 @@
  *
  * `gh` (the user's GitHub token) exists only inside sealed tokens. Never log a
  * payload or a sealed token.
+ *
+ * An authorization code (`mcp.code`) is also bound to its grant's code key
+ * (see `withCodeKey`): `seal` and `open` require `{ codeKey }` for that type
+ * and refuse it for every other, so a code can never be sealed without the
+ * extra layer by mistake.
  */
 
 import { sealData, unsealData } from "iron-session";
 import { z } from "zod";
-import { sealPasswords, unsealPasswords, type TokenType } from "./keys";
+import { sealPasswords, unsealPasswords, withCodeKey, type PasswordMap, type TokenType } from "./keys";
 
 export type { TokenType } from "./keys";
 
@@ -119,18 +124,36 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 // above is keyed exactly by TokenType, so this narrowing is sound.
 const shapeFor = <T extends TokenType>(typ: T) => payloadShapes[typ] as unknown as z.ZodType<TokenPayloadInput[T]>;
 
+/** Extra sealing input: the grant's code key, required for `mcp.code` and refused for every other type. */
+export interface SealOptions {
+  codeKey?: string;
+}
+
+/** The password map for `typ`, bound to the code key for `mcp.code`. Throws when the options do not fit the type. */
+function passwordsFor(typ: TokenType, base: PasswordMap, opts: SealOptions | undefined): PasswordMap {
+  const codeKey = opts?.codeKey;
+  if (typ === "mcp.code") {
+    if (codeKey === undefined) throw new TypeError("[mcp] mcp.code needs the grant's code key");
+    return withCodeKey(base, codeKey);
+  }
+  if (codeKey !== undefined) throw new TypeError(`[mcp] ${typ} does not take a code key`);
+  return base;
+}
+
 /**
  * Seal `payload` as a token of type `typ` that expires in `ttlSeconds`.
- * Throws on an invalid payload or ttl: both are programming errors.
+ * Throws on an invalid payload, ttl or code key: all are programming errors.
  */
 export async function seal<T extends TokenType>(
   typ: T,
   payload: TokenPayloadInput[T],
   ttlSeconds: number,
+  opts?: SealOptions,
 ): Promise<string> {
   if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0 || ttlSeconds > TOKEN_TTL_SEC[typ]) {
     throw new RangeError(`[mcp] ttl for ${typ} must be an integer in 1..${TOKEN_TTL_SEC[typ]}`);
   }
+  const password = passwordsFor(typ, sealPasswords(typ), opts);
   const parsed = shapeFor(typ).safeParse(payload);
   // Report field paths only: the payload may contain a GitHub token.
   if (!parsed.success) {
@@ -139,23 +162,32 @@ export async function seal<T extends TokenType>(
   }
   const iat = nowSec();
   const body = { ...parsed.data, typ, iat, exp: iat + ttlSeconds };
-  return sealData(body, { password: sealPasswords(typ), ttl: ttlSeconds });
+  return sealData(body, { password, ttl: ttlSeconds });
 }
 
 let warnedKeys = false;
 
-/** Open a token of type `typ`. Returns null for any invalid, expired or foreign token. Never throws. */
-export async function open<T extends TokenType>(typ: T, token: unknown): Promise<TokenPayload<T> | null> {
+/**
+ * Open a token of type `typ`. Returns null for any invalid, expired or foreign
+ * token, and for a code opened without (or with the wrong) code key. Never throws.
+ */
+export async function open<T extends TokenType>(typ: T, token: unknown, opts?: SealOptions): Promise<TokenPayload<T> | null> {
   if (typeof token !== "string" || token.length === 0 || token.length > MAX_TOKEN_LENGTH) return null;
-  let password;
+  let base: PasswordMap;
   try {
-    password = unsealPasswords(typ);
+    base = unsealPasswords(typ);
   } catch (err) {
     // A configuration fault, not a bad token: say so once, loudly, then fail closed.
     if (!warnedKeys) {
       warnedKeys = true;
       console.error(`[mcp] token keys unavailable: ${(err as Error).message}`);
     }
+    return null;
+  }
+  let password: PasswordMap;
+  try {
+    password = passwordsFor(typ, base, opts);
+  } catch {
     return null;
   }
   try {
@@ -176,4 +208,26 @@ export async function open<T extends TokenType>(typ: T, token: unknown): Promise
   } catch {
     return null;
   }
+}
+
+// ── Authorization code wire format ───────────────────────────────────────────
+
+const CODE_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.(.+)$/i;
+
+/**
+ * The authorization code as sent to the client: `<grant_id>.<sealed>`. The
+ * grant id is in clear so the token endpoint can load the grant's code key
+ * before it can open the seal; it reveals nothing the code did not already
+ * name, and the sealed part also carries it, checked on open.
+ */
+export function formatCode(grantId: string, sealed: string): string {
+  if (!CODE_RE.test(`${grantId}.x`)) throw new TypeError("[mcp] formatCode: invalid grant id");
+  return `${grantId.toLowerCase()}.${sealed}`;
+}
+
+/** Split a presented code into its grant id (lowercased) and sealed part, or null when it has the wrong shape. */
+export function parseCode(code: unknown): { grantId: string; sealed: string } | null {
+  if (typeof code !== "string" || code.length > MAX_TOKEN_LENGTH) return null;
+  const m = CODE_RE.exec(code);
+  return m ? { grantId: m[1].toLowerCase(), sealed: m[2] } : null;
 }

@@ -75,7 +75,12 @@ export function McpServer() {
         </CodeBlock>
         <ProseP>The first time the assistant uses it, this happens:</ProseP>
         <ol className="list-decimal pl-5 space-y-1.5 text-sm text-slate-300">
-          <li>The assistant opens GitDash in your browser. If you are not signed in, GitHub asks you to sign in.</li>
+          <li>
+            The assistant opens GitDash in your browser. If you are not signed in, GitHub asks you to sign in. This
+            sign-in asks GitHub only for <Code>repo</Code>, <Code>read:org</Code> and <Code>read:user</Code>, fewer
+            scopes than the web sign-in. If you are already signed in to GitDash with GitHub, the app gets your existing
+            web sign-in, with its scopes.
+          </li>
           <li>GitDash shows which app is asking, and where it will send you back. Check the host, then choose Allow.</li>
           <li>The app receives an encrypted token and calls the tools. You never paste a token.</li>
         </ol>
@@ -151,7 +156,8 @@ export function McpServer() {
           gives itself, when it connected and when it was last used; each key row shows &ldquo;Personal key&rdquo;, its
           label, when it was created, last used and when it expires. Choose Revoke and confirm. GitDash stops accepting
           that app&apos;s token or that key within a minute. Admins see every user&apos;s apps under Admin → Connected apps and can revoke
-          any of them.
+          any of them. Apps can also revoke their own token, and anyone holding a personal key can revoke it, at{" "}
+          <Code>/oauth/revoke</Code> (RFC 7009, organization mode).
         </ProseP>
         <ProseP>
           Revoking in GitDash does not touch GitHub. To cut GitHub access as well, revoke GitDash in{" "}
