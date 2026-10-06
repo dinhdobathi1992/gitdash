@@ -18,7 +18,7 @@ export const GRANT_ABSOLUTE_TTL_DAYS = 30;
 /** How long `getActiveGrant` trusts its per-instance cache: the revocation bound. */
 export const ACTIVE_GRANT_CACHE_MS = 60_000;
 /** A presented previous refresh id within this window is a benign retry (literal in rotateRefresh's SQL). */
-export const REFRESH_GRACE_SEC = 30;
+export const REFRESH_GRACE_SEC = 10;
 
 export type RevokeReason =
   | "user_revoked"
@@ -144,7 +144,7 @@ export async function redeemGrant(grantId: string, refreshJti: string): Promise<
  * Rotate the refresh id in one statement.
  *  - `presented` is the current id -> "ok"; the grant now expects `next`, and
  *    `refreshJti` is `next`.
- *  - `presented` is the previous id within 30 s of the last rotation (a benign
+ *  - `presented` is the previous id within 10 s of the last rotation (a benign
  *    retry, or the loser of two parallel refreshes) -> "ok" with no further
  *    rotation; `refreshJti` is the id the winning request already issued, so
  *    every caller ends up holding the same, valid refresh id.
@@ -170,7 +170,7 @@ export async function rotateRefresh(grantId: string, presented: string, next: st
         last_used_at     = NOW()
       WHERE grant_id = ${grantId}::uuid AND revoked_at IS NULL AND redeemed_at IS NOT NULL AND NOW() < absolute_expiry
         AND (current_refresh = ${presented}::uuid
-             OR (previous_refresh = ${presented}::uuid AND rotated_at > NOW() - INTERVAL '30 seconds'))
+             OR (previous_refresh = ${presented}::uuid AND rotated_at > NOW() - INTERVAL '10 seconds'))
       RETURNING current_refresh::text AS jti
     ), v AS (
       UPDATE mcp_grants SET revoked_at = NOW(), revoked_reason = 'refresh_reuse'

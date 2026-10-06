@@ -3,7 +3,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { handleMeRequest } from "@/lib/mcp/server";
 import { preflight, tooManyRequests, withCors } from "@/lib/mcp/http";
 import { authUnavailable, bearerToken, touchGrant, unauthorized, verifyToken } from "@/lib/mcp/auth";
-import { mcpGate } from "@/lib/mcp/oauth/config";
+import { issuer, mcpGate } from "@/lib/mcp/oauth/config";
 import { getRateLimitKey, rateLimit } from "@/lib/ratelimit";
 
 /**
@@ -42,7 +42,8 @@ async function handle(req: NextRequest): Promise<Response> {
   touchGrant(v.authInfo.extra.grant_id);
   // mcp-handler passes `req.auth` to the SDK, which exposes it as ctx.http.authInfo.
   (req as NextRequest & { auth?: AuthInfo }).auth = v.authInfo;
-  return withCors(await handleMeRequest(req, req.nextUrl.origin));
+  // Docs-tool links use the configured issuer, never the request's (header-derived) origin.
+  return withCors(await handleMeRequest(req, issuer()));
 }
 
 export { handle as GET, handle as POST, handle as DELETE };

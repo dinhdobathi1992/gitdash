@@ -5,6 +5,16 @@ import { upsertUser } from "@/lib/db";
 import { publicUrl } from "@/lib/url";
 import { labelGitHubRoute } from "@/lib/github-telemetry";
 
+/**
+ * GitHub's redirect_uri: from NEXT_PUBLIC_APP_URL when it is set, so forwarded
+ * headers cannot choose it; otherwise from publicUrl. The login route
+ * (api/auth/login/route.ts) builds the identical string with the same
+ * expression, as GitHub requires.
+ */
+function githubCallbackUrl(req: NextRequest): string {
+  return new URL("/api/auth/callback", process.env.NEXT_PUBLIC_APP_URL || publicUrl("/", req)).toString();
+}
+
 export async function GET(req: NextRequest) {
   labelGitHubRoute("auth/callback");
   assertOrgModeConfig();
@@ -66,7 +76,7 @@ export async function GET(req: NextRequest) {
         client_id: clientId,
         client_secret: clientSecret,
         code,
-        redirect_uri: publicUrl("/api/auth/callback", req).toString(),
+        redirect_uri: githubCallbackUrl(req),
       }),
     });
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };

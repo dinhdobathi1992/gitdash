@@ -254,7 +254,7 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       expect(row.previous_refresh).toBe(g.current_refresh);
     });
 
-    it("previous within 30 s -> ok, and the grant stays valid", async () => {
+    it("previous within 10 s -> ok, and the grant stays valid", async () => {
       const g = await redeemed();
       await rot(g.grant_id, g.current_refresh, randomUUID());
       expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("ok");
@@ -262,10 +262,10 @@ describe.each(backends)("MCP grants on $name", (backend) => {
       expect(await getActiveGrant(g.grant_id)).not.toBeNull();
     });
 
-    it("previous after 30 s -> reuse, and the grant is revoked", async () => {
+    it("previous after 10 s -> reuse, and the grant is revoked", async () => {
       const g = await redeemed();
       await rot(g.grant_id, g.current_refresh, randomUUID());
-      await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '31 seconds' WHERE grant_id = $1`, [g.grant_id]);
+      await q(`UPDATE mcp_grants SET rotated_at = NOW() - INTERVAL '11 seconds' WHERE grant_id = $1`, [g.grant_id]);
       expect(await getActiveGrant(g.grant_id)).not.toBeNull(); // warm this instance's cache
       expect(await rot(g.grant_id, g.current_refresh, randomUUID())).toBe("reuse");
       const row = await grantRow(g.grant_id);

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { metadataCorsOptionsRequestHandler, protectedResourceHandler } from "mcp-handler";
-import { issuer, mcpGate, RESOURCE_PATH, resourceUrl } from "@/lib/mcp/oauth/config";
+import { generateProtectedResourceMetadata, metadataCorsOptionsRequestHandler } from "mcp-handler";
+import { issuer, MCP_SCOPE, mcpGate, RESOURCE_PATH, resourceUrl } from "@/lib/mcp/oauth/config";
 import { addCors, corsJson } from "@/lib/mcp/oauth/headers";
 
 /**
@@ -21,7 +21,12 @@ async function gate(req: NextRequest, ctx: Ctx): Promise<Response | null> {
 export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const denied = await gate(req, ctx);
   if (denied) return denied;
-  return protectedResourceHandler({ authServerUrls: [issuer()], resourceUrl: resourceUrl() })(req);
+  const metadata = generateProtectedResourceMetadata({
+    authServerUrls: [issuer()],
+    resourceUrl: resourceUrl(),
+    additionalMetadata: { scopes_supported: [MCP_SCOPE], bearer_methods_supported: ["header"] },
+  });
+  return corsJson(metadata, 200, { "Cache-Control": "max-age=3600" }, false);
 }
 
 export async function OPTIONS(req: NextRequest, ctx: Ctx): Promise<Response> {

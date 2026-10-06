@@ -30,6 +30,7 @@ beforeEach(() => {
   vi.stubEnv("MODE", "organization");
   vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.test");
   vi.stubEnv("GITHUB_CLIENT_SECRET", "secret");
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
   lookupWhoAmI.mockResolvedValue({ identity: { id: 7, login: "u7", name: null, avatar_url: "", email: null }, allowed: true });
 });
 afterEach(() => {
@@ -58,6 +59,23 @@ describe("web sign-in redirect_uri", () => {
     expect(exchange).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(exchange.mock.calls[0][1].body));
     expect(body).toMatchObject({ code: "abc", redirect_uri: redirectUri });
+  });
+
+  it("with NEXT_PUBLIC_APP_URL set, forwarded headers cannot choose the redirect_uri, and the callback repeats it exactly", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://www.gitdash.test/");
+    const headers = { "x-forwarded-host": "evil.example", "x-forwarded-proto": "https", "x-forwarded-for": "198.51.100.3" };
+    const res = await login(new NextRequest("http://0.0.0.0:3000/api/auth/login", { headers }));
+    const redirectUri = new URL(res.headers.get("location")!).searchParams.get("redirect_uri");
+    expect(redirectUri).toBe("https://www.gitdash.test/api/auth/callback");
+    const state = new URL(res.headers.get("location")!).searchParams.get("state")!;
+
+    const exchange = vi.fn(async (_url: string, init: RequestInit) => {
+      void init;
+      return new Response(JSON.stringify({ access_token: "gho_test" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", exchange);
+    await callback(new NextRequest(`http://0.0.0.0:3000/api/auth/callback?code=abc&state=${state}`, { headers }));
+    expect(JSON.parse(String(exchange.mock.calls[0][1].body)).redirect_uri).toBe(redirectUri);
   });
 
   it("the web callback is not the MCP callback", async () => {

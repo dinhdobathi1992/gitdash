@@ -121,12 +121,61 @@ export function htmlPage(
   return new Response(html, { status, headers });
 }
 
-/** An error page: never redirects anywhere. */
-export function errorPage(status: number, message: string): Response {
+/** An error page: never redirects anywhere. `headers` lets a caller add, for example, a cookie deletion. */
+export function errorPage(status: number, message: string, headers: Headers = pageHeaders()): Response {
   return htmlPage(
     "Sign-in problem",
     `<h1>Can't connect this app</h1><p>${escapeHtml(message)}</p>` +
       `<p class="muted">Close this tab and start the connection again from your app.</p>`,
     status,
+    headers,
   );
+}
+
+// ── Request bodies ───────────────────────────────────────────────────────────
+
+export type BodyResult = { ok: true; text: string } | { ok: false; status: 400 | 413 };
+
+/**
+ * Read a request body as UTF-8 text, never holding more than `maxBytes`. A
+ * declared Content-Length over the cap is refused before any byte is read;
+ * otherwise the stream is counted as it arrives, so a body without (or lying
+ * about) Content-Length is cut off at the cap too. 413 when too large, 400
+ * when unreadable or not UTF-8.
+ */
+export async function readBodyCapped(req: Request, maxBytes: number): Promise<BodyResult> {
+  const declared = req.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^\d+$/.test(declared.trim())) return { ok: false, status: 400 };
+    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
+  }
+  if (!req.body) return { ok: true, text: "" };
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  try {
+    return { ok: true, text: new TextDecoder("utf-8", { fatal: true }).decode(all) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
 }
