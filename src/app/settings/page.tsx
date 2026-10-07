@@ -11,6 +11,7 @@
  */
 
 import { Suspense, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { ErrorBanner } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
+import { fetcher, FetchError } from "@/lib/swr";
 
 // ── General: account and session ─────────────────────────────────────────────
 
@@ -272,7 +274,7 @@ function Notifications() {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function SettingsContent() {
-  const { mode, isAdmin } = useAuth();
+  const { mode, isAdmin, resolvedMode } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const standalone = mode === "standalone";
@@ -285,7 +287,12 @@ function SettingsContent() {
   const users = useAdminUsers("", orgAdmin);
   const pending = (users.data?.users ?? []).filter((u) => u.groups.length === 0 && !u.isBootstrapAdmin).length;
 
+  // Same request (and SWR key) as the Connected apps card: a 404 means MCP is off here.
+  const apps = useSWR(resolvedMode !== null ? "/api/mcp/grants" : null, fetcher, { dedupingInterval: 0, shouldRetryOnError: false });
+  const mcpOff = resolvedMode === null || (apps.error instanceof FetchError && apps.error.status === 404);
+
   const visible = SETTINGS_SECTIONS.filter((s) => {
+    if (s.key === "connected-apps") return !mcpOff;
     if (["access", "members", "audit", "working-habits", "team", "account-links"].includes(s.key)) return orgAdmin;
     if (s.key === "ai" || s.key === "email") return standalone || isAdmin;
     return true;
@@ -359,12 +366,8 @@ function SettingsContent() {
           {active === "working-habits" && <WorkingHabitsSettingsCard notify={notify} />}
           {active === "team" && <TeamSettingsCard notify={notify} />}
           {active === "account-links" && <AccountLinksCard notify={notify} />}
-          {active === "features" && (
-            <div className="flex flex-col gap-8">
-              <MyFeatures />
-              <ConnectedAppsCard />
-            </div>
-          )}
+          {active === "features" && <MyFeatures />}
+          {active === "connected-apps" && <ConnectedAppsCard />}
           {active === "notifications" && <Notifications />}
           {requested && !visible.some((s) => s.key === requested) && (
             <ErrorBanner className="mt-4" message="That section is only available to admins." />

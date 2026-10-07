@@ -7,7 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased]
 
+### Changed
+- **Connected apps has its own Settings section** (`/settings?section=connected-apps`, under You). It was at the
+  bottom of My features and easy to miss. The section appears only when MCP is enabled.
+
 ### Added
+- MCP docs page and README show Cursor's agent using the GitDash MCP server.
 - **Personal MCP keys.** Create a key in Settings → Connected apps (Create MCP key) and connect Claude Code,
   Cursor or Claude Desktop to `/mcp/me` with one `Authorization: Bearer <key>` header, no OAuth sign-in. Works
   when you signed in with a personal access token, and in standalone mode (`GITDASH_MCP=true` plus
