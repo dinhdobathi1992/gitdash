@@ -4,7 +4,7 @@ import { Plug } from "lucide-react";
 import { Callout } from "@/components/docs/Callout";
 import { CodeBlock, Code } from "@/components/docs/CodeBlock";
 import { DocCard, DocTable } from "@/components/docs/DocCard";
-import { SectionHeading, SubHeading, ProseP } from "./primitives";
+import { SectionHeading, SubHeading, ProseP, ScreenshotSlot } from "./primitives";
 
 export function McpServer() {
   return (
@@ -99,7 +99,7 @@ export function McpServer() {
           Claude Desktop&apos;s config file accept it; the claude.ai connector screen supports only the sign-in above.
         </ProseP>
         <ol className="list-decimal pl-5 space-y-1.5 text-sm text-slate-300">
-          <li>Open Settings → My features → Connected apps and choose Create MCP key.</li>
+          <li>Open Settings → Connected apps and choose Create MCP key.</li>
           <li>Give it a label, such as &ldquo;Claude Code on my laptop&rdquo;, and choose Create key.</li>
           <li>Copy the key, or one of the ready-made snippets, straight away. GitDash shows it only once.</li>
         </ol>
@@ -116,6 +116,14 @@ export function McpServer() {
   }
 }`}
         </CodeBlock>
+        <ProseP>
+          Once connected, ask in plain words. Below, Cursor&apos;s agent lists the GitDash tools, checks open pull-request
+          health and reads a repository&apos;s DORA keys:
+        </ProseP>
+        <ScreenshotSlot
+          file="mcp-cursor-agent.png"
+          alt="Cursor agent using the gitdash MCP server: it lists the 11 tools, checks open pull-request health, and shows the DORA four keys for dinhdobathi1992/gitdash with an overall rating of medium"
+        />
         <Callout type="warning">
           Treat a key like a password: it contains your GitHub access. It holds an encrypted copy of the token you
           signed in to GitDash with (your personal access token or your GitHub sign-in), so it can read what that token
@@ -152,7 +160,7 @@ export function McpServer() {
       <DocCard>
         <SubHeading>Revoke an app or a key</SubHeading>
         <ProseP>
-          Open Settings → My features → Connected apps. Each app row shows the host the app returns to, the name it
+          Open Settings → Connected apps. Each app row shows the host the app returns to, the name it
           gives itself, when it connected and when it was last used; each key row shows &ldquo;Personal key&rdquo;, its
           label, when it was created, last used and when it expires. Choose Revoke and confirm. GitDash stops accepting
           that app&apos;s token or that key within a minute. Admins see every user&apos;s apps under Admin → Connected apps and can revoke

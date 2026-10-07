@@ -70,6 +70,29 @@
 | **Built for the rate limit** | GitHub reads are cached per token and shared across replicas through Postgres; the sidebar shows your remaining API budget. |
 | **AI insights** *(optional)* | Plain-English analysis of the numbers on screen via Bailian, Gemini or Qwen. Hidden unless a provider key is configured; only metrics and names are sent. |
 | **Export** | CSV or JSON from workflow detail, the health scorecard, the contributors table and Cost. |
+| **MCP server** | Ask Claude, Cursor or Claude Code about your CI in plain words. `/mcp` serves the docs to any MCP client; `/mcp/me` adds read-only data tools (repositories, DORA, failing workflows, PR health, org health, Actions cost) that see exactly what you see in GitDash. Connect with OAuth sign-in or a personal MCP key from Settings → Connected apps. Off unless `GITDASH_MCP=true`. |
+
+
+### Ask your AI assistant
+
+Connect GitDash as an MCP server and ask about your delivery metrics from Claude, Cursor or Claude Code. Below, Cursor's agent lists the tools and reads a repository's DORA keys:
+
+<p align="center">
+  <img src="public/screenshots/mcp-cursor-agent.png" alt="Cursor agent using the gitdash MCP server: it lists the 11 tools, checks open pull-request health, and shows the DORA four keys for dinhdobathi1992/gitdash" width="860" />
+</p>
+
+```json
+{
+  "mcpServers": {
+    "gitdash": {
+      "url": "https://<your GitDash host>/mcp/me",
+      "headers": { "Authorization": "Bearer <personal MCP key from Settings → Connected apps>" }
+    }
+  }
+}
+```
+
+See [Docs → MCP server](https://www.gitdash.info/docs/mcp) for the OAuth sign-in, every tool, and how keys are stored and revoked.
 
 ---
 

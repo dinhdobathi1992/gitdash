@@ -22,6 +22,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { key: "audit", label: "Audit log", group: "Organization", orgOnly: true },
   { key: "features", label: "My features", group: "You" },
   { key: "notifications", label: "Notifications", group: "You" },
+  // Shown only when MCP is on (the grants API answers 404 otherwise).
+  { key: "connected-apps", label: "Connected apps", group: "You" },
 ];
 
 export function settingsSectionLabel(key: string | null): string | null {
